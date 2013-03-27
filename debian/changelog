@@ -1,0 +1,11 @@
+libaria (2.7.5.2+repack-1) unstable; urgency=low
+
+  * Repack the original tarball to remove unnecesary non-source files.
+
+ -- Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>  Wed, 27 Mar 2013 09:45:31 +0100
+
+libaria (2.7.5.2-1) unstable; urgency=low
+
+  * Initial release (Closes: #703357)
+
+ -- Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>  Fri, 15 Mar 2013 17:20:36 +0100

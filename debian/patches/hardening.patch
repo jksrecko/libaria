@@ -1,0 +1,90 @@
+Patching detected hardening problems in libaria.
+--- a/src/ArMap.cpp
++++ b/src/ArMap.cpp
+@@ -1542,7 +1542,7 @@
+ {
+   myConfigMapName[0] = '\0';
+   if (fileName != NULL) {
+-    snprintf(myConfigMapName, MAX_MAP_NAME_LENGTH, fileName);
++    snprintf(myConfigMapName, MAX_MAP_NAME_LENGTH, "%s", fileName);
+   }
+ 
+ } // end method changeConfigMapName
+--- a/src/ArMapInterface.cpp
++++ b/src/ArMapInterface.cpp
+@@ -100,7 +100,7 @@
+     char *nameBuf = new char[totalLen];
+     nameBuf[0] = '\0';
+ 
+-    snprintf(nameBuf, totalLen, baseDirectory);
++    snprintf(nameBuf, totalLen, "%s", baseDirectory);
+     ArUtil::appendSlash(nameBuf, totalLen);
+     
+     realFileName = nameBuf;
+--- a/src/ArSocket.cpp
++++ b/src/ArSocket.cpp
+@@ -484,7 +484,7 @@
+   }
+   if (separator.getArgc() == 1)
+   {
+-    snprintf(useHost, useHostSize, separator.getArg(0));
++    snprintf(useHost, useHostSize, "%s", separator.getArg(0));
+     *port = rawPort;
+     return;
+   }
+@@ -492,7 +492,7 @@
+   {
+     if (separator.isArgInt(1))
+     {
+-      snprintf(useHost, useHostSize, separator.getArg(0));
++      snprintf(useHost, useHostSize, "%s", separator.getArg(0));
+       *port = separator.getArgInt(1);
+       return;
+     }
+--- a/src/ArSocket_LIN.cpp
++++ b/src/ArSocket_LIN.cpp
+@@ -684,7 +684,7 @@
+   {
+     myErrorStr="Trying to get socket name on an unopened socket";
+     myError = NetFail;
+-    printf(myErrorStr.c_str());
++    printf("%s", myErrorStr.c_str());
+     return(false);
+   }
+ 
+--- a/Makefile
++++ b/Makefile
+@@ -24,12 +24,12 @@
+ # this is set up with the extra layer since the python wrapper needs exceptions
+ # but I didn't want to have two sets of defines
+ BARECXXFLAGS:= -fPIC -g -Wall -D_REENTRANT 
+-CXXFLAGS+=$(BARECXXFLAGS) -fno-exceptions 
++CXXFLAGS+=$(CPPFLAGS) $(BARECXXFLAGS) -fno-exceptions 
+ 
+ CXXINC:=-Iinclude
+-CXXLINK:=-Llib -lAria -lpthread -ldl -lrt
++CXXLINK:=$(LDFLAGS) -Llib -lAria -lpthread -ldl -lrt
+ 
+-CXXSTATICLINK:=-Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic -lpthread -ldl -lrt -Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
++CXXSTATICLINK:=$(LDFLAGS) -Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic -lpthread -ldl -lrt -Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
+ 
+ 
+ ifndef JAVAC
+@@ -230,7 +230,7 @@
+ ####
+ 
+ # Default Rule
+-all: dirs $(TARGETS)
++all: dirs $(TARGETS) params docs lib/libAria.a
+ 
+ # Build all targets, docs, params, etc. etc.
+ everything: dirs $(ALL_TARGETS) 
+@@ -536,7 +536,7 @@
+ ####
+ 
+ lib/libAria.so: $(OFILES) Makefile.dep 
+-	$(CXX) -shared -Wl,-soname,libAria.so.2 -o $(@).2.7.5.2 $(OFILES)
++	$(CXX) -shared -Wl,-soname,libAria.so.2 $(LDFLAGS) -o $(@).2.7.5.2 $(OFILES)
+ 	ln -s libAria.so.2.7.5.2 lib/libAria.so.2
+ 	ln -s libAria.so.2 lib/libAria.so
+ 

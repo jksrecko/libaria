@@ -1,0 +1,4 @@
+version=3
+opts=dversionmangle=s/\+repack$// \
+http://robots.mobilerobots.com/wiki/ARIA \
+http://robots.mobilerobots.com/ARIA/download/current/ARIA-([0-9\.]+)\+gcc.+\.tgz

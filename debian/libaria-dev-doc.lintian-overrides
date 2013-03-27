@@ -1,0 +1,6 @@
+# The doxygen introduces jQuery library.
+# The issue has been discused at debian-metors mailing list:
+# http://lists.debian.org/debian-mentors/2012/11/msg00310.html
+libaria-dev-doc binary: embedded-javascript-library
+# Doxygen builds some identical images.
+libaria-dev-doc binary: duplicate-files

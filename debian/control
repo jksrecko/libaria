@@ -1,0 +1,44 @@
+Source: libaria
+Priority: extra
+Maintainer: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
+Build-Depends: debhelper (>= 9), libc6, doxygen
+Standards-Version: 3.9.4
+Section: libs
+Homepage: http://robots.mobilerobots.com/wiki/ARIA
+
+Package: libaria-dev
+Section: libdevel
+Architecture: any
+Depends: libaria2 (= ${binary:Version}), ${misc:Depends}
+Description: C++ library for MobileRobots/ActivMedia robots (devel)
+ ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
+ mobile robots and their accessories, and for creating robot control
+ applications. It also provides many cross-platform and high-level tools for
+ multimedia, networking, and other useful tasks.
+ .
+ This package contains static libraries and header files.
+
+Package: libaria2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: C++ library for MobileRobots/ActivMedia robots
+ ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
+ mobile robots and their accessories, and for creating robot control
+ applications. It also provides many cross-platform and high-level tools for
+ multimedia, networking, and other useful tasks.
+ .
+ This package contains shared libraries.
+
+Package: libaria-dev-doc
+Section: doc
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: libaria-dev (= ${binary:Version})
+Description: C++ library for MobileRobots/ActivMedia robots (devel docs)
+ ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
+ mobile robots and their accessories, and for creating robot control
+ applications. It also provides many cross-platform and high-level tools for
+ multimedia, networking, and other useful tasks.
+ .
+ This package contains doxygen generated documentation.
+

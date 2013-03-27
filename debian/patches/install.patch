@@ -1,0 +1,72 @@
+Changes the install location and files.
+
+The install location has been changed to /usr and the subset of generated files
+are installed to FHS conformant locations.
+--- a/Makefile
++++ b/Makefile
+@@ -536,7 +536,9 @@
+ ####
+ 
+ lib/libAria.so: $(OFILES) Makefile.dep 
+-	$(CXX) -shared -o $(@) $(OFILES)
++	$(CXX) -shared -Wl,-soname,libAria.so.2 -o $(@).2.7.5.2 $(OFILES)
++	ln -s libAria.so.2.7.5.2 lib/libAria.so.2
++	ln -s libAria.so.2 lib/libAria.so
+ 
+ lib/libAria.a: $(OFILES) Makefile.dep 
+ 	ar -cr $(@) $(OFILES)
+@@ -638,7 +640,7 @@
+ 
+ # What to put in /etc/Aria:
+ ifndef STORED_INSTALL_DIR
+-STORED_INSTALL_DIR=$(INSTALL_DIR)
++STORED_INSTALL_DIR=$(INSTALL_DIR)/share/Aria
+ endif
+ 
+ # How to run 'install' for the install rule:
+@@ -653,35 +655,19 @@
+ # Override installation locations with INSTALL_DIR environment variable.
+ # Things are installed group-writable so as to be hacked upon.
+ install:
+-	@echo      	--------------------------------------
+-	@echo		    Installing ARIA in $(DESTDIR)$(INSTALL_DIR)...
+-	@echo      	--------------------------------------
+-	$(INSTALL) -m 775 -d $(DESTDIR)$(INSTALL_DIR)
+-	find    include src tests utils params docs examples advanced maps \
+-	        ArNetworking java javaExamples python pythonExamples  obj \
+-	        \( -name \*.o -or -name core -or -name CVS -or -name .\* -or -name \*~ -or -name tmp -or -name proprietary* -or -name \*.bak -or -name \*.class \) -prune  \
+-	        -or -type d   -exec $(INSTALL) -d -m 777 $(DESTDIR)$(INSTALL_DIR)/\{\} \; \
+-	        -or -type l   -exec cp --no-dereference \{\} $(DESTDIR)$(INSTALL_DIR)/\{\} \; \
+-	        -or -name \*.a -exec $(INSTALL) -D -m 666 \{\}  $(DESTDIR)$(INSTALL_DIR)/\{\} \; \
+-	        -or -perm +1  -exec $(INSTALL) -D --strip -m 777 \{\}  $(DESTDIR)$(INSTALL_DIR)/\{\} \; \
+-	        -or           -exec $(INSTALL) -D -m 666 \{\} $(DESTDIR)$(INSTALL_DIR)/\{\} \;
+-	$(INSTALL) -D -m 664 LICENSE.txt INSTALL.txt README.txt Makefile Aria-Reference.html version.txt Changes.txt CommandLineOptions.txt icon.png $(DESTDIR)$(INSTALL_DIR)/
+-	$(INSTALL) -D -m 666  Makefile.dep doxygen.conf $(DESTDIR)$(INSTALL_DIR)/
+-	$(INSTALL) -D -m 664 bin/SIMULATOR_README.txt $(DESTDIR)$(INSTALL_DIR)/bin/SIMULATOR_README.txt
+-	$(INSTALL) -d -m 777 $(DESTDIR)$(INSTALL_DIR)/lib/
+-	$(INSTALL) -D --strip -m 666 lib/libAria.so lib/libArNetworking.so lib/libAriaJava.so lib/libArNetworkingJava.so $(DESTDIR)$(INSTALL_DIR)/lib/
++	$(INSTALL) -m 755 -d $(DESTDIR)$(INSTALL_DIR)
++	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/include/Aria
++	$(INSTALL) -D -m 644 include/*.h $(DESTDIR)$(INSTALL_DIR)/include/Aria
++	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
++	$(INSTALL) -D -m 644 params/* $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
++	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/lib/
++	$(INSTALL) -D -m 644 lib/libAria.so.2.7.5.2 $(DESTDIR)$(INSTALL_DIR)/lib/
++	cp --no-dereference lib/libAria.so.2 $(DESTDIR)$(INSTALL_DIR)/lib/
++	cp --no-dereference lib/libAria.so $(DESTDIR)$(INSTALL_DIR)/lib/
++	$(INSTALL) -D -m 644 lib/*.a $(DESTDIR)$(INSTALL_DIR)/lib/
+ 	@if test -z "$(DIST_INSTALL)"; then \
+-		echo "if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi" ;\
+ 		if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi ;\
+-		echo "echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria" ;\
+ 		echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria ;\
+-		echo       ------------------------------------------------------------------------------------ ;\
+-		echo       ARIA has been installed in $(DESTDIR)$(INSTALL_DIR). ;\
+-		echo ;\
+-		echo       To be able to use the ARIA libraries, you must now add $(DESTDIR)$(INSTALL_DIR)/lib ;\
+-		echo       to your LD_LIBRARY_PATH environment variable, or to the /etc/ld.so.conf system file, ;\
+-		echo       then run \'ldconfig\';\
+-		echo     	 ------------------------------------------------------------------------------------ ;\
+ 	fi
+ 
+ #		echo ;\

@@ -1,0 +1,102 @@
+Fix upstream build system.
+
+Since the upstream tarball already contains build results,
+Makefile and utils were modified to enable full clean and rebuild.
+--- a/Makefile
++++ b/Makefile
+@@ -264,7 +264,6 @@
+ docs: doc
+ doc: docs/index.html
+ docs/index.html: $(SRC_FILES) $(HEADER_FILES) $(EXAMPLES_CPP) doxygen.conf docs/overview.dox docs/options/all_options.dox docs/params.dox
+-	$(MAKE) cleanDoc
+ 	doxygen doxygen.conf
+ 
+ arnetworking_swig:
+@@ -349,7 +348,11 @@
+ 	-rm -f $(MOD_EXAMPLES)
+ 
+ cleanDoc:
+-	-rm -rf docs/*.html docs/*.png docs/doxygen.css
++	find docs/ -path docs/figures -prune -o -type d \! -name docs -exec rm -rf \{\} +
++	find docs/ -path docs/figures -prune -o \! \( -name "*.dox" -o -name docs \) -execdir rm \{\} +
++
++cleanParams:
++	-rm -rf params
+ 
+ cleanPython:
+ 	-rm python/_AriaPy.so
+@@ -390,23 +393,21 @@
+ cleanAll: clean 
+ 	rm -f lib/lib*.so*
+ 	for dir in `find . -maxdepth 1 -name "Ar*" -xtype d`; do cd $$dir; make clean; cd ..; done
+-	$(MAKE) -C ArVideo cleanAll
+ 	$(MAKE) -C ArNetworking cleanAll
+ 
+ fullCleanAll: cleanAll cleanJava cleanPython 
+ 	rm -f lib/lib*.so*
+ 	rm -f obj/*.o*
+-	for dir in `find . -maxdepth 1 -name "Ar*" -xtype d`; do cd $$dir; make fullClean; cd ..; done
+ 
+ 
+ 
+ params: utils/makeParams
+ 	-mkdir params
+-	utils/makeParams
++	LD_LIBRARY_PATH=lib utils/makeParams
+ 
+ CommandLineOptions.txt.in docs/options/all_options.dox: utils/genCommandLineOptionDocs src/ArSimpleConnector.cpp src/ArGPSConnector.cpp src/ArTCM2.cpp
+ 	-mkdir docs/options
+-	utils/genCommandLineOptionDocs
++	LD_LIBRARY_PATH=lib utils/genCommandLineOptionDocs
+ 
+ alllibs: allLibs
+ 
+--- a/utils/makeParams.cpp
++++ b/utils/makeParams.cpp
+@@ -38,6 +38,7 @@
+ {
+   Aria::init();
+   //ArLog::init(ArLog::StdOut, ArLog::Verbose);
++  Aria::setDirectory(".");
+ 
+   makePref(new ArRobotAmigo);
+   makePref(new ArRobotAmigoSh);
+--- a/ArNetworking/Makefile
++++ b/ArNetworking/Makefile
+@@ -68,7 +68,7 @@
+ TARGETS:=../lib/libArNetworking.so examples
+ 
+ EXAMPLES_CPP:=$(shell find examples -name "*.$(CFILEEXT)" | grep -v Mod.cpp)
+-EXAMPLES:=$(patsubst %.$(CFILEEXT),%,$(EXAMPLES_CPP))
++EXAMPLES:=$(patsubst %.$(CFILEEXT),%,$(EXAMPLES_CPP)) $(patsubst %.$(CFILEEXT),%Static,$(EXAMPLES_CPP))
+ 
+ TESTS_CPP:=$(shell find tests -name "*.$(CFILEEXT)" | grep -v Mod.cpp)
+ TESTS:=$(patsubst %.$(CFILEEXT),%,$(TESTS_CPP))
+@@ -102,6 +102,7 @@
+ clean: cleanExamples
+ 	rm -f ../lib/libArNetworking.so ../lib/libArNetworking.a \
+ 	`find . -name core` $(OFILES) `find . -name '*~'`
++	rm -f genCommandLineOptionDocs
+ 
+ cleanPython:
+ 	-rm ../python/_ArNetworkingPy.so
+@@ -114,8 +115,8 @@
+ 	rm -f $(EXAMPLES)
+ 
+ cleanDoc:
+-	-rm -f docs/*.html docs/*.png docs/*.png
+-	-rm -rf docs/tmp
++	find docs/ -path docs/figures -prune -o -type d \! -name docs -exec rm -rf \{\} +
++	find docs/ -path docs/figures -prune -o \! -name docs -execdir rm \{\} +
+ 
+ cleanAll: clean cleanExamples cleanJava cleanPython cleanDoc
+ 
+@@ -182,7 +183,7 @@
+ 
+ CommandLineOptions.txt.in docs/options/all_options.dox: genCommandLineOptionDocs
+ 	-mkdir docs/options
+-	./genCommandLineOptionDocs
++	LD_LIBRARY_PATH=../lib ./genCommandLineOptionDocs
+ 
+ genCommandLineOptionDocs: ../utils/genCommandLineOptionDocs.cpp ../lib/libAria.so ../lib/libArNetworking.so src/ArServerSimpleOpener.cpp src/ArClientSimpleConnector.cpp src/ArClientSwitchManager.cpp
+ 	$(CXX) $(CXXFLAGS) -DFOR_ARNETWORKING $(CXXINC) $< -o $@ $(CXXLINK)

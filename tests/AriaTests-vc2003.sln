@@ -1,0 +1,48 @@
+Microsoft Visual Studio Solution File, Format Version 8.00
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "joytest", "joytest.vcproj", "{949DC88E-420E-4A3D-9DA4-95A1D6EAFAE4}"
+	ProjectSection(ProjectDependencies) = postProject
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gyroDrive", "gyroDrive.vcproj", "{5CCF6F58-EBB1-46A9-B923-A65E0524931B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AriaDLL", "..\src\AriaDLL-vc2003.vcproj", "{606257AE-E882-4C66-84C0-72331642D09F}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mapTest", "mapTest-vc2003.vcproj", "{B5F29C69-B584-4221-98D9-F6BE7E039571}"
+	ProjectSection(ProjectDependencies) = postProject
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfiguration) = preSolution
+		Debug = Debug
+		Release = Release
+	EndGlobalSection
+	GlobalSection(ProjectConfiguration) = postSolution
+		{949DC88E-420E-4A3D-9DA4-95A1D6EAFAE4}.Debug.ActiveCfg = Debug|Win32
+		{949DC88E-420E-4A3D-9DA4-95A1D6EAFAE4}.Debug.Build.0 = Debug|Win32
+		{949DC88E-420E-4A3D-9DA4-95A1D6EAFAE4}.Release.ActiveCfg = Release|Win32
+		{949DC88E-420E-4A3D-9DA4-95A1D6EAFAE4}.Release.Build.0 = Release|Win32
+		{5CCF6F58-EBB1-46A9-B923-A65E0524931B}.Debug.ActiveCfg = Debug|Win32
+		{5CCF6F58-EBB1-46A9-B923-A65E0524931B}.Debug.Build.0 = Debug|Win32
+		{5CCF6F58-EBB1-46A9-B923-A65E0524931B}.Release.ActiveCfg = Release|Win32
+		{5CCF6F58-EBB1-46A9-B923-A65E0524931B}.Release.Build.0 = Release|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Debug.ActiveCfg = Debug|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Debug.Build.0 = Debug|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Release.ActiveCfg = Release|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Release.Build.0 = Release|Win32
+		{B5F29C69-B584-4221-98D9-F6BE7E039571}.Debug.ActiveCfg = Debug|Win32
+		{B5F29C69-B584-4221-98D9-F6BE7E039571}.Debug.Build.0 = Debug|Win32
+		{B5F29C69-B584-4221-98D9-F6BE7E039571}.Release.ActiveCfg = Release|Win32
+		{B5F29C69-B584-4221-98D9-F6BE7E039571}.Release.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+	EndGlobalSection
+	GlobalSection(ExtensibilityAddIns) = postSolution
+	EndGlobalSection
+EndGlobal

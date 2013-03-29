@@ -1,0 +1,73 @@
+Microsoft Visual Studio Solution File, Format Version 8.00
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AriaPy", "AriaPy.vcproj", "{7BADF083-FA45-4E04-B907-94007E257C20}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35} = {DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ArNetworkingPython", "ArNetworkingPython.vcproj", "{7A0CBE13-1A83-481F-9DB8-9E2372366950}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35} = {DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}
+		{7D28CD1A-B1DE-4109-9653-D8B26D0DA521} = {7D28CD1A-B1DE-4109-9653-D8B26D0DA521}
+		{7BADF083-FA45-4E04-B907-94007E257C20} = {7BADF083-FA45-4E04-B907-94007E257C20}
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+		{95FF1CC1-5006-4DEE-99D9-0B6C418C9689} = {95FF1CC1-5006-4DEE-99D9-0B6C418C9689}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AriaDLL", "..\src\AriaDLL-vc2003.vcproj", "{606257AE-E882-4C66-84C0-72331642D09F}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ArNetworkingLib", "..\ArNetworking\src\ArNetworkingLib.vcproj", "{95FF1CC1-5006-4DEE-99D9-0B6C418C9689}"
+	ProjectSection(ProjectDependencies) = postProject
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ArNetworkingSwigPython", "ArNetworkingSwigPython.vcproj", "{7D28CD1A-B1DE-4109-9653-D8B26D0DA521}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35} = {DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}
+		{7BADF083-FA45-4E04-B907-94007E257C20} = {7BADF083-FA45-4E04-B907-94007E257C20}
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+		{95FF1CC1-5006-4DEE-99D9-0B6C418C9689} = {95FF1CC1-5006-4DEE-99D9-0B6C418C9689}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AriaSwigPython", "AriaSwigPython.vcproj", "{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfiguration) = preSolution
+		Debug = Debug
+		Release = Release
+	EndGlobalSection
+	GlobalSection(ProjectConfiguration) = postSolution
+		{7BADF083-FA45-4E04-B907-94007E257C20}.Debug.ActiveCfg = Debug|Win32
+		{7BADF083-FA45-4E04-B907-94007E257C20}.Debug.Build.0 = Debug|Win32
+		{7BADF083-FA45-4E04-B907-94007E257C20}.Release.ActiveCfg = Release|Win32
+		{7BADF083-FA45-4E04-B907-94007E257C20}.Release.Build.0 = Release|Win32
+		{7A0CBE13-1A83-481F-9DB8-9E2372366950}.Debug.ActiveCfg = Debug|Win32
+		{7A0CBE13-1A83-481F-9DB8-9E2372366950}.Debug.Build.0 = Debug|Win32
+		{7A0CBE13-1A83-481F-9DB8-9E2372366950}.Release.ActiveCfg = Release|Win32
+		{7A0CBE13-1A83-481F-9DB8-9E2372366950}.Release.Build.0 = Release|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Debug.ActiveCfg = Debug|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Debug.Build.0 = Debug|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Release.ActiveCfg = Release|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Release.Build.0 = Release|Win32
+		{95FF1CC1-5006-4DEE-99D9-0B6C418C9689}.Debug.ActiveCfg = Debug|Win32
+		{95FF1CC1-5006-4DEE-99D9-0B6C418C9689}.Debug.Build.0 = Debug|Win32
+		{95FF1CC1-5006-4DEE-99D9-0B6C418C9689}.Release.ActiveCfg = Release|Win32
+		{95FF1CC1-5006-4DEE-99D9-0B6C418C9689}.Release.Build.0 = Release|Win32
+		{7D28CD1A-B1DE-4109-9653-D8B26D0DA521}.Debug.ActiveCfg = Debug|Win32
+		{7D28CD1A-B1DE-4109-9653-D8B26D0DA521}.Debug.Build.0 = Debug|Win32
+		{7D28CD1A-B1DE-4109-9653-D8B26D0DA521}.Release.ActiveCfg = Release|Win32
+		{7D28CD1A-B1DE-4109-9653-D8B26D0DA521}.Release.Build.0 = Release|Win32
+		{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}.Debug.ActiveCfg = Debug|Win32
+		{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}.Debug.Build.0 = Debug|Win32
+		{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}.Release.ActiveCfg = Release|Win32
+		{DDAB880A-2C68-4D8E-AD24-B3D940CCFB35}.Release.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+	EndGlobalSection
+	GlobalSection(ExtensibilityAddIns) = postSolution
+	EndGlobalSection
+EndGlobal

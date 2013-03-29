@@ -1,0 +1,61 @@
+Microsoft Visual Studio Solution File, Format Version 8.00
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AriaJava", "AriaJava.vcproj", "{3270E630-D0D3-434D-AB7E-703362AEA947}"
+	ProjectSection(ProjectDependencies) = postProject
+		{E333276C-952E-4A46-BED2-BC918AF7D957} = {E333276C-952E-4A46-BED2-BC918AF7D957}
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AriaDLL", "..\src\AriaDLL-vc2003.vcproj", "{606257AE-E882-4C66-84C0-72331642D09F}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ArNetworkingJava", "ArNetworkingJava.vcproj", "{01933B6F-657F-49FA-8AD8-BDC061910E92}"
+	ProjectSection(ProjectDependencies) = postProject
+		{3270E630-D0D3-434D-AB7E-703362AEA947} = {3270E630-D0D3-434D-AB7E-703362AEA947}
+		{E333276C-952E-4A46-BED2-BC918AF7D957} = {E333276C-952E-4A46-BED2-BC918AF7D957}
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ArNetworkingSwigJava", "ArNetworkingSwigJava.vcproj", "{AC5CCD7A-1657-4A3D-9E09-C1434B49AEFB}"
+	ProjectSection(ProjectDependencies) = postProject
+		{3270E630-D0D3-434D-AB7E-703362AEA947} = {3270E630-D0D3-434D-AB7E-703362AEA947}
+		{01933B6F-657F-49FA-8AD8-BDC061910E92} = {01933B6F-657F-49FA-8AD8-BDC061910E92}
+		{606257AE-E882-4C66-84C0-72331642D09F} = {606257AE-E882-4C66-84C0-72331642D09F}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AriaSwigJava", "AriaSwigJava.vcproj", "{E333276C-952E-4A46-BED2-BC918AF7D957}"
+	ProjectSection(ProjectDependencies) = postProject
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfiguration) = preSolution
+		Debug = Debug
+		Release = Release
+	EndGlobalSection
+	GlobalSection(ProjectConfiguration) = postSolution
+		{3270E630-D0D3-434D-AB7E-703362AEA947}.Debug.ActiveCfg = Debug|Win32
+		{3270E630-D0D3-434D-AB7E-703362AEA947}.Debug.Build.0 = Debug|Win32
+		{3270E630-D0D3-434D-AB7E-703362AEA947}.Release.ActiveCfg = Release|Win32
+		{3270E630-D0D3-434D-AB7E-703362AEA947}.Release.Build.0 = Release|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Debug.ActiveCfg = Debug|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Debug.Build.0 = Debug|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Release.ActiveCfg = Release|Win32
+		{606257AE-E882-4C66-84C0-72331642D09F}.Release.Build.0 = Release|Win32
+		{01933B6F-657F-49FA-8AD8-BDC061910E92}.Debug.ActiveCfg = Debug|Win32
+		{01933B6F-657F-49FA-8AD8-BDC061910E92}.Debug.Build.0 = Debug|Win32
+		{01933B6F-657F-49FA-8AD8-BDC061910E92}.Release.ActiveCfg = Release|Win32
+		{01933B6F-657F-49FA-8AD8-BDC061910E92}.Release.Build.0 = Release|Win32
+		{AC5CCD7A-1657-4A3D-9E09-C1434B49AEFB}.Debug.ActiveCfg = Debug|Win32
+		{AC5CCD7A-1657-4A3D-9E09-C1434B49AEFB}.Debug.Build.0 = Debug|Win32
+		{AC5CCD7A-1657-4A3D-9E09-C1434B49AEFB}.Release.ActiveCfg = Release|Win32
+		{AC5CCD7A-1657-4A3D-9E09-C1434B49AEFB}.Release.Build.0 = Release|Win32
+		{E333276C-952E-4A46-BED2-BC918AF7D957}.Debug.ActiveCfg = Debug|Win32
+		{E333276C-952E-4A46-BED2-BC918AF7D957}.Debug.Build.0 = Debug|Win32
+		{E333276C-952E-4A46-BED2-BC918AF7D957}.Release.ActiveCfg = Release|Win32
+		{E333276C-952E-4A46-BED2-BC918AF7D957}.Release.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+	EndGlobalSection
+	GlobalSection(ExtensibilityAddIns) = postSolution
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="Windows-1252"?>
+<VisualStudioProject
+	ProjectType="Visual C++"
+	Version="7.10"
+	Name="AriaSwigJava"
+	ProjectGUID="{E333276C-952E-4A46-BED2-BC918AF7D957}"
+	RootNamespace="RunSwigJava"
+	Keyword="ManagedCProj">
+	<Platforms>
+		<Platform
+			Name="Win32"/>
+	</Platforms>
+	<Configurations>
+		<Configuration
+			Name="Debug|Win32"
+			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)"
+			ConfigurationType="1"
+			CharacterSet="2"
+			ManagedExtensions="TRUE">
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="0"
+				PreprocessorDefinitions="WIN32;_DEBUG"
+				MinimalRebuild="FALSE"
+				BasicRuntimeChecks="0"
+				RuntimeLibrary="1"
+				WarningLevel="3"
+				DebugInformationFormat="3"/>
+			<Tool
+				Name="VCCustomBuildTool"
+				Description="Custom Build Step: Running C:\swig\swig.exe to generate Java wrapper code; Compiling Java code; Building JAR file."
+				CommandLine="mkdir &quot;$(ProjectDir)\com\mobilerobots\Aria&quot;
+del &quot;$(ProjectDir)\com\mobilerobots\Aria\*.java&quot;
+del &quot;$(ProjectDir)\com\mobilerobots\Aria\*.class&quot;
+echo Running Swig (C:\swig\swig.exe)...
+C:\swig\swig.exe -Fmicrosoft -c++ -package com.mobilerobots.Aria -java -module AriaJava -DWIN32 -DSWIGWIN -DAREXPORT -outdir &quot;$(ProjectDir)\com\mobilerobots\Aria&quot;  -o AriaJava_wrap.cpp &quot;-I$(ProjectDir)\..\include&quot; &quot;$(ProjectDir)\..\include\wrapper.i&quot;
+echo Compiling Java ($(JAVA_BIN)\javac)...
+&quot;$(JAVA_BIN)\javac&quot; -classpath &quot;$(ProjectDir)\com\mobilerobots\Aria&quot; $(ProjectDir)\com\mobilerobots\Aria\*.java
+cd &quot;$(ProjectDir)&quot;
+echo Building JAR ($(JAVA_BIN)\jar)...
+&quot;$(JAVA_BIN)\jar&quot; cf &quot;$(ProjectDir)\Aria.jar&quot; com\mobilerobots\Aria\*.class"
+				AdditionalDependencies="../include/wrapper.i"
+				Outputs="$(ProjectDir)\AriaJava_wrap.cpp;$(ProjectDir)\AriaJava_wrap.h;$(ProjectDir)\com\mobilerobots\Aria\ArRobot.cpp;$(ProjectDir)\com\mobilerobots\Aria\ArRobot.class;$(ProjectDir)\Aria.jar"/>
+			<Tool
+				Name="VCLinkerTool"
+				OutputFile="$(OutDir)\$(ProjectName).exe"
+				LinkIncremental="2"
+				GenerateDebugInformation="TRUE"
+				AssemblyDebug="1"/>
+			<Tool
+				Name="VCMIDLTool"/>
+			<Tool
+				Name="VCPostBuildEventTool"/>
+			<Tool
+				Name="VCPreBuildEventTool"/>
+			<Tool
+				Name="VCPreLinkEventTool"/>
+			<Tool
+				Name="VCResourceCompilerTool"/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"/>
+			<Tool
+				Name="VCWebDeploymentTool"/>
+			<Tool
+				Name="VCManagedWrapperGeneratorTool"/>
+			<Tool
+				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+		</Configuration>
+		<Configuration
+			Name="Release|Win32"
+			OutputDirectory="$(ProjectDir)/Aria"
+			IntermediateDirectory="$(ConfigurationName)"
+			ConfigurationType="1"
+			CharacterSet="2"
+			ManagedExtensions="TRUE">
+			<Tool
+				Name="VCCLCompilerTool"
+				PreprocessorDefinitions="WIN32;NDEBUG"
+				MinimalRebuild="FALSE"
+				RuntimeLibrary="0"
+				WarningLevel="3"
+				DebugInformationFormat="3"/>
+			<Tool
+				Name="VCCustomBuildTool"
+				Description="Custom Build Step: Running C:\swig\swig.exe to generate Java wrapper code; Compiling Java code; Building JAR file."
+				CommandLine="mkdir &quot;$(ProjectDir)\com\mobilerobots\Aria&quot;
+del &quot;$(ProjectDir)\com\mobilerobots\Aria\*.java&quot;
+del &quot;$(ProjectDir)\com\mobilerobots\Aria\*.class&quot;
+echo Running Swig (C:\swig\swig.exe)...
+C:\swig\swig.exe -Fmicrosoft -c++ -package com.mobilerobots.Aria -java -module AriaJava -DWIN32 -DSWIGWIN -DAREXPORT -outdir &quot;$(ProjectDir)\com\mobilerobots\Aria&quot;  -o AriaJava_wrap.cpp &quot;-I$(ProjectDir)\..\include&quot; &quot;$(ProjectDir)\..\include\wrapper.i&quot;
+echo Compiling Java ($(JAVA_BIN)\javac)...
+&quot;$(JAVA_BIN)\javac&quot; -classpath &quot;$(ProjectDir)\com\mobilerobots\Aria&quot; $(ProjectDir)\com\mobilerobots\Aria\*.java
+cd &quot;$(ProjectDir)&quot;
+echo Building JAR ($(JAVA_BIN)\jar)...
+&quot;$(JAVA_BIN)\jar&quot; cf &quot;$(ProjectDir)\Aria.jar&quot; com\mobilerobots\Aria\*.class"
+				AdditionalDependencies="../include/wrapper.i;../include/*.h"
+				Outputs="$(ProjectDir)\AriaJava_wrap.cpp;$(ProjectDir)\AriaJava_wrap.h;$(ProjectDir)\com\mobilerobots\Aria\ArRobot.java;$(ProjectDir)\com\mobilerobots\Aria\ArRobot.class;$(ProjectDir)\Aria.jar"/>
+			<Tool
+				Name="VCLinkerTool"
+				OutputFile="$(OutDir)\$(ProjectName).exe"
+				LinkIncremental="1"
+				GenerateDebugInformation="TRUE"/>
+			<Tool
+				Name="VCMIDLTool"/>
+			<Tool
+				Name="VCPostBuildEventTool"/>
+			<Tool
+				Name="VCPreBuildEventTool"/>
+			<Tool
+				Name="VCPreLinkEventTool"/>
+			<Tool
+				Name="VCResourceCompilerTool"/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"/>
+			<Tool
+				Name="VCWebDeploymentTool"/>
+			<Tool
+				Name="VCManagedWrapperGeneratorTool"/>
+			<Tool
+				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+		</Configuration>
+	</Configurations>
+	<References>
+	</References>
+	<Files>
+		<File
+			RelativePath="..\include\wrapper.i">
+		</File>
+		<File
+			RelativePath="..\include\wrapper_ExtraClasses.h">
+		</File>
+		<File
+			RelativePath="..\include\wrapper_Functors.h">
+		</File>
+	</Files>
+	<Globals>
+	</Globals>
+</VisualStudioProject>

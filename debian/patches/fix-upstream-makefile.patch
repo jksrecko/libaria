@@ -76,7 +76,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  TESTS_CPP:=$(shell find tests -name "*.$(CFILEEXT)" | grep -v Mod.cpp)
  TESTS:=$(patsubst %.$(CFILEEXT),%,$(TESTS_CPP))
-@@ -102,6 +102,7 @@
+@@ -102,20 +102,22 @@
  clean: cleanExamples
  	rm -f ../lib/libArNetworking.so ../lib/libArNetworking.a \
  	`find . -name core` $(OFILES) `find . -name '*~'`
@@ -84,7 +84,13 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  cleanPython:
  	-rm ../python/_ArNetworkingPy.so
-@@ -114,8 +115,8 @@
+ 	-rm ../python/ArNetworkingPy.py
+ 	-rm ../python/ArNetworkingPy.pyc
+ 	-rm ../python/ArNetworkingPy_wrap.cpp
++	-rm ../python/ArNetworkingPy_wrap.h
+ 	-rm ../obj/ArNetworkingPy_wrap.o
+ 
+ cleanExamples:
  	rm -f $(EXAMPLES)
  
  cleanDoc:
@@ -95,7 +101,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  cleanAll: clean cleanExamples cleanJava cleanPython cleanDoc
  
-@@ -182,7 +183,7 @@
+@@ -182,7 +184,7 @@
  
  CommandLineOptions.txt.in docs/options/all_options.dox: genCommandLineOptionDocs
  	-mkdir docs/options

@@ -5,6 +5,8 @@ Build-Depends: debhelper (>= 9), libc6, doxygen
 Standards-Version: 3.9.4
 Section: libs
 Homepage: http://robots.mobilerobots.com/wiki/ARIA
+Vcs-Git: git://github.com/jksrecko/libaria.git
+Vcs-browser: https://github.com/jksrecko/libaria
 
 Package: libaria-dev
 Section: libdevel

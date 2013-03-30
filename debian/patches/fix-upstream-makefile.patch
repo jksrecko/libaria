@@ -1,7 +1,11 @@
-Fix upstream build system.
-
-Since the upstream tarball already contains build results,
-Makefile and utils were modified to enable full clean and rebuild.
+Description: Fix upstream build system.
+ Since the upstream tarball already contains build results,
+ Makefile and utils were modified to enable full clean and rebuild.
+ .
+ Reed (upstream) will consider it for the next major ARIA release (2.8)
+ expected in the Summer of 2013.
+Forwarded: Reed Hedges <reed.hedges@adept.com>
+Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
 @@ -264,7 +264,6 @@

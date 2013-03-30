@@ -1,4 +1,5 @@
-Patching detected hardening problems in libaria.
+Subject: Patching detected hardening problems in libaria.
+Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/src/ArMap.cpp
 +++ b/src/ArMap.cpp
 @@ -1542,7 +1542,7 @@

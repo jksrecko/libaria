@@ -1,7 +1,8 @@
-Changes the install location and files.
-
-The install location has been changed to /usr and the subset of generated files
-are installed to FHS conformant locations.
+Description: Changes to the install target.
+ The install target handles only a subset of the generated files.
+ .
+ libAria.so gets a SONAME.
+Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
 @@ -536,7 +536,9 @@

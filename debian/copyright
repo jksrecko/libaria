@@ -2,17 +2,6 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: MobileRobots' Advanced Robot Interface for Applications (ARIA)
 Upstream-Contact: Reed Hedges <reed.hedges@adept.com>
 Source: http://robots.mobilerobots.com/wiki/ARIA
- Source tarball was repackaged from ARIA-2.7.5.2+gcc4.3.tgz since the upstream tarball wasn't source only.
- Repackaging was done as follows:
- $ wget http://robots.mobilerobots.com/ARIA/download/current/ARIA-2.7.5.2+gcc4.3.tgz
- $ tar xzf ARIA-2.7.5.2+gcc4.3.tgz
- $ mv Aria-2.7.5.2 libaria-2.7.5.2.orig
- $ cd libaria-2.7.5.2.orig
- $ patch -p1 < /path/to/libaria_source/debian/patches/fix-upstream-makefile.patch
- $ make fullCleanAll cleanDoc cleanParams
- $ patch -p1 -R < /path/to/libaria_source/debian/patches/fix-upstream-makefile.patch
- $ cd ..
- $ tar cjf libaria_2.7.5.2.orig.tar.bz2 libaria-2.7.5.2.orig/
 
 Files: *
 Copyright: 2002, 2003, 2004, 2005 ActivMedia Robotics, LLC. All rights reserved.

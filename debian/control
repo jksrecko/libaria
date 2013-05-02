@@ -11,6 +11,7 @@ Vcs-browser: https://github.com/jksrecko/libaria
 Package: libaria-dev
 Section: libdevel
 Architecture: any
+Multi-Arch: same
 Depends: libaria2 (= ${binary:Version}), ${misc:Depends}
 Description: C++ library for MobileRobots/ActivMedia robots (devel)
  ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
@@ -22,6 +23,8 @@ Description: C++ library for MobileRobots/ActivMedia robots (devel)
 
 Package: libaria2
 Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: C++ library for MobileRobots/ActivMedia robots
  ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
@@ -33,7 +36,8 @@ Description: C++ library for MobileRobots/ActivMedia robots
 
 Package: libaria-dev-doc
 Section: doc
-Architecture: all
+Architecture: foreign
+Multi-Arch: same
 Depends: ${misc:Depends}
 Suggests: libaria-dev (= ${binary:Version})
 Description: C++ library for MobileRobots/ActivMedia robots (devel docs)

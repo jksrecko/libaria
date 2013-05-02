@@ -3,6 +3,7 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 export INSTALL_DIR=/usr
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
 %:
 	dh $@ 

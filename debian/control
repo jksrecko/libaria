@@ -36,8 +36,8 @@ Description: C++ library for MobileRobots/ActivMedia robots
 
 Package: libaria-dev-doc
 Section: doc
-Architecture: foreign
-Multi-Arch: same
+Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
 Suggests: libaria-dev (= ${binary:Version})
 Description: C++ library for MobileRobots/ActivMedia robots (devel docs)

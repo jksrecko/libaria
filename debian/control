@@ -1,7 +1,7 @@
 Source: libaria
 Priority: extra
 Maintainer: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
-Build-Depends: debhelper (>= 9), doxygen
+Build-Depends: debhelper (>= 9), doxygen, swig, python-dev
 Standards-Version: 3.9.4
 Section: libs
 Homepage: http://robots.mobilerobots.com/wiki/ARIA
@@ -47,4 +47,17 @@ Description: C++ library for MobileRobots/ActivMedia robots (devel docs)
  multimedia, networking, and other useful tasks.
  .
  This package contains doxygen generated documentation.
+
+Package: python-libaria
+Section: python
+Architecture: any
+Multi-Arch: same
+Depends: libaria2 (= ${binary:Version}), ${misc:Depends}, ${python:Depends}
+Description: C++ library for MobileRobots/ActivMedia robots (Python bindings)
+ ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
+ mobile robots and their accessories, and for creating robot control
+ applications. It also provides many cross-platform and high-level tools for
+ multimedia, networking, and other useful tasks.
+ .
+ This package contains SWIG generated Python bindings.
 

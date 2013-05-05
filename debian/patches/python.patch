@@ -41,14 +41,14 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  python/_AriaPy.so: obj/AriaPy_wrap.o lib/libAria.so Makefile.dep
 -	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system?; exit 1; fi
 -	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o -lpthread -ldl -lrt -Llib -lAria
-+	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o -Llib -lAria -lpthread -ldl -lrt
++	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o $(LDFLAGS) -Llib -lAria -lpthread -ldl -lrt
  
  obj/AriaPy_wrap.o: python/AriaPy_wrap.cpp
  	mkdir -p obj
 -	@ if test -z "$(PYTHON_INCLUDE)"; then echo "*** Error: PYTHON_INCLUDE is not set, cannot build ARIA python wrapper"; fi
 -	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system?; exit 1; fi
 -	$(CXX) -c $(BARECXXFLAGS) $(CXXINC) $(PYTHON_INCLUDE_FLAGS) $< -o $@
-+	$(CXX) -c $(BARECXXFLAGS) $(CXXINC) $(shell python-config --includes) $< -o $@
++	$(CXX) -c $(CPPFLAGS) -O2 $(BARECXXFLAGS) $(CXXINC) $(shell python-config --includes) $< -o $@
  
  
  ### Java Wrapper: ###

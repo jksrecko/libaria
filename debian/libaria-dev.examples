@@ -1,0 +1,4 @@
+examples/*.cpp
+examples/Makefile
+examples/README.txt
+advanced

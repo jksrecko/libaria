@@ -21,6 +21,20 @@ Description: C++ library for MobileRobots/ActivMedia robots (devel)
  .
  This package contains static libraries and header files.
 
+Package: libaria-demo
+Section: libdevel
+Architecture: any
+Depends: libaria2 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Description: C++ library for MobileRobots/ActivMedia robots (demo example)
+ ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
+ mobile robots and their accessories, and for creating robot control
+ applications. It also provides many cross-platform and high-level tools for
+ multimedia, networking, and other useful tasks.
+ .
+ This package contains the demo example of the library functions. The example
+ is renamed to aria-demo and can be used to experiment and test the robot's
+ hardware.
+
 Package: libaria2
 Architecture: any
 Multi-Arch: same

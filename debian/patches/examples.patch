@@ -1,0 +1,105 @@
+Description: Including Aria examples in packages.
+Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
+--- a/examples/Makefile
++++ b/examples/Makefile
+@@ -1,30 +1,61 @@
+-# A simple $(MAKE)file to cause make to go look in the top directory. A simple
+-# convenience.
++#Hacked up Makefile for Aria examples
+ 
+-all: lib 
+-	$(MAKE) -C .. examples
+-
+-lib:
+-	$(MAKE) -C .. lib/libAria.so
+-
+-%.so: ../lib/libAria.so %.cpp 
+-	$(MAKE) -C .. examples/$@
+-
+-%: ../lib/libAria.so %.cpp 
+-	$(MAKE) -C .. examples/$@
+-
+-%Static: ../lib/libAria.a %.cpp 
+-	$(MAKE) -C .. examples/$@
+-
+-clean: 
+-	$(MAKE) -C .. cleanExamples
+-
+-../lib/libAria.so: FORCE
+-	$(MAKE) -C .. dirs lib/libAria.so
+-
+-../lib/libAria.a: FORCE	
+-	$(MAKE) -C .. dirs lib/libAria.a
+-
+-FORCE:
+-
+-.PHONY: all FORCE clean lib
++ifndef CXX
++CXX:=g++
++endif
++
++ifndef OUT_DIR
++OUT_DIR:=/tmp
++endif
++
++####
++#### General variables
++####
++
++CFILEEXT:=cpp
++# this is set up with the extra layer since the python wrapper needs exceptions
++# but I didn't want to have two sets of defines
++BARECXXFLAGS:= -fPIC -g -Wall -D_REENTRANT
++CXXFLAGS+=$(CPPFLAGS) $(BARECXXFLAGS) -fno-exceptions
++
++CXXINC:=-I/usr/include/Aria
++CXXLINK:=$(LDFLAGS) -Llib -lAria -lpthread -ldl -lrt
++
++EXAMPLES_CPP:=$(shell find . -maxdepth 1 -name "*.$(CFILEEXT)" | grep -v Mod.cpp | grep -v proprietary)
++EXAMPLES_CPP_GZ:=$(shell find . -maxdepth 1 -name "*.$(CFILEEXT).gz" | grep -v Mod.cpp | grep -v proprietary)
++EXAMPLES:=$(patsubst %.$(CFILEEXT),%,$(EXAMPLES_CPP))
++EXAMPLES+=$(patsubst %.$(CFILEEXT).gz,%,$(EXAMPLES_CPP_GZ))
++ADVANCED_CPP:=$(shell find advanced -name "*.$(CFILEEXT)" | grep -v Mod.cpp | grep -v proprietary)
++ADVANCED_CPP_GZ:=$(shell find advanced -name "*.$(CFILEEXT).gz" | grep -v Mod.cpp | grep -v proprietary)
++ADVANCED:=$(patsubst %.$(CFILEEXT),%,$(ADVANCED_CPP))
++ADVANCED+=$(patsubst %.$(CFILEEXT).gz,%,$(ADVANCED_CPP_GZ))
++
++info:
++	@echo "Convenience makefile for building Aria examples."
++	@echo "Provided targets are examples and advanced."
++	@echo "There is also target all, depending on the previously mentioned targets."
++	@echo
++	@echo "Build results end up in the OUT_DIR (defaults to /tmp)".
++	@echo
++	@echo "One can also build individual example, by providing an example name"
++	@echo "(without suffixes) as a make target."
++
++all: examples advanced
++
++examples: $(EXAMPLES)
++
++advanced: $(ADVANCED)
++
++%: %.$(CFILEEXT)
++	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $(OUT_DIR)/$@ $(CXXLINK)
++
++%: %.$(CFILEEXT).gz
++	zcat $< | $(CXX) $(CXXFLAGS) $(CXXINC) -x c++ - -o $(OUT_DIR)/$@ $(CXXLINK)
++
++advanced/%: advanced/%.$(CFILEEXT)
++	-mkdir -p $(OUT_DIR)/advanced
++	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $(OUT_DIR)/$@ $(CXXLINK)
++
++advanced/%: advanced/%.$(CFILEEXT).gz
++	-mkdir -p $(OUT_DIR)/advanced
++	zcat $< | $(CXX) $(CXXFLAGS) $(CXXINC) -x c++ - -o $(OUT_DIR)/$@ $(CXXLINK)
+--- a/Makefile
++++ b/Makefile
+@@ -657,6 +657,7 @@
+ 		if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi ;\
+ 		echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria ;\
+ 	fi
++	$(INSTALL) -D -m 755 examples/demo $(DESTDIR)$(INSTALL_DIR)/bin/aria-demo
+ 	$(INSTALL) -D -m 644 python/_AriaPy.so debian/
+ 	$(INSTALL) -D -m 644 python/AriaPy.py debian/
+ 

@@ -47,8 +47,7 @@ Description: C++ library for MobileRobots/ActivMedia robots (devel docs)
 Package: python-libaria
 Section: python
 Architecture: any
-Multi-Arch: same
-Depends: libaria2 (= ${binary:Version}), ${misc:Depends}, ${python:Depends}
+Depends: libaria2 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}
 Description: C++ library for MobileRobots/ActivMedia robots (Python bindings)
  ARIA is an object oriented toolkit for controlling MobileRobots/ActivMedia
  mobile robots and their accessories, and for creating robot control

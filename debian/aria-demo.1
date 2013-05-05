@@ -1,0 +1,89 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH ARIA-DEMO 1 "MAY 2013"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+aria-demo \- demonstration program for the Aria library
+.SH SYNOPSIS
+.B aria-demo [-remoteHost|-rh
+remoteHostNameOrIP
+.B ] [-robotPort|-rp
+robotSerialPort
+.B ] ...
+.SH DESCRIPTION
+This manual page documents briefly the
+.B aria-demo
+program.
+.PP
+.\" TeX users may be more comfortable with the \fB<whatever>\fP and
+.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
+.\" respectively.
+\fBaria-demo\fP uses "Modes" defined in ARIA to provide keyboard control
+of many different robot features.
+Use this utility to experiment and test the robot's hardware.
+.SH OPTIONS
+\fBaria-demo\fP accepts all command line options recognized by ARIA library.
+A summary of options is included below.
+.SS ArRobotConnector options
+.TP
+.B \-rh, \-remoteHost <remoteHostNameOrIP>
+Specify the hostname or the IP address of the robot to connect to.
+.TP
+.B \-rp. \-robotPort <robotSerialPort>
+Specify the serial port on which the robots microcontroller is connected.
+.TP
+.B \-rb, \-robotBaud <baud>
+Set the baud rate for the serial connection.
+.TP
+.B \-rrtp, \-remoteRobotTcpPort <remoteRobotTcpPort>
+Set the TCP port of the remote robot.
+.TP
+.B \-ris, \-remoteIsSim
+Indicate that the remote robot is simulated.
+.TP
+.B \-rins, \-remoteIsNotSim
+.TP
+.B \-rlpr, \-robotLogPacketsReceived
+.TP
+.B \-rlps, \-robotLogPacketsSent
+.TP
+.B \-rlmr, \-robotLogMovementReceived
+.TP
+.B \-rlms, \-robotLogMovementSent
+.TP
+.B \-rlvr, \-robotLogVelocitiesReceived
+.TP
+.B \-rla, \-robotLogActions
+.SS ArLaserConnector options
+The following options work accross different laser sensors that may be installed on the robot.
+Read the documentation (provided in the libaria-dev-doc package) for details.
+.TP
+.B \-lp, \-laserPort <laserPort>
+.TP
+.B \-lpt, \-laserPortType <serial|tcp|serial422>
+.TP
+.B \-rltp, \-remoteLaserTcpPort <remoteLaserTcpPort>
+.TP
+.B \-lf, \-laserFlipped <true|false>
+.TP
+.B \-lmr, -laserMaxRange <maxRange>
+.TP
+.B \-lair, \-laserAdditionalIgnoreReadings <readings>
+.SH AUTHOR
+Aria library and this demo program was written by MobileRobots/Adept.
+.PP
+This manual page was written by Srećko Jurić-Kavelj <srecko.juri-kavelj@fer.hr>,
+for the Debian project (and may be used by others).

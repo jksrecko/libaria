@@ -25,7 +25,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  endif
  
  # How to run 'install' for the install rule:
-@@ -653,35 +655,19 @@
+@@ -653,35 +655,18 @@
  # Override installation locations with INSTALL_DIR environment variable.
  # Things are installed group-writable so as to be hacked upon.
  install:
@@ -55,7 +55,6 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 +	$(INSTALL) -D -m 644 lib/libAria.so.2.7.5.2 $(DESTDIR)$(INSTALL_DIR)/lib/
 +	cp --no-dereference lib/libAria.so.2 $(DESTDIR)$(INSTALL_DIR)/lib/
 +	cp --no-dereference lib/libAria.so $(DESTDIR)$(INSTALL_DIR)/lib/
-+	$(INSTALL) -D -m 644 lib/*.a $(DESTDIR)$(INSTALL_DIR)/lib/
  	@if test -z "$(DIST_INSTALL)"; then \
 -		echo "if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi" ;\
  		if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi ;\

@@ -6,8 +6,8 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  ####
  
  # Default Rule
--all: dirs $(TARGETS) params docs lib/libAria.a
-+all: dirs $(TARGETS) params docs lib/libAria.a python python-doc
+-all: dirs $(TARGETS) params docs
++all: dirs $(TARGETS) params docs python python-doc
  
  # Build all targets, docs, params, etc. etc.
  everything: dirs $(ALL_TARGETS) 
@@ -52,7 +52,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  
  ### Java Wrapper: ###
-@@ -669,6 +657,9 @@
+@@ -668,6 +656,9 @@
  		if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi ;\
  		echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria ;\
  	fi

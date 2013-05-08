@@ -2,7 +2,7 @@ Description: Multi-Arch support for shared libraries
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
-@@ -660,11 +660,11 @@
+@@ -660,10 +660,10 @@
  	$(INSTALL) -D -m 644 include/*.h $(DESTDIR)$(INSTALL_DIR)/include/Aria
  	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
  	$(INSTALL) -D -m 644 params/* $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
@@ -10,12 +10,10 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 -	$(INSTALL) -D -m 644 lib/libAria.so.2.7.5.2 $(DESTDIR)$(INSTALL_DIR)/lib/
 -	cp --no-dereference lib/libAria.so.2 $(DESTDIR)$(INSTALL_DIR)/lib/
 -	cp --no-dereference lib/libAria.so $(DESTDIR)$(INSTALL_DIR)/lib/
--	$(INSTALL) -D -m 644 lib/*.a $(DESTDIR)$(INSTALL_DIR)/lib/
 +	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
 +	$(INSTALL) -D -m 644 lib/libAria.so.2.7.5.2 $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
 +	cp --no-dereference lib/libAria.so.2 $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
 +	cp --no-dereference lib/libAria.so $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
-+	$(INSTALL) -D -m 644 lib/*.a $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
  	@if test -z "$(DIST_INSTALL)"; then \
  		if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi ;\
  		echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria ;\

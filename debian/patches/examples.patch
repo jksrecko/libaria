@@ -100,6 +100,6 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  		echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria ;\
  	fi
 +	$(INSTALL) -D -m 755 examples/demo $(DESTDIR)$(INSTALL_DIR)/bin/aria-demo
- 	$(INSTALL) -D -m 644 python/_AriaPy.so debian/
- 	$(INSTALL) -D -m 644 python/AriaPy.py debian/
- 
+ 	$(INSTALL) -m 755 -d $(DESTDIR)$(INSTALL_DIR)/lib/$(shell pyversions -d)/dist-packages/
+ 	$(INSTALL) -D -m 644 python/_AriaPy.so $(DESTDIR)$(INSTALL_DIR)/lib/$(shell pyversions -d)/dist-packages/
+ 	$(INSTALL) -D -m 644 python/AriaPy.py $(DESTDIR)$(INSTALL_DIR)/lib/$(shell pyversions -d)/dist-packages/

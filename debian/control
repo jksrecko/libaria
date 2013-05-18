@@ -62,7 +62,7 @@ Description: C++ library for MobileRobots/ActivMedia robots (devel docs)
  .
  This package contains doxygen generated documentation.
 
-Package: python-libaria
+Package: python-ariapy
 Section: python
 Architecture: any
 Depends: libaria2 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}

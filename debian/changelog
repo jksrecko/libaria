@@ -2,7 +2,7 @@ libaria (2.7.5.2+repack-3) unstable; urgency=low
 
   * Removed statically linked library.
   * Corrected Multi-Arch config for the doc package.
-  * Building python-libaria package (SWIG generated bindings)
+  * Building python-ariapy package (SWIG generated bindings)
   * Building libaria-demo package
 
  -- Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>  Wed, 08 May 2013 09:54:02 +0200

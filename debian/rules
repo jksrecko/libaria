@@ -4,6 +4,7 @@
 #export DH_VERBOSE=1
 export INSTALL_DIR=/usr
 DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+export JAVA_INCLUDE=$(shell readlink -f /usr/bin/javac | sed "s:bin/javac:include:")
 
 %:
 	dh $@ --with python2

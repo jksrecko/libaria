@@ -4,3 +4,4 @@ hardening.patch
 multiarch.patch
 python.patch
 examples.patch
+java.patch

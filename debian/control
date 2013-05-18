@@ -1,7 +1,7 @@
 Source: libaria
 Priority: extra
 Maintainer: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
-Build-Depends: debhelper (>= 9), doxygen, swig, python-dev
+Build-Depends: debhelper (>= 9), doxygen, swig, python-dev, default-jdk
 Standards-Version: 3.9.4
 Section: libs
 Homepage: http://robots.mobilerobots.com/wiki/ARIA

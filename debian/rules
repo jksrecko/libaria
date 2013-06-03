@@ -5,7 +5,7 @@
 export INSTALL_DIR=/usr
 
 %:
-	dh $@ --with python2
+	dh $@ --with python2 --parallel
 
 override_dh_installchangelogs:
 	dh_installchangelogs Changes.txt upstream

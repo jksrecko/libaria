@@ -1,0 +1,167 @@
+Description: Run some tests with dh_autotest
+ Programs in tests directory do not comprise a standard testsuite.
+ Most tests presume a human as an evaluator, and most need actual
+ robot hardware to run.
+ .
+ Following tests could be patched to be useful for automated testing:
+ tests/actionAverageTest.cpp
+ tests/actionManagementTest.cpp
+ tests/configSectionTest.cpp
+ tests/configTest.cpp
+ tests/fileParserTest.cpp
+ tests/functorTest.cpp
+ tests/gpsCoordsTest.cpp
+ tests/gpsInternals.cpp
+ tests/interpolationTest.cpp
+ tests/mapTest.cpp
+ tests/mutexLockWarning.cpp
+ tests/poseTest.cpp
+ tests/stripQuoteTest.cpp
+ tests/timeTest.cpp
+ tests/transformTest.cpp
+Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
+--- a/Makefile
++++ b/Makefile
+@@ -224,6 +224,15 @@
+ UTILS:=$(patsubst %.$(CFILEEXT),%,$(UTILS_CPP))
+ SRC_FILES:=$(patsubst %,src/%,$(CFILES))
+ HEADER_FILES:=$(shell find include -type f -name \*.h)
++# Tests to run for the testsuite
++TESTS_TO_RUN:=\
++	tests/actionArgumentTest \
++	tests/angleBetweenTest \
++	tests/angleFixTest \
++	tests/angleTest \
++	tests/lineTest \
++	tests/mathTests \
++	tests/robotListTest
+ 
+ ####
+ #### General rules for user invocation
+@@ -249,6 +258,11 @@
+ 
+ tests: $(TESTS) $(MOD_TESTS)
+ 
++test: $(TESTS_TO_RUN)
++	for test in $(TESTS_TO_RUN); do \
++	  LD_LIBRARY_PATH=lib $$test; \
++	done
++
+ advanced: $(ADVANCED)
+ 
+ utils: $(UTILS)
+--- a/tests/angleTest.cpp
++++ b/tests/angleTest.cpp
+@@ -73,7 +73,7 @@
+     {
+       printf("Failed that one from (%.0f, %.0f) (%.0f, %.0f) %3.0f %4.0f\n", 
+ 	     x1, y1, x2, y2, initial, distance);
+-      exit(0);
++      exit(1);
+     }
+   }
+   
+--- a/tests/robotListTest.cpp
++++ b/tests/robotListTest.cpp
+@@ -31,42 +31,42 @@
+ 
+   ArRobot robot;
+   printf("%s\n", robot.getName());
+-  if (strcmp(robot.getName(), "robot") == 0)
+-    printf("SUCCESS: 'robot's name successfully set\n");
++  if (strcmp(robot.getName(), "robot0") == 0)
++    printf("SUCCESS: 'robot0's name successfully set\n");
+   else
+   {
+-    printf("FAILURE: 'robot's name not successfully set\n");
++    printf("FAILURE: 'robot0's name not successfully set\n");
+     exit(1);
+   }
+   ArRobot robot2;
+   printf("%s\n", robot2.getName());
+-  if (strcmp(robot2.getName(), "robot2") == 0)
+-    printf("SUCCESS: 'robot2's name successfully set\n");
++  if (strcmp(robot2.getName(), "robot1") == 0)
++    printf("SUCCESS: 'robot1's name successfully set\n");
+   else
+   {
+-    printf("FAILURE: 'robot2's name not successfully set\n");
++    printf("FAILURE: 'robot1's name not successfully set\n");
+     exit(1);
+   }
+   ArRobot robot3;
+   printf("%s\n", robot3.getName());
+-  if (strcmp(robot3.getName(), "robot3") == 0)
+-    printf("SUCCESS: 'robot3's name successfully set\n");
++  if (strcmp(robot3.getName(), "robot2") == 0)
++    printf("SUCCESS: 'robot2's name successfully set\n");
+   else
+   {
+-    printf("FAILURE: 'robot3's name not successfully set\n");
++    printf("FAILURE: 'robot2's name not successfully set\n");
+     exit(1);
+   }
+ 
+-  r = Aria::findRobot("robot");
+-  if (r != NULL && strcmp(r->getName(), "robot") == 0)
+-    printf("SUCCESS: Found a the robot named 'robot' successfully.\n");
++  r = Aria::findRobot("robot0");
++  if (r != NULL && strcmp(r->getName(), "robot0") == 0)
++    printf("SUCCESS: Found a the robot named 'robot0' successfully.\n");
+   else
+   {
+-    printf("FAILURE: could not find the robot named 'robot'\n");
++    printf("FAILURE: could not find the robot named 'robot0'\n");
+     exit(1);
+   }
+ 
+-  r = Aria::findRobot("Bleargh");
++  r = Aria::findRobot("bleargh");
+   if (r == NULL)
+     printf("SUCCESS: didn't find any robot named bleargh\n");
+   else
+@@ -76,35 +76,35 @@
+   }
+   
+   robot.setName(NULL);
+-  printf("Resetting the name of 'robot'\n");
++  printf("Resetting the name of 'robot0'\n");
+   printf("%s\n", robot.getName());
+   if (strcmp(robot.getName(), "robot") == 0)
+-    printf("SUCCESS: 'robot's name successfully reset\n");
++    printf("SUCCESS: 'robot0's name successfully reset\n");
+   else
+   {
+-    printf("FAILURE: 'robot's name not successfully reset\n");
++    printf("FAILURE: 'robot0's name not successfully reset\n");
+     exit(1);
+   }
+ 
+   robot2.setName(NULL);
+-  printf("Resetting the name of 'robot2'\n");
++  printf("Resetting the name of 'robot1'\n");
+   printf("%s\n", robot2.getName());
+   if (strcmp(robot2.getName(), "robot2") == 0)
+-    printf("SUCCESS: 'robot2's name successfully reset\n");
++    printf("SUCCESS: 'robot1's name successfully reset\n");
+   else
+   {
+-    printf("FAILURE: 'robot2's name not successfully reset\n");
++    printf("FAILURE: 'robot1's name not successfully reset\n");
+     exit(1);
+   }
+ 
+   robot.setName("BobBot");
+-  printf("Resetting the name of 'robot' to 'BobBot'\n");
++  printf("Resetting the name of 'robot0' to 'BobBot'\n");
+   printf("%s\n", robot.getName());
+   if (strcmp(robot.getName(), "BobBot") == 0)
+-    printf("SUCCESS: 'robot's name successfully changed to 'BobBot'\n");
++    printf("SUCCESS: 'robot0's name successfully changed to 'BobBot'\n");
+   else
+   {
+-    printf("FAILURE: 'robot's name not successfully changed to 'BobBot'");
++    printf("FAILURE: 'robot0's name not successfully changed to 'BobBot'");
+     exit(1);
+   }
+ }

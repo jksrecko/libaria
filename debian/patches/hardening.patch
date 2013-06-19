@@ -71,15 +71,6 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  
  ifndef JAVAC
-@@ -230,7 +230,7 @@
- ####
- 
- # Default Rule
--all: dirs $(TARGETS)
-+all: dirs $(TARGETS) params docs
- 
- # Build all targets, docs, params, etc. etc.
- everything: dirs $(ALL_TARGETS) 
 @@ -536,7 +536,7 @@
  ####
  

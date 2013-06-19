@@ -5,6 +5,15 @@ Description: Changes to the install target.
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
+@@ -230,7 +230,7 @@
+ ####
+ 
+ # Default Rule
+-all: dirs $(TARGETS)
++all: dirs $(TARGETS) params
+ 
+ # Build all targets, docs, params, etc. etc.
+ everything: dirs $(ALL_TARGETS) 
 @@ -536,7 +536,9 @@
  ####
  

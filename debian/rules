@@ -8,6 +8,9 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 %:
 	dh $@ --with python2 --parallel
 
+override_dh_auto_build-indep:
+	$(MAKE) -C . docs
+
 override_dh_installchangelogs:
 	dh_installchangelogs Changes.txt upstream
 

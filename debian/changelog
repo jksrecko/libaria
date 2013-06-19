@@ -2,11 +2,12 @@ libaria (2.7.5.2+repack-3) unstable; urgency=low
 
   * Removed statically linked library.
   * Corrected Multi-Arch config for the doc package.
+    Also, generating documentation in a build-indep target.
   * Building python-ariapy package (SWIG generated bindings)
   * Building libaria-demo package
   * Added test target for dh_autotest.
 
- -- Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>  Wed, 12 Jun 2013 00:19:13 +0200
+ -- Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>  Wed, 19 Jun 2013 11:17:59 +0200
 
 libaria (2.7.5.2+repack-2) unstable; urgency=low
 

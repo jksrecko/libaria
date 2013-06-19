@@ -6,8 +6,8 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  ####
  
  # Default Rule
--all: dirs $(TARGETS) params docs
-+all: dirs $(TARGETS) params docs python python-doc
+-all: dirs $(TARGETS) params
++all: dirs $(TARGETS) params python python-doc
  
  # Build all targets, docs, params, etc. etc.
  everything: dirs $(ALL_TARGETS) 

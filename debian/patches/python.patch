@@ -11,7 +11,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  # Build all targets, docs, params, etc. etc.
  everything: dirs $(ALL_TARGETS) 
-@@ -440,15 +440,6 @@
+@@ -440,37 +440,25 @@
  
  ### Python wrapper: ###
  
@@ -27,11 +27,12 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  python: python/_AriaPy.so python/AriaPy.py
  
  py: python
-@@ -456,21 +447,18 @@
+ 
  python-doc: python/AriaPy.html
  
- python/AriaPy.html: python/AriaPy.py
+-python/AriaPy.html: python/AriaPy.py
 -	cd python; pydoc -w AriaPy
++python/AriaPy.html: python/_AriaPy.so python/AriaPy.py
 +	cd python; LD_LIBRARY_PATH=../lib pydoc -w AriaPy
  
  python/AriaPy_wrap.cpp python/AriaPy.py: include/wrapper.i include/*.h

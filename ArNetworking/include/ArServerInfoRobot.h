@@ -100,11 +100,14 @@ public:
 protected:
   ArServerBase *myServer;
   ArRobot *myRobot;
+
   void userTask(void);
   
   std::string myStatus;
+  std::string myExtendedStatus;
   std::string myMode;
   std::string myOldStatus;
+  std::string myOldExtendedStatus;
   std::string myOldMode;
 
   

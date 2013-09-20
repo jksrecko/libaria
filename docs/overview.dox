@@ -1,4 +1,26 @@
 
+/** 
+  @defgroup ImportantClasses Important Classes
+  @brief These classes are essential far all programs using Aria to control a robot.
+
+  @defgroup OptionalClasses Optional Classes
+  @brief These classes provide additional features that may be used in some programs.
+
+  @defgroup ActionClasses Predefined ArAction Classes
+  @brief These classes implement component behaviors as ArAction subclasses (see ArAction and the overview for more details on actions)
+  
+  @defgroup DeviceClasses Device Interface Classes
+  @brief These classes provide interfaces to hardware devices such as sensors. Some use
+"connector" objects for configure, connection and sometimes to create the
+interface objects. Read documentation fro details.
+
+  @defgroup UtilityClasses Utility Classes
+  @brief These classes provide useful cross-platform system tools, math and string tools, and other miscellaneous programming utilities.
+
+  @defgroup MTX MTX/Pioneer LX Specific Classes
+  @brief These classes are only used on Pioneer LX and other MTX-type robots.
+*/
+
 /**
   \mainpage ARIA Developer's Reference Manual
 
@@ -7,7 +29,7 @@ MobileRobots <b>Advanced Robotics Interface for Applications (ARIA)</b>
 <p>
 Copyright 2002, 2003, 2004, 2005 ActivMedia Robotics, LLC. All rights reserved.<br>
 Copyright 2006, 2007, 2008, 2009, 2010 MobileRobots Inc. All rights reserved.<br>
-Copyright 2011, 2012 Adept Technology. All rights reserved.
+Copyright 2011, 2012, 2013 Adept Technology. All rights reserved.
 </p>
 
 
@@ -29,6 +51,7 @@ Copyright 2011, 2012 Adept Technology. All rights reserved.
  <li>\ref intro
    <ul>
      <li>\ref javapython</li>
+     <li>\ref matlab</li>
    </ul>
  </li>
  <li>\ref licensing</li>
@@ -136,8 +159,7 @@ as to the many accessory robot sensors and effectors.  ARIA includes
 many useful utilities for general robot programming and cross-platform
 (Linux and Windows) programming as well.
    
-ARIA can be run multi- or single-threaded, using its own wrapper
-around Linux pthreads or Win32 threads.  You can access ARIA at different
+You can access ARIA at different
 levels, from simply sending commands to the robot through ArRobot
 to development of higher-level intelligent behavior using @ref actions.
 (For a description of how to integrate parts of ARIA with
@@ -149,9 +171,14 @@ remote programs over a network, such as MobileEyes.
 
 This page contains an overview of ARIA. Read this overview to become familiar
 with the ARIA library and how to get started using it. 
-Click a class or function link to view its detail pages. New
-users should view this document along with the ARIA examples, README.txt, and
-your robot's operating manual.
+Click a class or function link to view its details.
+A selection of the most important ARIA classes is listed in @ref
+ImportantClasses in the menu to the left, as well as @ref OptionalClasses, @ref
+DeviceClasses, @ref UtilityClasses and @ref ActionClasses. All
+classes are available in the full class list and hierarchy links on the left.
+
+New users should view this document along with the ARIA examples, README.txt, and
+your robot's operating manual as well. 
 
 You can download new versions of ARIA from http://robots.mobilerobots.com/ARIA
 
@@ -211,6 +238,12 @@ on how to use the Python wrapper, and likewise see <a class="file"
 href="../ArNetworking/javaExamples">ArNetworking/javaExamples</a>
 and <a class="file" href="../ArNetworking/pythonExamples">ArNetworking/pythonExamples</a> for information about and examples of the
 ArNetworking Java and Python wrappers.
+
+ \subsection matlab Matlab
+
+A subset of essential robot control and accessor functions from ARIA are now also available for use in
+Matlab.  See matlab/README.txt for instructions on how to create
+and use this interface, and notes on what is available and what its requirements and supported platforms are.
 
  \section licensing License and Sharing
 
@@ -826,9 +859,9 @@ behavior from simple building blocks for dynamic and continuous motion control.
 Actions are defined by creating a subclass of the ArAction the base class
 which overloads the ArAction::fire() method.
 See the <code>@ref actionExample.cpp</code> example program.
-ARIA also includes some pre-made action classes:
-look for them as subclasses of ArAction in its class documentation or
-in in the ARIA source code (the files begin with ArAction...).
+ARIA also includes some useful pre-made action classes (see @ref ActionClasses
+for a list).  Include these in your programs, or use them as examples when
+creating your own custom ArAction subclass.
 
 Actions are attached to an ArRobot object with ArRobot::addAction(), along with
 a priority which determines its position in the action list.
@@ -960,7 +993,10 @@ The same method is used for all of the other channels.
 
  \subsection predefinedActions Predefined Actions
 
-ARIA has several predefined action classes.
+ARIA includes several predefined action classes. 
+See @ref ActionClasses for a list.  Include these in your programs, or use them as examples when
+creating your own custom ArAction subclass.
+
 <i>Movement</i> action classes have an "ArAction" prefix and set
 either or both the translational velocity (setVel) and heading
 (setDeltaHeading and setHeading) channels to effect motion. <i>Limiting</i> action classes
@@ -1321,6 +1357,8 @@ ARIA includes classes to communicate with various kinds of devices.
 (Many of these devices are optional accessories, and not all robots have them
 installed.)
 
+Some are mentioned below. See @ref DeviceClasses for a list.
+
 <ul>
   <li>Range devices.  See @ref rangeDevices for more about range devices. 
     <ul>
@@ -1354,12 +1392,17 @@ types based on robot and program configuration parameters. The lasers created by
     </ul>
   </li>
 
-  <li>ArAnalogGyro enables a robot's on-board gyro, if present and enabled
-  in the firmware configuration, after ArRobot connects, and automatically
-  corrects the heading component of ArRobot's pose value as new data is
-  received. The gyro also measures its own temperature as part of its operation,
-  and ArAnalogGyro makes that value available as well, which can be used to
-  detect damaging high-heat conditions in the robot electronics.</li>
+  <li>ArAnalogGyro provides data from the optional analog gyro  on Pioneer,
+PeopleBot, PatrolBot, PowerBot or AmigoBot.  If the HasGyro parameter in the robot's
+internal firmware configuration is 2 (the default on most robots), then the robot automatically uses the gyro for
+position correction before sending its pose estimate to ARIA.  However,
+if GyroType is 1, then create an ArAnalogGyro object to begin receiving data
+from the robot and allow it to apply those corrections to the position in the
+ArRobot object. 
+
+  The gyro also measures its own temperature as part of its operation,
+  and ArAnalogGyro makes that value available as well.
+  </li>
 
   <li>ArGripper provides access to a Pioneer gripper.</li>
 
@@ -1399,8 +1442,9 @@ those libraries for details.
  \section utility Utility Classes
 
 Some of the general-purpose utility classes included with are ArMath, ArUtil, ArTime, ArPose, ArLog, 
-ArSectors, ArRingQueue, ArLineFinder, the GPS-related subclasses of ArPoint3d, ArMD5Calculator
-(and the functions in md5.h), ArMutex, ArCondition and ArASyncTask. See those classes for further information.
+ArSectors, ArRingQueue, ArLineFinder, the GPS-related subclasses of Ar3DPoint, ArMD5Calculator
+(and the functions in md5.h), ArMutex, ArCondition and ArASyncTask. See @ref
+UtilityClasses for a list of utility classes.
 
  \section arconfig ArConfig
 
@@ -1829,5 +1873,7 @@ useful for interpolating the robot's location more precisely.
 
 
 */
+
+
 
 

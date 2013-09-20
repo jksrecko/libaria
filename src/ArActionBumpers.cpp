@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -63,6 +63,7 @@ AREXPORT ArActionBumpers::ArActionBumpers(const char *name,
   mySpeed = 0.0;
   myHeading = 0.0;
 
+  // MPL I wrote this code, but checking for BIT8 makes no sense, BIT0 is the stall, BIT8 would be beyond this data
   myBumpMask = (ArUtil::BIT1 | ArUtil::BIT2 | ArUtil::BIT3 | ArUtil::BIT4 | 
 		ArUtil::BIT5 | ArUtil::BIT6 | ArUtil::BIT7 | ArUtil::BIT8); 
 }
@@ -70,6 +71,12 @@ AREXPORT ArActionBumpers::ArActionBumpers(const char *name,
 AREXPORT ArActionBumpers::~ArActionBumpers()
 {
 
+}
+
+AREXPORT void ArActionBumpers::activate(void)
+{
+  myFiring = false;
+  ArAction::activate();
 }
 
 AREXPORT double ArActionBumpers::findDegreesToTurn(int bumpValue, int whichBumper)
@@ -85,6 +92,7 @@ AREXPORT double ArActionBumpers::findDegreesToTurn(int bumpValue, int whichBumpe
 
   for (int i = 0; i < numBumpers; i++)
     {
+      // MPL I wrote this code, but checking for BIT8 makes no sense, BIT0 is  the stall, BIT8 would be beyond this data
       if((i == 0 && (bumpValue & ArUtil::BIT1)) || 
 	 (i == 1 && (bumpValue & ArUtil::BIT2)) ||
 	 (i == 2 && (bumpValue & ArUtil::BIT3)) || 
@@ -169,7 +177,7 @@ AREXPORT ArActionDesired *ArActionBumpers::fire(ArActionDesired currentDesired)
     ArLog::log(ArLog::Normal, "Bumpers: done");
   }
   
-  if (myRobot->getVel() > 5)
+  if (myRobot->getVel() > 25)
   {
     if (frontBump == 0)
       return NULL;
@@ -182,7 +190,7 @@ AREXPORT ArActionDesired *ArActionBumpers::fire(ArActionDesired currentDesired)
     mySpeed = -myBackOffSpeed;
     myStartBack.setToNow();
   }
-  else if (myRobot->getVel() < -5)
+  else if (myRobot->getVel() < -25)
   {
     if (rearBump == 0)
       return NULL;

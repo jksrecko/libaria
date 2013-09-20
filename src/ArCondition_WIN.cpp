@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -40,7 +40,8 @@ AREXPORT ArCondition::ArCondition() :
   myCond=CreateEvent(0, FALSE, FALSE, 0);
   if (myCond == NULL)
   {
-    ArLog::log(ArLog::Terse, "ArCondition::ArCondition: Unknown error trying to create the condition.");
+	DWORD err = GetLastError(); // see http://msdn.microsoft.com/en-us/library/windows/desktop/ms681381(v=vs.85).aspx
+    ArLog::log(ArLog::Terse, "ArCondition(%s)::ArCondition: Error %d trying to create the condition.", getLogName(), err);
     myFailedInit=true;
   }
 
@@ -56,20 +57,20 @@ AREXPORT ArCondition::ArCondition() :
 AREXPORT ArCondition::~ArCondition()
 {
   if (!myFailedInit && !CloseHandle(myCond))
-    ArLog::log(ArLog::Terse, "ArCondition::~ArCondition: Unknown error while trying to destroy the condition.");
+    ArLog::log(ArLog::Terse, "ArCondition(%s)::~ArCondition: Unknown error while trying to destroy the condition.", getLogName());
 }
 
 AREXPORT int ArCondition::signal()
 {
   if (myFailedInit)
   {
-    ArLog::log(ArLog::Terse, "ArCondition::signal: Initialization of condition failed, failed to signal");
+    ArLog::log(ArLog::Terse, "ArCondition(%s)::signal: Initialization of condition failed, failed to signal", getLogName());
     return(STATUS_FAILED_INIT);
   }
 
   if (!PulseEvent(myCond))
   {
-    ArLog::log(ArLog::Terse, "ArCondition::signal: Unknown error while trying to signal the condition.");
+    ArLog::log(ArLog::Terse, "ArCondition(%s)::signal: Unknown error while trying to signal the condition.", getLogName());
     return(STATUS_FAILED);
   }
 
@@ -82,15 +83,17 @@ AREXPORT int ArCondition::broadcast()
 
   if (myFailedInit)
   {
-    ArLog::log(ArLog::Terse, "ArCondition::broadcast: Initialization of condition failed, failed to broadcast");
+    ArLog::log(ArLog::Terse, "ArCondition(%s)::broadcast: Initialization of condition failed, failed to broadcast", getLogName());
     return(STATUS_FAILED_INIT);
   }
 
+  ArLog::log(ArLog::Normal, "broadcasting %s", getLogName());
   for (; myCount != 0; --myCount)
   {
-    if (PulseEvent(myCond) != 0)
+    if (PulseEvent(myCond) == 0) // PulseEvent returns 09 on error according to http://msdn.microsoft.com/en-us/library/windows/desktop/ms684914(v=vs.85).aspx
     {
-      ArLog::log(ArLog::Terse, "ArCondition::broadcast: Unknown error while trying to broadcast the condition.");
+	  DWORD err = GetLastError(); // see http://msdn.microsoft.com/en-us/library/windows/desktop/ms681381(v=vs.85).aspx
+      ArLog::log(ArLog::Terse, "ArCondition(%s)::broadcast: Error %d while trying to broadcast the condition.", getLogName(), err);
       ret=STATUS_FAILED;
     }
   }
@@ -104,7 +107,7 @@ AREXPORT int ArCondition::wait()
 
   if (myFailedInit)
   {
-    ArLog::log(ArLog::Terse, "ArCondition::wait: Initialization of condition failed, failed to wait");
+    ArLog::log(ArLog::Terse, "ArCondition(%s)::wait: Initialization of condition failed, failed to wait", getLogName());
     return(STATUS_FAILED_INIT);
   }
 
@@ -114,7 +117,7 @@ AREXPORT int ArCondition::wait()
     return(0);
   else
   {
-    ArLog::logNoLock(ArLog::Terse, "ArCondition::wait: Failed to lock due to an unknown error");
+    ArLog::logNoLock(ArLog::Terse, "ArCondition(%s)::wait: Failed to lock due to an unknown error", getLogName());
     return(STATUS_FAILED);
   }
 }
@@ -125,7 +128,7 @@ AREXPORT int ArCondition::timedWait(unsigned int msecs)
 
   if (myFailedInit)
   {
-    ArLog::log(ArLog::Terse, "ArCondition::wait: Initialization of condition failed, failed to wait");
+    ArLog::log(ArLog::Terse, "ArCondition(%s)::wait: Initialization of condition failed, failed to wait", getLogName());
     return(STATUS_FAILED_INIT);
   }
 
@@ -137,7 +140,7 @@ AREXPORT int ArCondition::timedWait(unsigned int msecs)
     return(STATUS_WAIT_TIMEDOUT);
   else
   {
-    ArLog::logNoLock(ArLog::Terse, "ArCondition::timedWait: Failed to lock due to an unknown error");
+    ArLog::logNoLock(ArLog::Terse, "ArCondition(%s)::timedWait: Failed to lock due to an unknown error", getLogName());
     return(STATUS_FAILED);
   }
 }

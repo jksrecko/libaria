@@ -42,7 +42,8 @@ public:
   bool getQuiet(void) { return myQuiet; }
 protected:
   enum Ret { 
-    RET_CONN_CLOSED, // the connection was closed
+    RET_CONN_CLOSED, // the connection was closed (in a good manner)
+    RET_CONN_ERROR, // the connection was has an error (so close it)
     RET_GOT_PACKET, // we got a good packet
     RET_BAD_PACKET, // we got a bad packet (checksum wrong)
     RET_FAILED_READ, // our read failed (no data)

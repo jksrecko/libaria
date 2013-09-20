@@ -109,7 +109,8 @@ AREXPORT ArServerHandlerMap::ArServerHandlerMap(ArServerBase *server,
 		      NULL, "none", "none", 
 		      "Map", "RETURN_SINGLE");
 
-    myServer->addData("checkMap", "TODO",
+    myServer->addData("checkMap", 
+                      "Requests that the server check whether the map needs to be read",
 		                  &myCheckMapCB, 
                       "none", 
                       "none",
@@ -181,6 +182,15 @@ AREXPORT ArMapInterface *ArServerHandlerMap::getMap(void)
 AREXPORT void ArServerHandlerMap::serverGetMapId(ArServerClient *client, 
                                                  ArNetPacket *packet)
 {
+   ArLog::log(ArLog::Normal,
+              "ArServerHandlerMap::serverGetMapId() map ID requested by %s",
+              ((client != NULL) ? client->getIPString() : "NULL"));
+
+  // To force the problem described in Bug 11160 to become reproducible 
+  // instead of highly intermittent, uncomment the following sleep.
+  // ArUtil::sleep(1000);
+
+
   ArNetPacket sendPacket;
   ArMapId mapId;
   if (myMap != NULL)
@@ -208,6 +218,7 @@ AREXPORT void ArServerHandlerMap::serverGetMapId(ArServerClient *client,
 
   
   client->sendPacketTcp(&sendPacket);
+
 
 } // end method serverGetMapId
 

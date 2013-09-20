@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "ArExport.h"
@@ -84,7 +84,7 @@ AREXPORT bool ArGPSConnector::parseArgs()
   return true;
 }
 
-AREXPORT ArGPSConnector::GPSType ArGPSConnector::deviceTypeFromString(const char *str)
+ArGPSConnector::GPSType ArGPSConnector::deviceTypeFromString(const char *str)
 {
   if (strcasecmp(str, "novatel") == 0)
   {
@@ -102,6 +102,10 @@ AREXPORT ArGPSConnector::GPSType ArGPSConnector::deviceTypeFromString(const char
   {
     return NovatelSPAN;
   }
+  else if (strcasecmp(str, "sim") == 0)
+  {
+    return Simulator;
+  }
   else
   {
     ArLog::log(ArLog::Terse, "GPSConnector: Error: unrecognized GPS type.");
@@ -109,10 +113,10 @@ AREXPORT ArGPSConnector::GPSType ArGPSConnector::deviceTypeFromString(const char
   }
 }
 
-AREXPORT void ArGPSConnector::logOptions()
+void ArGPSConnector::logOptions()
 {
   ArLog::log(ArLog::Terse, "GPS options:"); 
-  ArLog::log(ArLog::Terse, "-gpsType <standard|novatel|novatelspan|trimble>\tSelect GPS device type (default: standard)");
+  ArLog::log(ArLog::Terse, "-gpsType <standard|novatel|novatelspan|trimble|sim>\tSelect GPS device type (default: standard)");
   ArLog::log(ArLog::Terse, "-gpsPort <gpsSerialPort>\tUse the given serial port (default: %s)", ARGPS_DEFAULT_SERIAL_PORT);
   ArLog::log(ArLog::Terse, "-gpsBaud <gpsSerialBaudRate>\tUse the given serial Baud rate (default: %d)", ARGPS_DEFAULT_SERIAL_BAUD);
   ArLog::log(ArLog::Terse, "-remoteGpsTcpHost <host>\tUse a TCP connection instead of serial, and connect to remote host <host>");
@@ -155,7 +159,15 @@ AREXPORT ArGPS* ArGPSConnector::createGPS(ArRobot *robot)
     if(myDeviceType == Invalid) myDeviceType = Standard;
   }
 
-  // Create gps:
+  // If simulator, create simulated GPS and return
+  if(robot && strcmp(robot->getRobotName(), "MobileSim") == 0)
+  {
+    ArLog::log(ArLog::Normal, "ArGPSConnector: Using simulated GPS");
+    myDeviceType = Simulator;
+    return new ArSimulatedGPS(robot);
+  }
+
+  // Create gps and connect to serial port or tcp port for device data stream:
   ArGPS* newGPS = NULL;
   switch (myDeviceType)
   {
@@ -171,50 +183,49 @@ AREXPORT ArGPS* ArGPSConnector::createGPS(ArRobot *robot)
       ArLog::log(ArLog::Normal, "ArGPSConnector: Using Novatel SPAN GPS");
       newGPS = new ArNovatelSPAN;
       break;
+    case Simulator:
+      ArLog::log(ArLog::Normal, "ArGPSConnector: Using simulated GPS");
+      newGPS = new ArSimulatedGPS(robot);
+      break;
     default:
       ArLog::log(ArLog::Normal, "ArGPSConnector: Using standard NMEA GPS");
       newGPS = new ArGPS;
       break;
   }
 
-  if (myTCPHost == NULL)
+  if(myDeviceType != Simulator)
   {
-    // Setup serial connection
-    ArSerialConnection *serialCon = new ArSerialConnection;
-    ArLog::log(ArLog::Normal, "ArGPSConnector: Connecting to GPS on port %s at %d baud...", myPort, myBaud);
-    if (!serialCon->setBaud(myBaud)) { delete serialCon; return false; }
-    if (serialCon->open(myPort) != 0) {
-      ArLog::log(ArLog::Terse, "ArGPSConnector: Error: could not open GPS serial port %s.", myPort);
-      delete serialCon;
-      return NULL;
+    if (myTCPHost == NULL)
+    {
+      // Setup serial connection
+      ArSerialConnection *serialCon = new ArSerialConnection;
+      ArLog::log(ArLog::Normal, "ArGPSConnector: Connecting to GPS on port %s at %d baud...", myPort, myBaud);
+      if (!serialCon->setBaud(myBaud)) { delete serialCon; return false; }
+      if (serialCon->open(myPort) != 0) {
+        ArLog::log(ArLog::Terse, "ArGPSConnector: Error: could not open GPS serial port %s.", myPort);
+        delete serialCon;
+        return NULL;
+      }
+      newGPS->setDeviceConnection(serialCon);
+      myDeviceCon = serialCon;
     }
-    newGPS->setDeviceConnection(serialCon);
-    myDeviceCon = serialCon;
-  }
-  else
-  {
-    // Setup TCP connection
-    ArTcpConnection *tcpCon = new ArTcpConnection;
-    ArLog::log(ArLog::Normal, "ArGPSConnector: Opening TCP connection to %s:%d...", myTCPHost, myTCPPort);
-    int openState = tcpCon->open(myTCPHost, myTCPPort);
-    if (openState != 0) {
-      ArLog::log(ArLog::Terse, "ArGPSConnector: Error: could not open TCP connection to %s port %d: %s", tcpCon->getOpenMessage(openState));
-      delete tcpCon;
-      return NULL;
+    else
+    {
+      // Setup TCP connection
+      ArTcpConnection *tcpCon = new ArTcpConnection;
+      ArLog::log(ArLog::Normal, "ArGPSConnector: Opening TCP connection to %s:%d...", myTCPHost, myTCPPort);
+      int openState = tcpCon->open(myTCPHost, myTCPPort);
+      if (openState != 0) {
+        ArLog::log(ArLog::Terse, "ArGPSConnector: Error: could not open TCP connection to %s port %d: %s", tcpCon->getOpenMessage(openState));
+        delete tcpCon;
+        return NULL;
+      }
+      newGPS->setDeviceConnection(tcpCon);
+      myDeviceCon = tcpCon;
     }
-    newGPS->setDeviceConnection(tcpCon);
-    myDeviceCon = tcpCon;
   }
 
   return newGPS;
 }
 
-#if 0  
-//doesn't really do anything :
-AREXPORT bool ArGPSConnector::connectGPS(ArGPS *gps)
-{
-  // TODO try different BAUD rates if using a serial connection.
-  return gps->blockingConnect();
-}
-#endif
 

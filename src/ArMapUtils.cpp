@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 
@@ -34,6 +34,12 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
 #include <iterator>
 
+//#define ARDEBUG_MAPUTILS
+#ifdef ARDEBUG_MAPUTILS
+#define IFDEBUG(code) {code;}
+#else
+#define IFDEBUG(code)
+#endif 
 
 // -----------------------------------------------------------------------------
 // ArMapId
@@ -47,7 +53,7 @@ AREXPORT ArMapId::ArMapId() :
   myDisplayChecksum(NULL),
   myDisplayChecksumLength(0),
   mySize(0),
-  myTimestamp(0)
+  myTimestamp(-1)
 {
 }
 
@@ -149,7 +155,7 @@ AREXPORT void ArMapId::clear()
   myDisplayChecksumLength = 0;
 
   mySize = 0;
-  myTimestamp = 0;
+  myTimestamp = -1;
 
 } // end method clear
 
@@ -212,8 +218,8 @@ AREXPORT bool ArMapId::isSameFile(const ArMapId &other) const
 
   // If both timestamps are specified, then the must be identical...
   if ((myTimestamp != other.myTimestamp) &&
-      (myTimestamp != -1) &&
-      (other.myTimestamp != -1)) {
+      (isValidTimestamp()) &&
+      (other.isValidTimestamp())) {
     return false;
   }
 
@@ -236,6 +242,13 @@ AREXPORT bool ArMapId::isVersionOfSameFile(const ArMapId &other) const
   return false;
 
 } // end method isVersionOfSameFile
+  
+AREXPORT bool ArMapId::isValidTimestamp() const
+{
+  bool b = ((myTimestamp != -1) &&
+            (myTimestamp != 0));
+  return b;
+}
 
 
 AREXPORT void ArMapId::setSourceName(const char *sourceName)
@@ -290,6 +303,10 @@ AREXPORT void ArMapId::setSize(long int size)
 
 AREXPORT void ArMapId::setTimestamp(const time_t &timestamp)
 {
+  IFDEBUG(ArLog::log(ArLog::Normal,
+                     "ArMapId::setTimestamp() time = %i", 
+                     timestamp));
+
   myTimestamp = timestamp;
 }
 
@@ -303,8 +320,8 @@ AREXPORT bool operator==(const ArMapId & id1, const ArMapId & id2)
     return false;
   }
   // A null timestamp  (-1) can be "equal" to any other timestamp
-  if ((id1.myTimestamp != -1) &&
-      (id2.myTimestamp != -1) &&
+  if ((id1.isValidTimestamp()) &&
+      (id2.isValidTimestamp()) &&
       (id1.myTimestamp != id2.myTimestamp)) {
     return false;
   }
@@ -344,8 +361,8 @@ AREXPORT bool operator!=(const ArMapId & id1, const ArMapId & id2)
     return true;
   }
   // A null timestamp  (-1) can be "equal" to any other timestamp
-  if ((id1.myTimestamp != -1) &&
-      (id2.myTimestamp != -1) &&
+  if ((id1.isValidTimestamp()) &&
+      (id2.isValidTimestamp()) &&
       (id1.myTimestamp != id2.myTimestamp)) {
     return true;
   }
@@ -395,7 +412,7 @@ AREXPORT void ArMapId::log(const char *prefix) const
   }
 
   ArLog::log(ArLog::Normal,
-             "%s%smap %s %s%s checksum = \"%s\" size = %i  time = %s",
+             "%s%smap %s %s%s checksum = \"%s\" size = %i  time = %s (%i)",
              ((prefix != NULL) ? prefix : ""),
              ((prefix != NULL) ? " " : ""),
              getFileName(),
@@ -403,7 +420,8 @@ AREXPORT void ArMapId::log(const char *prefix) const
              (!ArUtil::isStrEmpty(getSourceName()) ? getSourceName() : ""),
              getDisplayChecksum(),
              getSize(),
-             timeBuf);
+             timeBuf,
+             idTime);
   
 }
   
@@ -433,12 +451,18 @@ AREXPORT bool ArMapId::fromPacket(ArBasePacket *packetIn,
   size_t fileSize = packetIn->bufToUByte4();
   time_t fileTime = packetIn->bufToByte4();
 
+  IFDEBUG(ArLog::log(ArLog::Normal,
+                     "ArMapId::fromPacket() time = %i", 
+                     fileTime));
+
   *mapIdOut = ArMapId(sourceBuffer,
                       fileNameBuffer,
                       checksum,
                       checksumLength,
                       fileSize,
                       fileTime);
+
+  IFDEBUG(mapIdOut->log("ArMapId::fromPacket()"));
 
   delete [] checksum;
 
@@ -450,6 +474,9 @@ AREXPORT bool ArMapId::fromPacket(ArBasePacket *packetIn,
 AREXPORT bool ArMapId::toPacket(const ArMapId &mapId,
                                 ArBasePacket *packetOut)
 {
+  
+  IFDEBUG(mapId.log("ArMapId::toPacket()"));
+ 
   if (packetOut == NULL) {
     return false;
   }
@@ -474,6 +501,10 @@ AREXPORT bool ArMapId::toPacket(const ArMapId &mapId,
   }
   packetOut->uByte4ToBuf(mapId.getSize());
   packetOut->byte4ToBuf(mapId.getTimestamp());
+  
+  IFDEBUG(ArLog::log(ArLog::Normal,
+                     "ArMapId::toPacket() time = %i", 
+                     mapId.getTimestamp()));
   
   return true;
 
@@ -932,6 +963,11 @@ AREXPORT ArMapFileLineSet *ArMapChangeDetails::getChangedInfoLines
                                                 (const char *infoName,
                                                  MapLineChangeType change) 
 {
+  if (ArUtil::isStrEmpty(infoName)) {
+    ArLog::log(ArLog::Normal, "ArMapChangeDetails::getChangedInfoLines() null info name");
+    return NULL;
+  }
+
   std::map<std::string, ArMapFileLineSet>::iterator iter = myInfoToChangeMaps[change].find(infoName);
   if (iter == myInfoToChangeMaps[change].end()) {
     myInfoToChangeMaps[change][infoName] = ArMapFileLineSet();
@@ -1135,6 +1171,8 @@ AREXPORT ArMapChangedHelper::ArMapChangedHelper() :
   myMapChangedCBList(),
   myPreMapChangedCBList()
 {
+  myMapChangedCBList.setName("MapChangedHelper");
+  myPreMapChangedCBList.setName("PreMapChangedHelper");
 }
 
 AREXPORT ArMapChangedHelper::~ArMapChangedHelper()
@@ -1145,69 +1183,38 @@ AREXPORT void ArMapChangedHelper::invokeMapChangedCallbacks(void)
 {
   ArLog::LogLevel level = myMapChangedLogLevel;
 
-  std::list<ArFunctor *>::iterator it;
-  for (it = myPreMapChangedCBList.begin(); 
-	      it != myPreMapChangedCBList.end(); 
-	      it++)
-  {
-    ArFunctor *functor = (*it);
-
-		ArLog::log(level, "ArMap: Calling preMapChanged functor '%s'", 
-		   					((!ArUtil::isStrEmpty(functor->getName())) ? functor->getName() : "<unnamed>"));
-    
-		functor->invoke();
-  }
-
-  for (it = myMapChangedCBList.begin(); it != myMapChangedCBList.end(); it++)
-  {
-    ArFunctor *functor = (*it);
- 		
-		ArLog::log(level, "ArMap: Calling mapChanged functor '%s'", 
-		   					((!ArUtil::isStrEmpty(functor->getName())) ? functor->getName() : "<unnamed>"));
-    
-    functor->invoke();
-  }
+  myPreMapChangedCBList.setLogLevel(level);
+  myPreMapChangedCBList.invoke();
+  
+  myMapChangedCBList.setLogLevel(level);
+  myMapChangedCBList.invoke();
 
 } // end method invokeMapChangedCallbacks
 
 
 AREXPORT void ArMapChangedHelper::addMapChangedCB(ArFunctor *functor, 
-				                                          ArListPos::Pos position)
+						  int position)
 {
-  if (position == ArListPos::FIRST)
-    myMapChangedCBList.push_front(functor);
-  else if (position == ArListPos::LAST)
-    myMapChangedCBList.push_back(functor);
-  else
-    ArLog::log(ArLog::Terse, 
-	       "ArMapChangedHelper::addMapChangedCB: Invalid position.");
-
+  myMapChangedCBList.addCallback(functor, position);
 } // end method addMapChangedCB
 
 AREXPORT void ArMapChangedHelper::remMapChangedCB(ArFunctor *functor)
 {
-  myMapChangedCBList.remove(functor);
+  myMapChangedCBList.remCallback(functor);
 
 } // end method remMapChangedCB
 
 
 AREXPORT void ArMapChangedHelper::addPreMapChangedCB(ArFunctor *functor,
-                                                     ArListPos::Pos position)
+                                                     int position)
 {
-  if (position == ArListPos::FIRST)
-    myPreMapChangedCBList.push_front(functor);
-  else if (position == ArListPos::LAST)
-    myPreMapChangedCBList.push_back(functor);
-  else
-    ArLog::log(ArLog::Terse, 
-	       "ArMapChangedHelper::addPreMapChangedCB: Invalid position.");
-
+  myPreMapChangedCBList.addCallback(functor, position);
 } // end method addPreMapChangedCB
 
 
 AREXPORT void ArMapChangedHelper::remPreMapChangedCB(ArFunctor *functor)
 {
-  myPreMapChangedCBList.remove(functor);
+  myPreMapChangedCBList.remCallback(functor);
 
 } // end method remPreMapChangedCB
 

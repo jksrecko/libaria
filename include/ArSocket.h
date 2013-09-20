@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARSOCKET_H
 #define ARSOCKET_H
@@ -70,6 +70,8 @@ class ArFunctor;
 
    @sa @ref socketServerExample.cpp
    @sa @ref socketClientExample.cpp
+
+    @ingroup UtilityClasses
 */
 class ArSocket
 {
@@ -78,13 +80,19 @@ public:
   enum Type {UDP, TCP, Unknown};
   enum Error {NoErr, NetFail, ConBadHost, ConNoRoute, ConRefused, NameLookup};
 
-  /// Constructor
+  /// Constructor. You must then use either connect() or open().
   AREXPORT ArSocket();
 
-  /// Constructor which automatically connects to a server as a client
+  /// Constructor which immediately connects to a server as a client
+  /// @a host Hostname or IP address of remote server
+  /// @a port Port number on server
+  /// @a Which IP protocol to use, type ArSocket::TCP or ArSocket::UDP
   AREXPORT ArSocket(const char *host, int port, Type type);
 
-  /// Constructor which outomatically opens a server port
+  /// Constructor which immediately opens a port as a server
+  /// @a port Port number to open. Use a value greater than 1024.
+  /// @a doClose Automatically close the port when ArSocket is destroyed (recommend using true)
+  /// @a type Which IP protocol to use, ArSocket::TCP or ArSocket::UDP
   AREXPORT ArSocket(int port, bool doClose, Type type);
 
   /// Destructor
@@ -102,10 +110,12 @@ public:
   /** @internal */
   AREXPORT static bool ourInitialized;
 
-  /// Copy socket structures
+  /// Copy internal socket structures
+  /// @internal
   AREXPORT bool copy(int fd, bool doclose);
 
-  /// Copy socket structures
+  /// Copy socket 
+  /// @internal
   AREXPORT void copy(ArSocket *s)
     {myFD=s->myFD; myDoClose=false; mySin=s->mySin;}
 

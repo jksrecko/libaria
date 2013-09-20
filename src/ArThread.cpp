@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 // ArThread.cc -- Thread classes
@@ -36,7 +36,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
 ArMutex ArThread::ourThreadsMutex;
 ArThread::MapType ArThread::ourThreads;
-#ifdef WIN32
+#if defined(WIN32) && !defined(MINGW)
 std::map<HANDLE, ArThread *> ArThread::ourThreadHandles;
 #endif
 AREXPORT ArLog::LogLevel ArThread::ourLogLevel = ArLog::Verbose; // todo, instead of AREXPORT move accessors into .cpp?
@@ -55,9 +55,7 @@ AREXPORT void ArThread::stopAll()
 AREXPORT void ArThread::joinAll()
 {
   MapType::iterator iter;
-  ArThread *thread;
-
-  thread=self();
+  ArThread *thread = self();
   ourThreadsMutex.lock();
   for (iter=ourThreads.begin(); iter != ourThreads.end(); ++iter)
   {
@@ -67,12 +65,19 @@ AREXPORT void ArThread::joinAll()
     }
   }
   ourThreads.clear();
+
+  // KMC I think that the insert was there because "thread" still exists
+  // but the entire map was cleared.
+
   // MPL BUG I'm not to sure why this insert was here, as far as I can
   // tell all it would do is make it so you could join the threads
   // then start them all up again, but I don't see much utility in
   // that so I'm not going to worry about it now
  
-  //ourThreads.insert(MapType::value_type(thread->myThread, thread));
+  if (thread != NULL) {
+	addThreadToMap(thread->myThread, thread); // Note: Recursive lock of ourThreadsMutex!
+    //ourThreads.insert(MapType::value_type(thread->myThread, thread));
+  }
   ourThreadsMutex.unlock();
 }
 
@@ -82,9 +87,15 @@ AREXPORT ArThread::ArThread(bool blockAllSignals) :
   myBlockAllSignals(blockAllSignals),
   myStarted(false),
   myFinished(false),
+  myStrMap(),
   myFunc(0),
   myThread(),
-  myStrMap()
+#if defined(WIN32) && !defined(MINGW)
+  myThreadHandle(0)
+#else
+  myPID(0)
+#endif
+
 {
 }
 
@@ -95,9 +106,14 @@ AREXPORT ArThread::ArThread(ThreadType thread, bool joinable,
   myBlockAllSignals(blockAllSignals),
   myStarted(false),
   myFinished(false),
+  myStrMap(),
   myFunc(0),
   myThread(thread),
-  myStrMap()
+#if defined(WIN32) && !defined(MINGW)
+  myThreadHandle(0)
+#else
+  myPID(0)
+#endif
 {
 }
 
@@ -108,23 +124,31 @@ AREXPORT ArThread::ArThread(ArFunctor *func, bool joinable,
   myBlockAllSignals(blockAllSignals),
   myStarted(false),
   myFinished(false),
+  myStrMap(),
   myFunc(func),
   myThread(),
-  myStrMap()
+#if defined(WIN32) && !defined(MINGW)
+  myThreadHandle(0)
+#else
+  myPID(0)
+#endif
 {
   create(func, joinable);
 }
 
-#ifndef WIN32
+#if !defined(WIN32) || defined(MINGW)
 AREXPORT ArThread::~ArThread()
 {
   // Just make sure the thread is no longer in the map.
+  removeThreadFromMap(myThread);
+  /*
   ourThreadsMutex.lock();
   MapType::iterator iter = ourThreads.find(myThread);
   if (iter != ourThreads.end()) {
     ourThreads.erase(iter);
   }
   ourThreadsMutex.unlock();
+  */
 }
 #endif 
 
@@ -135,10 +159,13 @@ AREXPORT int ArThread::join(void **iret)
   if (ret)
     return(ret);
 
+  removeThreadFromMap(myThread);
+  /*
   ourThreadsMutex.lock();
   ourThreads.erase(myThread);
   ourThreadsMutex.unlock();
-
+ */
+ 
   return(0);
 }
 
@@ -185,5 +212,80 @@ AREXPORT ArThread::ThreadType ArThread::getThisOSThread(void)
   if ((self = ArThread::self()) != NULL)
     return self->getOSThread();
   else
+#ifdef MINGW
+	return {NULL, 0};
+#else
     return 0;
+#endif
 }
+
+
+// ourThreads is a vector on MINGW and a map on Linux and Windows (where native ThreadType just happens to be a scalar and usable as a key in a map)
+
+#ifdef MINGW
+
+ArThread* ArThread::findThreadInMap(ThreadType t) 
+{
+	ourThreadsMutex.lock();
+	for(MapType::iterator i = ourThreads.begin(); i != ourThreads.end(); ++i)
+	{
+		if(pthread_equal(t, (*i).first))
+		{
+			ourThreadsMutex.unlock();
+			return (*i).second;
+		}
+	}
+	ourThreadsMutex.unlock();
+	return NULL;
+}
+
+void ArThread::removeThreadFromMap(ThreadType t) 
+{
+	ourThreadsMutex.lock();
+	MapType::iterator found = ourThreads.end();
+	for(MapType::iterator i = ourThreads.begin(); i != ourThreads.end(); ++i)
+		if(pthread_equal(t, (*i).first))
+			found = i;
+	if(found != ourThreads.end())
+		ourThreads.erase(found);
+	ourThreadsMutex.unlock();
+}
+
+void ArThread::addThreadToMap(ThreadType pt, ArThread *at) 
+{
+	ourThreadsMutex.lock();
+	ourThreads.push_back(std::pair<ThreadType, ArThread*>(pt, at));
+	ourThreadsMutex.unlock();
+}
+  
+#else
+
+ArThread* ArThread::findThreadInMap(ThreadType pt) 
+{
+	ourThreadsMutex.lock();
+	MapType::iterator iter = ourThreads.find(pt);
+	ArThread *r = NULL;
+	if (iter != ourThreads.end())
+		r = (*iter).second;
+	ourThreadsMutex.unlock();
+	return r;
+}
+
+void ArThread::removeThreadFromMap(ThreadType t) 
+{  
+	ourThreadsMutex.lock();
+	MapType::iterator iter = ourThreads.find(t);
+	if (iter != ourThreads.end()) {
+		ourThreads.erase(iter);
+	}
+	ourThreadsMutex.unlock();
+}
+
+void ArThread::addThreadToMap(ThreadType pt, ArThread *at) 
+{
+	ourThreadsMutex.lock();
+	ourThreads[pt] = at;
+	ourThreadsMutex.unlock();
+}
+
+#endif

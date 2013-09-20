@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARANALOGGYRO_H
 #define ARANALOGGYRO_H
@@ -89,6 +89,8 @@ class ArRobotPacket;
    it is best to integrate this one simple gyro to simply improve robot odometry, 
    rather than a complicated and expensive IMU.
 
+   @ingroup OptionalClasses
+
 */
 class ArAnalogGyro
 {
@@ -112,9 +114,9 @@ public:
   /// If this class actually has data or not (if it has no data, the
   /// robot is all there is)
   bool hasNoInternalData(void) { return myHasNoData; }
-  /// Gets if we really have a gyro or not
+  /// Returns true if any amount of gyro data has yet been received, false if no readings have yet been received from the robot.
   AREXPORT bool haveGottenData(void) { return myHaveGottenData; }
-  /// Gets the heading the gyro thinks
+  /// Gets a heading calculated from past gyro readings
   AREXPORT double getHeading(void) const { return myHeading; }
   /// Gets the temperature the gyro has
   AREXPORT int getTemperature(void) const { return myTemperature; }
@@ -137,11 +139,12 @@ public:
   /// Returns the number of readings taken in the last second
   AREXPORT int getPacCount(void) { return myPacCount; }
 
-  /// Gets the average value
+  /// Gets the most recently calculated average rotational velocity (over one
+  //second)
   AREXPORT double getAverage(void) const { return myLastAverage; }
   /// Gets the time the last average was taken 
   AREXPORT ArTime getAverageTaken(void) const { return myLastAverageTaken; }
-  /// Gets the scaling factor used for multiplying the readings (default 1.626)
+  /// Gets the scaling factor used for multiplying the reading values received (default 1.626)
   AREXPORT double getScalingFactor(void) const { return myScalingFactor; }
   /// Sets the scaling factor used for multiplying the readings
   AREXPORT void setScalingFactor(double factor) { myScalingFactor = factor; }
@@ -150,7 +153,7 @@ public:
   AREXPORT bool handleGyroPacket(ArRobotPacket *packet);
   /// internal function for correcting the encoder readings with the gyro data
   AREXPORT double encoderCorrect(ArPoseWithTime deltaPose);
-  /// Internal connection callback
+  /// Internal connection callback; delays for a short amount of time to give the gyro enough time to stabilize before we try to use it
   AREXPORT void stabilizingCallback(void);
   /// Internal user task callback
   AREXPORT void userTaskCallback(void);

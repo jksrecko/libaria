@@ -19,7 +19,11 @@ AREXPORT ArServerHandlerMapping::ArServerHandlerMapping(
 	ArServerBase *server, ArRobot *robot, ArLaser *laser,
 	const char *baseDirectory, const char *tempDirectory,
 	bool useReflectorValues, ArLaser *laser2, 
-	const char *suffix, const char *suffix2) :
+	const char *suffix, const char *suffix2,
+	std::list<ArLaser *> *extraLasers) :
+  myTempDirectoryHelper(baseDirectory, tempDirectory),
+  myZipFile(NULL),
+  mySnapshotZipFile(NULL),
   myMappingStartCB(this, &ArServerHandlerMapping::serverMappingStart),
   myMappingEndCB(this, &ArServerHandlerMapping::serverMappingEnd),
   myMappingStatusCB(this, &ArServerHandlerMapping::serverMappingStatus),
@@ -38,15 +42,7 @@ AREXPORT ArServerHandlerMapping::ArServerHandlerMapping(
   if (suffix2 != NULL)
     mySuffix2 = suffix2;
 
-  if (baseDirectory != NULL && strlen(baseDirectory) > 0)
-    myBaseDirectory = baseDirectory;
-  else
-    myBaseDirectory = "";
-
-  if (tempDirectory != NULL && strlen(tempDirectory) > 0)
-    myTempDirectory = tempDirectory;
-  else
-    myTempDirectory = myBaseDirectory;
+  myExtraLasers = extraLasers;
 
   if (myServer != NULL)
   {
@@ -132,6 +128,7 @@ AREXPORT void ArServerHandlerMapping::serverMappingStart(
       myFileName2 += ".2d";
   }
 
+
   // call our mapping started callbacks
   std::list<ArFunctor *>::iterator fit;
   ArFunctor *functor;
@@ -145,11 +142,12 @@ AREXPORT void ArServerHandlerMapping::serverMappingStart(
 
 
   myLaserLogger = new ArLaserLogger(myRobot, myLaser, 300, 25, myFileName.c_str(),
-				  true, Aria::getJoyHandler(), 
-				  myTempDirectory.c_str(), 
-				  myUseReflectorValues,
-				  Aria::getRobotJoyHandler(),
-				  &myLocationDataMap);
+				    true, Aria::getJoyHandler(), 
+				    myTempDirectoryHelper.getTempDirectory(),
+				    myUseReflectorValues,
+				    Aria::getRobotJoyHandler(),
+				    &myLocationDataMap,
+				    myExtraLasers);
   if (myLaserLogger == NULL)
   {
     ArLog::log(ArLog::Normal, "MappingStart: myLaserLogger == NULL");
@@ -181,7 +179,7 @@ AREXPORT void ArServerHandlerMapping::serverMappingStart(
     myLaserLogger2 = new ArLaserLogger(myRobot, myLaser2, 300, 25, 
 				     myFileName2.c_str(),
 				     true, Aria::getJoyHandler(), 
-				     myTempDirectory.c_str(), 
+				     myTempDirectoryHelper.getTempDirectory(),
 				     myUseReflectorValues,
 				     Aria::getRobotJoyHandler(),
 				     &myLocationDataMap);
@@ -198,6 +196,17 @@ AREXPORT void ArServerHandlerMapping::serverMappingStart(
     if (myLaserLogger2 != NULL)
       myLaserLogger2->addInfoToLogPlain((*it).c_str());
   }
+
+  // call our mapping started callbacks
+  for (fit = myMappingBegunCallbacks.begin(); 
+       fit != myMappingBegunCallbacks.end(); 
+       fit++)
+  {
+    functor = (*fit);
+    functor->invoke();
+  }
+
+
   myRobot->unlock();
   
   
@@ -229,6 +238,7 @@ AREXPORT void ArServerHandlerMapping::serverMappingEnd(
   }
 
   myRobot->lock();
+
   delete myLaserLogger;
   myLaserLogger = NULL;
 
@@ -241,122 +251,42 @@ AREXPORT void ArServerHandlerMapping::serverMappingEnd(
     myLaserLogger2 = NULL;
   }
     
-  // now, if our temp directory and base directory are different we
-  // need to move it and put the result in the packet, otherwise put
-  // in we're okay
-  if (ArUtil::strcasecmp(myBaseDirectory, myTempDirectory) != 0)
-  {
-#ifndef WIN32
-    char *mvName = "mv";
-#else
-    char *mvName = "move";
-#endif
-    char systemBuf[6400];
-    char fromBuf[1024];
-    char toBuf[1024];
-
-    char systemBuf2[6400];
-    char fromBuf2[1024];
-    char toBuf2[1024];
-
-    if (myTempDirectory.size() > 0)
-      snprintf(fromBuf, sizeof(fromBuf), "%s%s", 
-	       myTempDirectory.c_str(), myFileName.c_str());
-    else
-      snprintf(fromBuf, sizeof(fromBuf), "%s", myFileName.c_str());
-    ArUtil::fixSlashes(fromBuf, sizeof(fromBuf));
-
-    if (myTempDirectory.size() > 0)
-      snprintf(toBuf, sizeof(toBuf), "%s%s", 
-	       myBaseDirectory.c_str(), myFileName.c_str());
-    else
-      snprintf(toBuf, sizeof(toBuf), "%s", myFileName.c_str());
-    ArUtil::fixSlashes(toBuf, sizeof(toBuf));
-
-    sprintf(systemBuf, "%s \"%s\" \"%s\"", mvName, fromBuf, toBuf);
-
-
-
-
-    ArLog::log(ArLog::Verbose, "Moving with '%s'", systemBuf);
-    // call our pre move callbacks
-    for (fit = myPreMoveCallbacks.begin(); 
-	 fit != myPreMoveCallbacks.end(); 
-	 fit++)
-      (*fit)->invoke();
-
-    // move file
-    int ret;
-    if ((ret = system(systemBuf)) == 0)
-    {
-      ArLog::log(ArLog::Verbose, "ArServerHandlerMapping: Moved file %s (with %s)", 
-		 myFileName.c_str(), systemBuf);
-      sendPacket.byteToBuf(0);
-    }
-    else
-    {
-      ArLog::log(ArLog::Normal, 
-		 "ArServerHandlerMapping: Couldn't move file for %s (ret of '%s' is %d) removing file", 
-		 myFileName.c_str(), systemBuf, ret);
-      unlink(fromBuf);
-      sendPacket.uByte2ToBuf(2);
-    }
-
-    if (haveFile2)
-    {
-      if (myTempDirectory.size() > 0)
-	snprintf(fromBuf2, sizeof(fromBuf2), "%s%s", 
-		 myTempDirectory.c_str(), myFileName2.c_str());
-      else
-	snprintf(fromBuf2, sizeof(fromBuf2), "%s", myFileName2.c_str());
-      ArUtil::fixSlashes(fromBuf2, sizeof(fromBuf2));
-      
-      if (myTempDirectory.size() > 0)
-	snprintf(toBuf2, sizeof(toBuf2), "%s%s", 
-		 myBaseDirectory.c_str(), myFileName2.c_str());
-      else
-	snprintf(toBuf2, sizeof(toBuf2), "%s", myFileName2.c_str());
-      ArUtil::fixSlashes(toBuf2, sizeof(toBuf2));
-      
-      sprintf(systemBuf2, "%s \"%s\" \"%s\"", mvName, fromBuf2, toBuf2);
-      
-      if ((ret = system(systemBuf2)) == 0)
-      {
-	ArLog::log(ArLog::Verbose, "ArServerHandlerMapping: Moved file2 %s (with %s)", 
-		   myFileName2.c_str(), systemBuf2);
-      }
-      else
-      {
-	ArLog::log(ArLog::Normal, 
-		   "ArServerHandlerMapping: Couldn't move file2 for %s (ret of '%s' is %d) removing file", 
-		   myFileName2.c_str(), systemBuf2, ret);
-	unlink(fromBuf2);
-      }
-    }
     
-    // call our post move callbacks
-    for (fit = myPostMoveCallbacks.begin(); 
-	 fit != myPostMoveCallbacks.end(); 
-	 fit++)
-      (*fit)->invoke();
+  std::list<std::string> sourceFileNameList;
+  sourceFileNameList.push_back(myFileName);
+  if (haveFile2) {
+    sourceFileNameList.push_back(myFileName2);
+  }
 
+  bool isSuccess = myTempDirectoryHelper.moveFilesToBaseDirectory
+                                           (sourceFileNameList);
+  
+  if (isSuccess) {
+    sendPacket.uByte2ToBuf(0);
   }
-  else
-  {
-    // just put in things are okay, it'll get sent below
-    sendPacket.byteToBuf(0);
-  }
+  else {
+    sendPacket.uByte2ToBuf(2);
+  } 
 
 
   ArLog::log(ArLog::Normal, "MappingEnd: Stopped mapping %s", 
-	     myFileName.c_str());
+	           myFileName.c_str());
 
-  // call our mapping started callbacks
+  // call our mapping end callbacks
   for (fit = myMappingEndCallbacks.begin(); 
        fit != myMappingEndCallbacks.end(); 
        fit++)
     (*fit)->invoke();
+  
+  
+  // Call the mapping ended callbacks
+  for (fit = myMappingEndedCallbacks.begin(); 
+       fit != myMappingEndedCallbacks.end(); 
+       fit++) {
+    (*fit)->invoke();
+  }
 
+  // Clear the internal file names
   myMapName = "";
   myFileName = "";
 
@@ -413,6 +343,24 @@ AREXPORT void ArServerHandlerMapping::remMappingStartCallback(
   myMappingStartCallbacks.remove(functor);
 }
 
+AREXPORT void ArServerHandlerMapping::addMappingBegunCallback(
+	ArFunctor *functor, ArListPos::Pos position)
+{
+  if (position == ArListPos::FIRST)
+    myMappingBegunCallbacks.push_front(functor);
+  else if (position == ArListPos::LAST)
+    myMappingBegunCallbacks.push_back(functor);
+  else
+    ArLog::log(ArLog::Terse, 
+       "ArServerHandlerMapping::addMappingBegunCallback: Invalid position.");
+}
+
+AREXPORT void ArServerHandlerMapping::remMappingBegunCallback(
+	ArFunctor *functor)
+{
+  myMappingBegunCallbacks.remove(functor);
+}
+
 AREXPORT void ArServerHandlerMapping::addMappingEndCallback(
 	ArFunctor *functor, ArListPos::Pos position)
 {
@@ -431,41 +379,53 @@ AREXPORT void ArServerHandlerMapping::remMappingEndCallback(
   myMappingEndCallbacks.remove(functor);
 }
 
-AREXPORT void ArServerHandlerMapping::addPreMoveCallback(
+
+AREXPORT void ArServerHandlerMapping::addMappingEndedCallback(
 	ArFunctor *functor, ArListPos::Pos position)
 {
   if (position == ArListPos::FIRST)
-    myPreMoveCallbacks.push_front(functor);
+    myMappingEndedCallbacks.push_front(functor);
   else if (position == ArListPos::LAST)
-    myPreMoveCallbacks.push_back(functor);
+    myMappingEndedCallbacks.push_back(functor);
   else
     ArLog::log(ArLog::Terse, 
-       "ArServerHandlerMapping::addPreMoveCallback: Invalid position.");
+               "ArServerHandlerMapping::addMappingEndedCallback: Invalid position.");
+}
+
+AREXPORT void ArServerHandlerMapping::remMappingEndedCallback(
+	ArFunctor *functor)
+{
+  myMappingEndedCallbacks.remove(functor);
+}
+
+
+
+
+AREXPORT void ArServerHandlerMapping::addPreMoveCallback(
+	ArFunctor *functor, ArListPos::Pos position)
+{
+  myTempDirectoryHelper.addPreMoveCallback(functor, position);
 }
 
 AREXPORT void ArServerHandlerMapping::remPreMoveCallback(
 	ArFunctor *functor)
 {
-  myPreMoveCallbacks.remove(functor);
+  myTempDirectoryHelper.remPreMoveCallback(functor);
 }
 
 AREXPORT void ArServerHandlerMapping::addPostMoveCallback(
 	ArFunctor *functor, ArListPos::Pos position)
 {
-  if (position == ArListPos::FIRST)
-    myPostMoveCallbacks.push_front(functor);
-  else if (position == ArListPos::LAST)
-    myPostMoveCallbacks.push_back(functor);
-  else
-    ArLog::log(ArLog::Terse, 
-       "ArServerHandlerMapping::addPostMoveCallback: Invalid position.");
+  myTempDirectoryHelper.addPostMoveCallback(functor, position);
 }
 
 AREXPORT void ArServerHandlerMapping::remPostMoveCallback(
 	ArFunctor *functor)
 {
-  myPostMoveCallbacks.remove(functor);
+  myTempDirectoryHelper.remPostMoveCallback(functor);
 }
+
+
 
 AREXPORT void ArServerHandlerMapping::addSimpleCommands(
 	ArServerHandlerCommands *handlerCommands)
@@ -603,7 +563,7 @@ AREXPORT bool ArServerHandlerMapping::isMapping(void)
 
 AREXPORT bool ArServerHandlerMapping::addLocationData(
 	const char *name, 
-	ArRetFunctor2<int, ArTime, ArPose *> *functor)
+	ArRetFunctor3<int, ArTime, ArPose *, ArPoseWithTime *> *functor)
 {
   if (myLocationDataMap.find(name) != myLocationDataMap.end())
   {
@@ -618,7 +578,7 @@ AREXPORT bool ArServerHandlerMapping::addLocationData(
 
   /// Get location data map (mostly for internal things)
 AREXPORT const std::map<std::string, 
-			ArRetFunctor2<int, ArTime, ArPose *> *, 
+			ArRetFunctor3<int, ArTime, ArPose *, ArPoseWithTime *> *, 
 			ArStrCaseCmpOp> *
 ArServerHandlerMapping::getLocationDataMap(void)
 {
@@ -664,4 +624,90 @@ AREXPORT void ArServerHandlerMapping::addStringsForStartOfLogToMap(
     if (builder != NULL)
       delete builder;
   }
+}
+  
+
+/**
+ *  When the optional zip file feature is used, this method should be called with
+ *  a valid file in the context of a "mapping start" callback. The file should 
+ *  have been opened in ZIP_MODE, and should remain open until after all of the 
+ *  "mapping end" callbacks have completed.  The file should be closed and this
+ *  method should be called with a NULL pointer within the context of a "mapping
+ *  ended" callback. 
+ *
+ *  It is the application's responsibility to create and manage the zip file.
+ *  Not all applications will use this feature.
+ *
+ *  @param zipFile a pointer to the optional ArZippable instance in which 
+ *  scan results can be stored
+**/
+AREXPORT void ArServerHandlerMapping::setZipFile(ArZippable *zipFile)
+{
+  myZipFile = zipFile;
+}
+
+/**
+ *  If snapshots are enabled when the optional zip file feature is used, this 
+ *  method should be called with a valid file in the context of a "mapping start" 
+ *  callback. The file should have been opened in ZIP_MODE, and should remain 
+ *  open until after all of the "mapping end" callbacks have completed.  The file 
+ *  should be closed and this method should be called with a NULL pointer within 
+ *  the context of a "mapping ended" callback. The file should then be added to 
+ *  the main mapping zip file.
+ *
+ *  It is the application's responsibility to create and manage the zip file.
+ *  Not all applications will use this feature.
+ *
+ *  @param zipFile a pointer to the optional ArZippable instance in which 
+ *  snapshots can be stored
+**/
+AREXPORT void ArServerHandlerMapping::setSnapshotZipFile(ArZippable *zipFile)
+{
+  mySnapshotZipFile = zipFile;
+}
+
+/**
+ *  This method returns a pointer to the optional zip file associated with the
+ *  mapping session. The file should be opened before the "mapping begun" 
+ *  callbacks are invoked, and should be closed after the "mapping end" callbacks are 
+ *  invoked.
+ * 
+ *  It is the application's responsibility to create and manage the zip file.
+ *  Not all applications will use this feature.
+ *
+ *  @param zipFile a pointer to the optional ArZippable instance in which 
+ *  scan results can be stored; NULL if there is no active zip file
+**/
+AREXPORT ArZippable *ArServerHandlerMapping::getZipFile()
+{
+  return myZipFile;
+
+} // end method getZipFile
+
+/**
+ *  This method returns a pointer to a second optional zip file associated with the
+ *  mapping session.  It contains the snapshot images, and is eventually added to the 
+ *  main mapping zip file.  The file should be opened before the "mapping begun" 
+ *  callbacks are invoked, and should be closed after the "mapping end" callbacks are 
+ *  invoked.
+ * 
+ *  It is the application's responsibility to create and manage the zip file.
+ *  Not all applications will use this feature.
+ *
+ *  @param zipFile a pointer to the optional ArZippable instance in which 
+ *  scan results can be stored; NULL if there is no active zip file
+**/
+AREXPORT ArZippable *ArServerHandlerMapping::getSnapshotZipFile()
+{
+  return mySnapshotZipFile;
+
+} // end method getZipFile
+
+
+AREXPORT void ArServerHandlerMapping::forceReading(void)
+{
+  if (myLaserLogger != NULL)
+    myLaserLogger->takeReading();
+  if (myLaserLogger2 != NULL)
+    myLaserLogger2->takeReading();
 }

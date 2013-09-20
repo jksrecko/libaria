@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,16 +19,15 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "Aria.h"
 
 /** @example robotSyncTaskExample.cpp  Shows how to add a task callback to ArRobot's synchronization/processing cycle
 
-  This program will just have the robot wander around, it uses some avoidance 
-  routines, then just has a constant velocity.  A sensor interpretation task callback is invoked
+  A sensor interpretation task callback is invoked
   by the ArRobot object every cycle as it runs, which records the robot's current 
   pose and velocity.
 
@@ -104,11 +103,6 @@ int main(int argc, char** argv)
   // as a 'user task'.
   PrintingTask pt(&robot);
 
-  // the actions we will use to wander
-  ArActionStallRecover recover;
-  ArActionAvoidFront avoidFront;
-  ArActionConstantVelocity constantVelocity("Constant Velocity", 400);
-
   // initialize aria
   Aria::init();
 
@@ -123,15 +117,6 @@ int main(int argc, char** argv)
   }
   printf("Connected to the robot. (Press Ctrl-C to exit)\n");
   
-  
-  // turn on the motors, turn off amigobot sounds
-  robot.comInt(ArCommands::ENABLE, 1);
-  robot.comInt(ArCommands::SOUNDTOG, 0);
-
-  // add the wander actions
-  robot.addAction(&recover, 100);
-  robot.addAction(&avoidFront, 50);
-  robot.addAction(&constantVelocity, 25);
   
   // Start the robot process cycle running. Each cycle, it calls the robot's
   // tasks. When the PrintingTask was created above, it added a new

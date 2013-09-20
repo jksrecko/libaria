@@ -85,10 +85,11 @@ echo Building JAR ($(JAVA_BIN)\jar)...
 				DebugInformationFormat="3"/>
 			<Tool
 				Name="VCCustomBuildTool"
-				Description="Custom Build Step: Running C:\swig\swig.exe to generate Java wrapper code; Compiling Java code; Building JAR file."
+				Description="(AriaSwigJava Custom Build Step) Running C:\swig\swig.exe to generate Java wrapper code; Compiling Java code; Building JAR file."
 				CommandLine="mkdir &quot;$(ProjectDir)\com\mobilerobots\Aria&quot;
 del &quot;$(ProjectDir)\com\mobilerobots\Aria\*.java&quot;
 del &quot;$(ProjectDir)\com\mobilerobots\Aria\*.class&quot;
+cd &quot;$(ProjectDir)&quot;
 echo Running Swig (C:\swig\swig.exe)...
 C:\swig\swig.exe -Fmicrosoft -c++ -package com.mobilerobots.Aria -java -module AriaJava -DWIN32 -DSWIGWIN -DAREXPORT -outdir &quot;$(ProjectDir)\com\mobilerobots\Aria&quot;  -o AriaJava_wrap.cpp &quot;-I$(ProjectDir)\..\include&quot; &quot;$(ProjectDir)\..\include\wrapper.i&quot;
 echo Compiling Java ($(JAVA_BIN)\javac)...

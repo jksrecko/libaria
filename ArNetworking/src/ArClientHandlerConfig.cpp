@@ -18,32 +18,60 @@
 */
 AREXPORT ArClientHandlerConfig::ArClientHandlerConfig(ArClientBase *client,
 						                                          bool ignoreBounds,
-                                                      const char *robotName) :
+                                                      const char *robotName,
+                                                      const char *logPrefix) :
   myRobotName((robotName != NULL) ? robotName : ""),
-  myLogPrefix(""),
+  myLogPrefix((logPrefix != NULL) ? logPrefix : ""),
 
-  myConfig(NULL, false, ignoreBounds),
+  myGotConfigCBList(),
+  mySaveConfigSucceededCBList(),
+  mySaveConfigFailedCBList(),
+  myGotConfigDefaultsCBList(),
+  myGotLastEditablePriorityCBList(),
+
+  myClient(client),
+
+  myConfig(NULL, 
+           false, 
+           ignoreBounds),
   myDefaultConfig(NULL),
+  myLastEditablePriority(ArPriority::LAST_PRIORITY),
 
-  myHandleGetConfigBySectionsCB(this, &ArClientHandlerConfig::handleGetConfigBySections),
+  myDataMutex(),
+  myCallbackMutex(),
+
+  myHaveRequestedLastEditablePriority(false),
+  myHaveGottenLastEditablePriority(false),
+  myHaveRequestedConfig(false),
+  myHaveGottenConfig(false),
+  myHaveRequestedDefaults(false),
+  myHaveGottenDefaults(false),
+  myHaveRequestedDefaultCopy(false),
+
+  myIsQuiet(false),
+
+  myHandleGetConfigBySectionsV3CB
+                     (this, &ArClientHandlerConfig::handleGetConfigBySectionsV3),
+  myHandleGetConfigBySectionsV2CB
+                     (this, &ArClientHandlerConfig::handleGetConfigBySectionsV2),
+  myHandleGetConfigBySectionsCB
+                     (this, &ArClientHandlerConfig::handleGetConfigBySections),
   myHandleGetConfigCB(this, &ArClientHandlerConfig::handleGetConfig),
   myHandleSetConfigCB(this, &ArClientHandlerConfig::handleSetConfig),
-  myHandleGetConfigDefaultsCB(this, 
-			      &ArClientHandlerConfig::handleGetConfigDefaults),
-  myHandleGetConfigSectionFlagsCB(this, 
-				  &ArClientHandlerConfig::handleGetConfigSectionFlags)
+  myHandleSetConfigBySectionsCB(this, &ArClientHandlerConfig::handleSetConfigBySections),
+  myHandleSetConfigBySectionsV2CB(this, &ArClientHandlerConfig::handleSetConfigBySectionsV2),
+  myHandleGetConfigDefaultsCB
+                     (this, &ArClientHandlerConfig::handleGetConfigDefaults),
+  myHandleGetConfigSectionFlagsCB
+                     (this, &ArClientHandlerConfig::handleGetConfigSectionFlags),
+  myHandleGetLastEditablePriorityCB
+                     (this, &ArClientHandlerConfig::handleGetLastEditablePriority)
+
 {
   myDataMutex.setLogName("ArClientConfigHandler::myDataMutex");
   myCallbackMutex.setLogName("ArClientConfigHandler::myCallbackMutex");
 
-  myClient = client;
-  myHaveGottenConfig = false;
-  myHaveRequestedDefaults = false;
-  myHaveGottenDefaults = false;
-  myHaveRequestedDefaultCopy = false;
-  myIsQuiet = false;
-
-  if (!myRobotName.empty()) {
+  if ((logPrefix == NULL) && !myRobotName.empty()) {
     myLogPrefix = myRobotName + ": ";
   }
 
@@ -58,56 +86,119 @@ AREXPORT ArClientHandlerConfig::~ArClientHandlerConfig()
 }
 
 /**
-   This requests a config from the server and resets it so we haven't
-   gotten a config.
+   This requests the config from the server.  The handler's internal state is
+   reset to indicate that the config hasn't been received.
+
+   If the server supports editable priority levels and the client wishes to
+   receive parameters of ineditable priorities, then the method 
+   requestLastEditablePriority should be called (and completed) before 
+   requestConfigFromServer is called.
  **/
 AREXPORT void ArClientHandlerConfig::requestConfigFromServer(void)
 {
-
-  char *getConfigPacketName = "getConfigBySections";
+  char *getConfigPacketName = "getConfigBySectionsV3";
   bool isInsertPriority = true;
+  bool isInsertRestartLevel = true;
 
-  ArFunctor1C<ArClientHandlerConfig, ArNetPacket *> *getConfigCB = &myHandleGetConfigBySectionsCB;
-
+  ArFunctor1C<ArClientHandlerConfig, ArNetPacket *> *getConfigCB = &myHandleGetConfigBySectionsV3CB;
+  
   if (!myClient->dataExists(getConfigPacketName)) {
-    getConfigPacketName = "getConfig";
-    isInsertPriority = false;
 
-    getConfigCB = &myHandleGetConfigCB;
-  }
+    getConfigPacketName = "getConfigBySectionsV2";
+    getConfigCB = &myHandleGetConfigBySectionsV2CB;
+
+    if (!myClient->dataExists(getConfigPacketName)) {
+
+      getConfigPacketName = "getConfigBySections";
+      isInsertRestartLevel = false;
+
+      getConfigCB = &myHandleGetConfigBySectionsCB;
+
+      if (!myClient->dataExists(getConfigPacketName)) {
+        getConfigPacketName = "getConfig";
+        isInsertPriority = false;
+
+        getConfigCB = &myHandleGetConfigCB;
+
+      } // end if packet name does not exist
+    } // end if 
+
+  } // end if packet name does not exist
+
+  char *setConfigPacketName = "setConfigBySectionsV2";
+  ArFunctor1C<ArClientHandlerConfig, ArNetPacket *> *setConfigCB = &myHandleSetConfigBySectionsV2CB;
+  
+  if (!myClient->dataExists(setConfigPacketName)) {
+ 
+    setConfigPacketName = "setConfigBySections";
+
+    setConfigCB = &myHandleSetConfigBySectionsCB;
+
+    if (!myClient->dataExists(setConfigPacketName)) {
+ 
+      setConfigPacketName = "setConfig";
+
+      setConfigCB = &myHandleSetConfigCB;
+
+    } // end if packet name does not exist
+
+  } // end if packet name does not exist
 
   myDataMutex.lock();
-  ArLog::log(ArLog::Verbose, "%sRequesting config from server, and clearing sections...", 
-              myLogPrefix.c_str());
+  ArLog::log(ArLog::Normal, "%sRequesting config from server (with %s, save with %s)", 
+	     myLogPrefix.c_str(), getConfigPacketName, setConfigPacketName);
   myConfig.clearSections();
   myDataMutex.unlock();
 
   myClient->remHandler(getConfigPacketName, getConfigCB);
   myClient->addHandler(getConfigPacketName, getConfigCB);
-  myClient->remHandler("setConfig", &myHandleSetConfigCB);
-  myClient->addHandler("setConfig", &myHandleSetConfigCB);
+
+  myClient->remHandler(setConfigPacketName, setConfigCB);
+  myClient->addHandler(setConfigPacketName, setConfigCB);
 
   if (myClient->dataExists("getConfigDefaults")) {
     myClient->remHandler("getConfigDefaults", &myHandleGetConfigDefaultsCB);
     myClient->addHandler("getConfigDefaults", &myHandleGetConfigDefaultsCB);
   }
+
   if (myClient->dataExists("getConfigSectionFlags"))
   {
     myClient->remHandler("getConfigSectionFlags", 
-			 &myHandleGetConfigSectionFlagsCB);
+			                   &myHandleGetConfigSectionFlagsCB);
     myClient->addHandler("getConfigSectionFlags", 
-			 &myHandleGetConfigSectionFlagsCB);
+			                   &myHandleGetConfigSectionFlagsCB);
     myClient->requestOnce("getConfigSectionFlags");
   }
 
+  bool isInsertLastEditablePriority = true;
+  if (!myClient->dataExists("getLastEditablePriority")) {
+    isInsertLastEditablePriority = false;
+  }
+  else if (!myHaveGottenLastEditablePriority) {
+    isInsertLastEditablePriority = false;
+    ArLog::log(ArLog::Terse,
+               "%sConfig requested but last editable priority not yet received, using old protocol",
+               myLogPrefix.c_str());
+  } // end else if last editable priority not received
+
+
   if (isInsertPriority) {
     ArLog::log(ArLog::Verbose,
-               "%sRequesting that config has last priority value %i",
+               "%sRequesting that config has last priority %s",
                myLogPrefix.c_str(),
-               ArPriority::LAST_PRIORITY);
+               ArPriority::getPriorityName(ArPriority::LAST_PRIORITY));
 
     ArNetPacket packet;
     packet.byteToBuf(ArPriority::LAST_PRIORITY);
+
+    if (isInsertLastEditablePriority) {
+      ArLog::log(ArLog::Verbose,
+                 "%sRequesting that config has last editable priority %s",
+                 myLogPrefix.c_str(),
+                 ArPriority::getPriorityName(myLastEditablePriority));
+      packet.byteToBuf(myLastEditablePriority);
+    }
+
     myClient->requestOnce(getConfigPacketName, &packet);
   }
   else { // don't insert priority
@@ -119,28 +210,42 @@ AREXPORT void ArClientHandlerConfig::requestConfigFromServer(void)
   myDataMutex.unlock();
 }
 
+AREXPORT void ArClientHandlerConfig::handleGetConfigBySectionsV3(ArNetPacket *packet)
+{
+  handleGetConfigData(packet, true, 3);
+}
+
+AREXPORT void ArClientHandlerConfig::handleGetConfigBySectionsV2(ArNetPacket *packet)
+{
+  handleGetConfigData(packet, true, 2);
+}
+
 AREXPORT void ArClientHandlerConfig::handleGetConfigBySections(ArNetPacket *packet)
 {
-  handleGetConfigData(packet, true);
+  handleGetConfigData(packet, true, 1);
 }
 
 AREXPORT void ArClientHandlerConfig::handleGetConfig(ArNetPacket *packet)
 {
-  handleGetConfigData(packet, false);
+  handleGetConfigData(packet, false, 0);
 }
 
 AREXPORT void ArClientHandlerConfig::handleGetConfigData(ArNetPacket *packet,
-                                                         bool isMultiplePackets)
+                                                         bool isMultiplePackets,
+                                                         int version)
 {
   char name[32000];
   char comment[32000];
+  char categoryName[512]; 
+
   char type;
   std::string section;
   
   // The multiple packets method also sends display hints with the parameters;
   // the old single packet method does not.
   ArClientArg clientArg(isMultiplePackets, 
-                        ArPriority::LAST_PRIORITY);
+                        ArPriority::LAST_PRIORITY,
+                        version);
   bool isEmptyPacket = true;
 
   myDataMutex.lock();
@@ -154,28 +259,50 @@ AREXPORT void ArClientHandlerConfig::handleGetConfigData(ArNetPacket *packet,
     if (type == 'S')
     {
       packet->bufToStr(name, sizeof(name));
-      packet->bufToStr(comment, sizeof(name));
+      packet->bufToStr(comment, sizeof(comment));
+
+      if (version >= 2) {
+        packet->bufToStr(categoryName, sizeof(categoryName));
+        int index = 1;
+
+        if (version >= 3) {
+
+          index = packet->bufToUByte2();
+        }
+        if (index <= 1) {
+          ArLog::log(ArLog::Verbose, "%sReceiving config section %s, %s...", 
+                      myLogPrefix.c_str(), categoryName, name);
+              
+          myConfig.addSection(categoryName, name, comment);
+        }
+        else {
+          ArLog::log(ArLog::Verbose, "%sAppending to config section %s, %s (packet %i)...", 
+                      myLogPrefix.c_str(), categoryName, name, index);
+              
+        }
+      }
+      else {
+        ArLog::log(ArLog::Verbose, "%sReceiving config section %s...", 
+                   myLogPrefix.c_str(), name);
+        myConfig.setSectionComment(name, comment);
+      }
       //printf("%c %s %s\n", type, name, comment);
 
-      ArLog::log(ArLog::Verbose, "%sReceiving config section %s...", 
-                 myLogPrefix.c_str(), name);
+ 
       
       section = name;
-      myConfig.setSectionComment(name, comment);
+
     }
     else if (type == 'P')
     {
 		  ArConfigArg configArg;
 
 		  bool isSuccess = clientArg.createArg(packet,
-											                     configArg);
+						       configArg);
 
 		  if (isSuccess) {
-        
-			  myConfig.addParam(configArg,
-							            section.c_str(),
-							            configArg.getConfigPriority(),
-                          configArg.getDisplayHint());
+		    myConfig.addParamAsIs(configArg,
+					  section.c_str());
 		  }
 		  else
 		  {
@@ -192,7 +319,15 @@ AREXPORT void ArClientHandlerConfig::handleGetConfigData(ArNetPacket *packet,
   if (!isMultiplePackets || isEmptyPacket) {
 
     ArLog::log(ArLog::Normal, "%sGot config from server.", myLogPrefix.c_str());
+    
+    // KMC 1/22/13 To only log some of the config, substitute the commented
+    // lines below for the following config->log statement. 
     IFDEBUG(myConfig.log());
+    /*** 
+    std::list<std::string> sectionNameList;
+    sectionNameList.push_back("Data Log Settings");
+    IFDEBUG(myConfig.log(false, &sectionNameList, myLogPrefix.c_str()));
+    ****/
 
     myHaveGottenConfig = true;
   }
@@ -248,24 +383,53 @@ AREXPORT void ArClientHandlerConfig::saveConfigToServer(
   //ArConfigArg param;
   ArClientArg clientArg;
 
+  bool isMultiplePackets = true;
+  int version = 2;
+  char *setConfigPacketName = "setConfigBySectionsV2";
+  if (!myClient->dataExists(setConfigPacketName)) {
+
+    setConfigPacketName = "setConfigBySections";
+    version = 1;
+
+    if (!myClient->dataExists(setConfigPacketName)) {
+      version = 0;
+      isMultiplePackets = false;
+      setConfigPacketName = "setConfig";
+    } 
+  }
+
   ArNetPacket sending;
-  ArLog::log(ArLog::Normal, "%sSaving config to server", myLogPrefix.c_str());
+  ArLog::log(ArLog::Normal, 
+             "%sSaving config to server (with %s)", 
+             myLogPrefix.c_str(), setConfigPacketName);
+  
+   
+  // KMC 1/22/13 To only log some of the config, substitute the commented
+  // lines below for the following config->log statement. 
+  IFDEBUG(config->log(false, NULL, myLogPrefix.c_str()));
+  /***
+  std::list<std::string> sectionNameList;
+  sectionNameList.push_back("Data Log Settings");
+  IFDEBUG(config->log(false, &sectionNameList, myLogPrefix.c_str()));
+  ***/
+   
 
   myDataMutex.lock();
+  bool isSuccess = true;
   std::list<ArConfigSection *> *sections = config->getSections();
   for (std::list<ArConfigSection *>::iterator sIt = sections->begin(); 
-       sIt != sections->end(); 
+       (isSuccess && (sIt != sections->end())); 
        sIt++)
   {
     ArConfigSection *section = (*sIt);
     // if we're ignoring sections and we're ignoring this one, then
     // don't send it
     if (ignoreTheseSections != NULL && 
-	(ignoreTheseSections->find(section->getName()) != 
-	 ignoreTheseSections->end()))
+	      (ignoreTheseSections->find(section->getName()) != 
+	      ignoreTheseSections->end()))
     {
       ArLog::log(ArLog::Verbose, "Not sending section %s", 
-		 section->getName());
+		  section->getName());
       continue;
     }
     sending.strToBuf("Section");
@@ -282,20 +446,62 @@ AREXPORT void ArClientHandlerConfig::saveConfigToServer(
         continue;
       }
 
-      sending.strToBuf(param.getName());
+      clientArg.addArgTextToPacket(param, &sending);
 
-      clientArg.argTextToBuf(param, &sending);
+      //sending.strToBuf(param.getName());
+      
+      //clientArg.argTextToBuf(param, &sending);
 
     } // end for each param
+
+    if (isMultiplePackets) {
+
+      if (!myClient->requestOnce(setConfigPacketName, &sending)) {
+
+        isSuccess = false;
+        break;
+ 
+      }
+      // Empty the packet so that the next section can be sent    
+      sending.empty();
+
+    } // end if send multiple packets
+
   } // end for each section
 
   myDataMutex.unlock();
-  myClient->requestOnce("setConfig", &sending);
+
+  if (isMultiplePackets) {
+    // Send an empty packet to indicate the end of the config
+    ArNetPacket emptyPacket;
+    if (!myClient->requestOnce(setConfigPacketName, &emptyPacket)) {
+      isSuccess = false;
+    }
+    else {
+      ArLog::log(ArLog::Normal,
+                 "ArClientHandlerConfig sent empty packet");
+    }
+  }
+  else {
+    if (!myClient->requestOnce(setConfigPacketName, &sending)) {
+      isSuccess = false;
+    }
+  }
+  
+  if (!isSuccess) {
+    ArLog::log(ArLog::Normal,
+               "%sclient request to %s failed, invoking callbacks",
+               myLogPrefix.c_str(), setConfigPacketName);
+    for (std::list<ArFunctor1<const char *> *>::iterator it = mySaveConfigFailedCBList.begin(); 
+	       it != mySaveConfigFailedCBList.end(); 
+	       it++) {
+      (*it)->invoke();
+    }
+  }
 }
 
 AREXPORT void ArClientHandlerConfig::handleSetConfig(ArNetPacket *packet)
-{
-  
+{ 
   char buffer[1024];
   packet->bufToStr(buffer, sizeof(buffer));
 
@@ -320,6 +526,97 @@ AREXPORT void ArClientHandlerConfig::handleSetConfig(ArNetPacket *packet)
   }
   myCallbackMutex.unlock();
 }
+
+/// Handles the return packet from the setConfig (saveConfigToServer)
+AREXPORT void ArClientHandlerConfig::handleSetConfigBySections(ArNetPacket *packet)
+{
+  char buffer[1024];
+  packet->bufToStr(buffer, sizeof(buffer));
+
+  myCallbackMutex.lock();
+  if (buffer[0] == '\0')
+  {
+    ArLog::log(ArLog::Normal, "%sSaved config to server successfully", myLogPrefix.c_str());
+    std::list<ArFunctor *>::iterator it;
+    for (it = mySaveConfigSucceededCBList.begin(); 
+	       it != mySaveConfigSucceededCBList.end(); 
+	       it++)
+      (*it)->invoke();
+  }
+  else
+  {
+    ArLog::log(ArLog::Normal, "%sSaving config to server had error: %s", myLogPrefix.c_str(), buffer);
+    std::list<ArFunctor1<const char *> *>::iterator it;
+    for (it = mySaveConfigFailedCBList.begin(); 
+	       it != mySaveConfigFailedCBList.end(); 
+	       it++)
+      (*it)->invoke(buffer);
+  }
+  myCallbackMutex.unlock();
+} 
+
+/// Handles the return packet from the setConfig (saveConfigToServer)
+AREXPORT void ArClientHandlerConfig::handleSetConfigBySectionsV2(ArNetPacket *packet)
+{
+  IFDEBUG(ArLog::log(ArLog::Normal,
+                     "ArClientHandlerConfig::handleSetConfigBySectionsV2()"));
+
+  char sectionBuffer[1024];
+  char errorBuffer[1024];
+
+  packet->bufToStr(sectionBuffer, sizeof(sectionBuffer));
+  packet->bufToStr(errorBuffer, sizeof(errorBuffer));
+
+  if (sectionBuffer[0] == '\0') {
+    myCallbackMutex.lock();
+    if (errorBuffer[0] == '\0')
+    {
+      ArLog::log(ArLog::Normal, "%sSaved config to server successfully", myLogPrefix.c_str());
+      std::list<ArFunctor *>::iterator it;
+      for (it = mySaveConfigSucceededCBList.begin(); 
+	         it != mySaveConfigSucceededCBList.end(); 
+	         it++)
+        (*it)->invoke();
+    }
+    else
+    {
+      ArLog::log(ArLog::Normal, "%sSaving config to server had error: %s", myLogPrefix.c_str(), errorBuffer);
+      std::list<ArFunctor1<const char *> *>::iterator it;
+      for (it = mySaveConfigFailedCBList.begin(); 
+	         it != mySaveConfigFailedCBList.end(); 
+	         it++)
+        (*it)->invoke(errorBuffer);
+    }
+    myCallbackMutex.unlock();
+  }
+  else {
+    myCallbackMutex.lock();
+    if (errorBuffer[0] == '\0')
+    {
+      ArLog::log(ArLog::Normal, "%sSaved config section %s to server successfully", 
+                 myLogPrefix.c_str(), 
+                 sectionBuffer);
+      /***
+      std::list<ArFunctor *>::iterator it;
+      for (it = mySaveConfigSucceededCBList.begin(); 
+	         it != mySaveConfigSucceededCBList.end(); 
+	         it++)
+        (*it)->invoke();
+      **/
+    }
+    else
+    {
+      ArLog::log(ArLog::Normal, "%sSaving config to server had error: %s", myLogPrefix.c_str(), errorBuffer);
+      std::list<ArFunctor1<const char *> *>::iterator it;
+      for (it = mySaveConfigFailedCBList.begin(); 
+	         it != mySaveConfigFailedCBList.end(); 
+	         it++)
+        (*it)->invoke(errorBuffer);
+    }
+    myCallbackMutex.unlock();
+  }
+} 
+
 
 AREXPORT void ArClientHandlerConfig::reloadConfigOnServer(void)
 {
@@ -725,3 +1022,118 @@ AREXPORT void ArClientHandlerConfig::handleGetConfigDefaults(
   myCallbackMutex.unlock();
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Last Editable Priority
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+AREXPORT bool ArClientHandlerConfig::requestLastEditablePriorityFromServer()
+{
+  if (myClient->dataExists("getLastEditablePriority")) {
+
+    myClient->remHandler("getLastEditablePriority", &myHandleGetLastEditablePriorityCB);
+    myClient->addHandler("getLastEditablePriority", &myHandleGetLastEditablePriorityCB);
+    myClient->requestOnce("getLastEditablePriority");
+
+    myDataMutex.lock();
+    myHaveRequestedLastEditablePriority = true;
+    myHaveGottenLastEditablePriority = false;
+    myDataMutex.unlock();
+
+    ArLog::log(ArLog::Normal, "%sRequesting last editable priority", 
+		          myLogPrefix.c_str());
+
+    return true;
+  }
+  else { // server does not support last editable priority
+
+    ArLog::log(ArLog::Normal, "%sserver does not support last editable priority", 
+		          myLogPrefix.c_str());
+    return false;
+
+  } // end else server does not support last editable priority
+
+} // end method requestLastEditablePriorityFromServer
+  
+AREXPORT bool ArClientHandlerConfig::isLastEditablePriorityAvailable()
+{
+  if ((myClient != NULL) &&
+      (myClient->dataExists("getLastEditablePriority"))) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+AREXPORT bool ArClientHandlerConfig::haveGottenLastEditablePriority()
+{
+  myDataMutex.lock();
+  bool b = myHaveGottenLastEditablePriority;
+  myDataMutex.unlock();
+
+  return b;
+
+} // end method haveGottenLastEditablePriority
+
+AREXPORT ArPriority::Priority ArClientHandlerConfig::getLastEditablePriority()
+{
+  myDataMutex.lock();
+  ArPriority::Priority p = myLastEditablePriority;
+  myDataMutex.unlock();
+
+  return p;
+
+} // end method getLastEditablePriority
+
+AREXPORT void ArClientHandlerConfig::addGotLastEditablePriorityCB
+                                        (ArFunctor *functor, 
+			                                   int position)
+{
+  myGotLastEditablePriorityCBList.addCallback(functor, position);
+
+} // end method addGotLastEditablePriorityCB
+
+AREXPORT void ArClientHandlerConfig::remGotLastEditablePriorityCB
+                                        (ArFunctor *functor)
+{
+  myGotLastEditablePriorityCBList.remCallback(functor);
+
+} // end method remGotLastEditablePriorityCB
+
+
+AREXPORT void ArClientHandlerConfig::handleGetLastEditablePriority
+                                                    (ArNetPacket *packet)
+{
+
+  if (packet == NULL) {
+    ArLog::log(ArLog::Normal, "%sreceived null packet for getLastEditablePriority", 
+		          myLogPrefix.c_str());
+    return;
+  }
+
+  ArPriority::Priority lastPriority = ArPriority::LAST_PRIORITY;
+
+  int tempPriority = packet->bufToByte();
+  if ((tempPriority >= 0) && (tempPriority < ArPriority::PRIORITY_COUNT)) {
+    lastPriority = (ArPriority::Priority) tempPriority;
+  }
+  else {
+    ArLog::log(ArLog::Terse, "%sReceived invalid last editable priority %i", 
+		          myLogPrefix.c_str(), 
+              tempPriority);
+  }
+
+  ArLog::log(ArLog::Normal, "%sReceived last editable priority %s", 
+		         myLogPrefix.c_str(), 
+             ArPriority::getPriorityName(lastPriority));
+
+  myDataMutex.lock();
+  myLastEditablePriority = lastPriority;
+  myHaveRequestedLastEditablePriority = false;
+  myHaveGottenLastEditablePriority = true;
+
+  myDataMutex.unlock();
+
+  myGotLastEditablePriorityCBList.invoke();
+
+} // end method handleGetLastEditablePriority

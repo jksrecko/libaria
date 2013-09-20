@@ -23,13 +23,26 @@ endif
 CFILEEXT:=cpp
 # this is set up with the extra layer since the python wrapper needs exceptions
 # but I didn't want to have two sets of defines
-BARECXXFLAGS:= -fPIC -g -Wall -D_REENTRANT 
+BARECXXFLAGS:=-g -Wall -D_REENTRANT  #-pg -fprofile-arcs
 CXXFLAGS+=$(BARECXXFLAGS) -fno-exceptions 
-
 CXXINC:=-Iinclude
-CXXLINK:=-Llib -lAria -lpthread -ldl -lrt
+CXXLINK=-Llib -lAria
+CXXSTATICLINK:=-Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic 
 
-CXXSTATICLINK:=-Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic -lpthread -ldl -lrt -Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
+host:=$(shell uname | cut -d _ -f 1)
+ifeq ($(host),MINGW32)
+  $(info Building on MinGW)
+	#CXXFLAGS+=-mwindows -mms-bitfields -D__MINGW__ -DMINGW
+	CXXFLAGS+=-mms-bitfields -D__MINGW__ -DMINGW
+	CXXLINK+=-lpthreadGC2 -lwinmm -lws2_32 -lstdc++
+	CXXSTATICLINK+=-Wl,-Bstatic -lpthread -Wl,-Bdynamic -lwinmm -lws2_32 -lstdc++
+	binsuffix:=.exe
+else
+	BARECXXFLAGS+=-fPIC
+	CXXLINK+=-lpthread -ldl -lrt
+	CXXSTATICLINK+=-Xlinker -Bdynamic -lpthread -ldl -lrt -Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
+	binsuffix:=
+endif
 
 
 ifndef JAVAC
@@ -53,10 +66,13 @@ endif #ifndef JAR
 ####
 
 # Default targets to build in the default rule:
-TARGETS:=lib/libAria.so examples/demo
+TARGETS:=lib/libAria.so examples/demo$(binsuffix)
+
+# Default static libraries and examples:
+STATIC_TARGETS:=lib/libAria.a examples/demoStatic$(binsuffix)
 
 # Lots of targets, to build in the everything rule:
-ALL_TARGETS:=lib/libAria.so utils examples tests docs params lib/libArNetworking.so swig arnetworking_docs arnetworking_swig lib/libAria.a lib/libArNetworking.a examples/demoStatic
+ALL_TARGETS:=lib/libAria.so utils examples tests docs params lib/libArNetworking.so swig arnetworking_docs arnetworking_swig clib/libArNetworking.a $(STATIC_TARGETS)
 
 CFILES:= \
 	ArAction.cpp \
@@ -78,8 +94,10 @@ CFILES:= \
 	ArActionKeydrive.cpp \
 	ArActionLimiterBackwards.cpp \
 	ArActionLimiterForwards.cpp \
+	ArActionLimiterRot.cpp \
 	ArActionLimiterTableSensor.cpp \
 	ArActionMovementParameters.cpp \
+	ArActionMovementParametersDebugging.cpp \
 	ArActionRatioInput.cpp \
 	ArActionRobotJoydrive.cpp \
 	ArActionStallRecover.cpp \
@@ -94,6 +112,8 @@ CFILES:= \
 	ArArgumentParser.cpp \
 	ArASyncTask.cpp \
 	ArBasePacket.cpp \
+	ArBatteryConnector.cpp \
+	ArBatteryMTX.cpp \
 	ArBumpers.cpp \
 	ArCameraCommands.cpp \
 	ArCameraCollection.cpp \
@@ -115,13 +135,14 @@ CFILES:= \
 	ArIrrfDevice.cpp \
 	ArIRs.cpp \
 	ArJoyHandler.cpp \
-	ArJoyHandler_LIN.cpp \
 	ArKeyHandler.cpp \
 	ArLaser.cpp \
 	ArLaserConnector.cpp \
 	ArLaserFilter.cpp \
 	ArLaserLogger.cpp \
 	ArLaserReflectorDevice.cpp \
+	ArLCDConnector.cpp \
+	ArLCDMTX.cpp \
 	ArLineFinder.cpp \
 	ArLMS1XX.cpp \
 	ArLMS2xx.cpp \
@@ -147,6 +168,7 @@ CFILES:= \
 	ArP2Arm.cpp \
 	ArPriorityResolver.cpp \
 	ArPTZ.cpp \
+  ArPTZConnector.cpp \
 	ArRangeBuffer.cpp \
 	ArRangeDevice.cpp \
 	ArRangeDeviceThreaded.cpp \
@@ -155,26 +177,27 @@ CFILES:= \
 	ArRatioInputRobotJoydrive.cpp \
 	ArRecurrentTask.cpp \
 	ArRobot.cpp \
+	ArRobotBatteryPacketReader.cpp \
 	ArRobotConfig.cpp \
 	ArRobotConfigPacketReader.cpp \
 	ArRobotConnector.cpp \
 	ArRobotJoyHandler.cpp \
 	ArRobotPacket.cpp \
 	ArRobotPacketReceiver.cpp \
+	ArRobotPacketReaderThread.cpp \
 	ArRobotPacketSender.cpp \
 	ArRobotParams.cpp \
 	ArRobotTypes.cpp \
 	ArRVisionPTZ.cpp \
 	ArS3Series.cpp \
 	ArSZSeries.cpp \
-	ArSerialConnection_LIN.cpp \
 	ArSick.cpp \
-	ArSignalHandler_LIN.cpp \
 	ArSimpleConnector.cpp \
 	ArSimulatedLaser.cpp \
 	ArSocket.cpp \
-	ArSocket_LIN.cpp \
+	ArSonarConnector.cpp \
 	ArSonarDevice.cpp \
+	ArSonarMTX.cpp \
 	ArSensorReading.cpp \
 	ArSonyPTZ.cpp \
 	ArSoundsQueue.cpp \
@@ -195,11 +218,27 @@ CFILES:= \
 	ArTrimbleGPS.cpp \
 	ArUrg.cpp \
 	ArUrg_2_0.cpp \
-	ArVersalogicIO.cpp \
 	ArVCC4.cpp \
 	Aria.cpp \
 	ariaUtil.cpp \
 	md5.cpp
+
+# Omit some Linux-only classes, and replace others with Win32 implementations.
+ifeq ($(host),MINGW32)
+	CFILES+=ArSocket_WIN.cpp \
+		ArJoyHandler_WIN.cpp \
+		ArSerialConnection_WIN.cpp \
+		ArSignalHandler_WIN.cpp
+else
+	CFILES+=ArSocket_LIN.cpp \
+		ArJoyHandler_LIN.cpp \
+		ArSerialConnection_LIN.cpp \
+		ArSignalHandler_LIN.cpp \
+		ArVersalogicIO.cpp \
+    ArMTXIO.cpp
+endif
+
+
 
 
 ####
@@ -209,21 +248,24 @@ CFILES:= \
 OTFILES:=$(patsubst %.$(CFILEEXT),%.o,$(CFILES))
 OFILES:=$(patsubst %,obj/%,$(OTFILES))
 EXAMPLES_CPP:=$(shell find examples -name "*.$(CFILEEXT)" | grep -v Mod.cpp | grep -v proprietary)
-EXAMPLES:=$(patsubst %.$(CFILEEXT),%,$(EXAMPLES_CPP))
-EXAMPLES_STATIC:=$(patsubst %,%Static,$(EXAMPLES))
+EXAMPLES:=$(patsubst %.$(CFILEEXT),%$(binsuffix),$(EXAMPLES_CPP))
+EXAMPLES_STATIC:=$(patsubst %,%Static$(binsuffix),$(EXAMPLES))
 MOD_EXAMPLES_CPP:=$(shell find examples -name "*.$(CFILEEXT)" | grep Mod.cpp)
 MOD_EXAMPLES:=$(patsubst %.$(CFILEEXT),%.so,$(MOD_EXAMPLES_CPP))
 TESTS_CPP:=$(shell find tests -name "*.$(CFILEEXT)" | grep -v Mod.cpp | grep -v proprietary)
 MOD_TESTS_CPP:=$(shell find tests -name "*Mod.$(CFILEEXT)")
 MOD_TESTS:=$(patsubst %.$(CFILEEXT),%.so,$(MOD_TESTS_CPP))
-TESTS:=$(patsubst %.$(CFILEEXT),%,$(TESTS_CPP))
-TESTS_STATIC:=$(patsubst %,%Static,$(TESTS))
+TESTS:=$(patsubst %.$(CFILEEXT),%$(binsuffix),$(TESTS_CPP))
+TESTS_STATIC:=$(patsubst %,%Static$(binsuffix),$(TESTS))
 ADVANCED_CPP:=$(shell find advanced -name "*.$(CFILEEXT)" | grep -v Mod.cpp | grep -v proprietary)
 ADVANCED:=$(patsubst %.$(CFILEEXT),%,$(ADVANCED_CPP))
 UTILS_CPP:=$(shell find utils -name "*.$(CFILEEXT)")
-UTILS:=$(patsubst %.$(CFILEEXT),%,$(UTILS_CPP))
+UTILS:=$(patsubst %.$(CFILEEXT),%$(binsuffix),$(UTILS_CPP))
 SRC_FILES:=$(patsubst %,src/%,$(CFILES))
 HEADER_FILES:=$(shell find include -type f -name \*.h)
+
+
+
 
 ####
 #### General rules for user invocation
@@ -234,6 +276,8 @@ all: dirs $(TARGETS)
 
 # Build all targets, docs, params, etc. etc.
 everything: dirs $(ALL_TARGETS) 
+
+static: dirs $(STATIC_TARGETS)
 
 # Build everything required for distribution packages
 dist-all: lib/libAria.so params docs CommandLineOptions.txt.in \
@@ -263,10 +307,12 @@ dirs:
 
 docs: doc
 doc: docs/index.html
-docs/index.html: $(SRC_FILES) $(HEADER_FILES) $(EXAMPLES_CPP) doxygen.conf docs/overview.dox docs/options/all_options.dox docs/params.dox
+docs/index.html: $(SRC_FILES) $(HEADER_FILES) $(EXAMPLES_CPP) docs/overview.dox docs/options/all_options.dox docs/params.dox
+	@echo Removing old documentation...
 	$(MAKE) cleanDoc
-	doxygen doxygen.conf
-
+	@echo Running dist/make-doc.sh to generate HTML API documentation...
+	dist/make-doc.sh dev ARIA_DIST_NO_NTP=1
+	
 arnetworking_swig:
 	$(MAKE) -C ArNetworking java python
 
@@ -349,7 +395,9 @@ cleanModules:
 	-rm -f $(MOD_EXAMPLES)
 
 cleanDoc:
-	-rm -rf docs/*.html docs/*.png docs/doxygen.css
+	-rm  docs/*.html docs/*.png docs/doxygen.css
+
+cleandoc: cleanDoc
 
 cleanPython:
 	-rm python/_AriaPy.so
@@ -359,25 +407,27 @@ cleanPython:
 	-rm python/AriaPy_wrap.h
 	-rm obj/AriaPy_wrap.o
 
+cleanpython: cleanPython
+
 dep: clean 
 	if [ -f `echo src/*.cpp | cut -d' ' -f1` ]; then \
 	$(CXX) $(CXXFLAGS) $(CXXINC) -MM src/*.cpp | \
 	awk '$$1 ~ /:/{printf "obj/%s\n", $$0} $$1 !~ /:/' > Makefile.dep; fi
 	if [ -f `echo examples/*.cpp | cut -d' ' -f1` ]; then \
 	$(CXX) $(CXXFLAGS) $(CXXINC) -MM examples/*.cpp | \
-	awk '$$1 ~ /:/{printf "examples/%s\n", $$0} $$1 !~ /:/' | \
+	awk '$$1 ~ /:/{printf "examples/%s$(binsuffix)\n", $$0} $$1 !~ /:/' | \
 	sed 's/\.o//' >> Makefile.dep; fi
 	if [ -f `echo utils/*.cpp | cut -d' ' -f1` ]; then \
 	$(CXX) $(CXXFLAGS) $(CXXINC) -MM utils/*.cpp | \
-	awk '$$1 ~ /:/{printf "utils/%s\n", $$0} $$1 !~ /:/' | \
+	awk '$$1 ~ /:/{printf "utils/%s$(binsuffix)\n", $$0} $$1 !~ /:/' | \
 	sed 's/\.o//' >> Makefile.dep; fi
 	if [ -f `echo tests/*.cpp | cut -d' ' -f1` ]; then \
 	$(CXX) $(CXXFLAGS) $(CXXINC) -MM tests/*.cpp | \
-	awk '$$1 ~ /:/{printf "tests/%s\n", $$0} $$1 !~ /:/' | \
+	awk '$$1 ~ /:/{printf "tests/%s$(binsuffix)\n", $$0} $$1 !~ /:/' | \
 	sed 's/\.o//' >> Makefile.dep; fi
 	if [ -f `echo advanced/*.cpp | cut -d' ' -f1` ]; then \
 	$(CXX) $(CXXFLAGS) $(CXXINC) -MM advanced/*.cpp | \
-	awk '$$1 ~ /:/{printf "advanced/%s\n", $$0} $$1 !~ /:/' | \
+	awk '$$1 ~ /:/{printf "advanced/%s$(binsuffix)\n", $$0} $$1 !~ /:/' | \
 	sed 's/\.o//' >> Makefile.dep; fi
 
 Makefile.dep:
@@ -400,13 +450,13 @@ fullCleanAll: cleanAll cleanJava cleanPython
 
 
 
-params: utils/makeParams
+params: utils/makeParams$(binsuffix)
 	-mkdir params
-	utils/makeParams
+	utils/makeParams$(binsuffix)
 
-CommandLineOptions.txt.in docs/options/all_options.dox: utils/genCommandLineOptionDocs src/ArSimpleConnector.cpp src/ArGPSConnector.cpp src/ArTCM2.cpp
+CommandLineOptions.txt.in docs/options/all_options.dox: utils/genCommandLineOptionDocs$(binsuffix) src/ArSimpleConnector.cpp src/ArGPSConnector.cpp src/ArTCM2.cpp
 	-mkdir docs/options
-	utils/genCommandLineOptionDocs
+	utils/genCommandLineOptionDocs$(binsuffix)
 
 alllibs: allLibs
 
@@ -414,7 +464,7 @@ allLibs: all
 	find . -type d -and -name Ar\* -maxdepth 1 -exec $(MAKE) -C \{\}  \;
 
 cleanAllLibs: clean cleanJava cleanPython cleanDep
-	for dir in `find . -maxdepth 1 -name "Ar*" -xtype d`; do $(MAKE) -C $$dir cleanAll; done
+	for dir in `find . -maxdepth 1 -name "Ar*" -xtype d`; do $(MAKE) -C $$dir clean cleanAll; done
 
 cleanalllibs: cleanAllLibs
 
@@ -443,7 +493,9 @@ endif
 ifdef PYTHON_INCLUDE
 PYTHON_INCLUDE_FLAGS=-I$(PYTHON_INCLUDE)
 else
+ifdef DIST_INSTALL
 $(warning WARNING using default value of /usr/include/python2.5 for PYTHON_INCLUDE directory. Set PYTHON_INCLUDE environment variable if you would like to use a different version of the Python C development library to build the Python ARIA wrapper.)
+endif
 PYTHON_INCLUDE:=/usr/include/python2.5
 PYTHON_INCLUDE_FLAGS=-I/usr/include/python2.5
 endif
@@ -462,13 +514,13 @@ python/AriaPy_wrap.cpp python/AriaPy.py: include/wrapper.i include/*.h
 	cd python; $(SWIG) -Wall -c++ -python -modern -module AriaPy -Dlinux -DAREXPORT -o AriaPy_wrap.cpp -I../include ../include/wrapper.i 
 
 python/_AriaPy.so: obj/AriaPy_wrap.o lib/libAria.so Makefile.dep
-	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system?; exit 1; fi
-	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o -lpthread -ldl -lrt -Llib -lAria
+	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system? Is PYTHON_INCLUDE set correctly?; exit 1; fi
+	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o $(CXXLINK)
 
 obj/AriaPy_wrap.o: python/AriaPy_wrap.cpp
 	mkdir -p obj
 	@ if test -z "$(PYTHON_INCLUDE)"; then echo "*** Error: PYTHON_INCLUDE is not set, cannot build ARIA python wrapper"; fi
-	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system?; exit 1; fi
+	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system? Is PYTHON_INCLUDE set correctly?; exit 1; fi
 	$(CXX) -c $(BARECXXFLAGS) $(CXXINC) $(PYTHON_INCLUDE_FLAGS) $< -o $@
 
 
@@ -488,11 +540,13 @@ cleanJava:
 	-rm java/AriaJava_wrap.h
 	-rm obj/AriaJava_wrap.o
 
+cleanjava: cleanJava
+
 cleanSwigJava:
 	-rm -r java/Aria.jar java/com/mobilerobots/Aria
 
 lib/libAriaJava.so: obj/AriaJava_wrap.o lib/libAria.so Makefile.dep
-	$(CXX) -shared -o $(@) obj/AriaJava_wrap.o -lpthread -ldl -lrt -Llib -lAria
+	$(CXX) -shared -o $(@) obj/AriaJava_wrap.o $(CXXLINK) 
 
 obj/AriaJava_wrap.o: java/AriaJava_wrap.cpp
 	@ if test -z "$(JAVA_INCLUDE)"; then echo "Error: JAVA_INCLUDE is not set, compiling AriaJava_wrap.cpp will fail!"; fi
@@ -544,42 +598,49 @@ lib/libAria.a: $(OFILES) Makefile.dep
 examples/%.so: examples/%.$(CFILEEXT) lib/libAria.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) -shared $< -o $@
 
-examples/%: examples/%.$(CFILEEXT) lib/libAria.so Makefile.dep
+examples/%$(binsuffix): examples/%.$(CFILEEXT) lib/libAria.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXLINK)
 
-examples/%Static: examples/%.$(CFILEEXT) lib/libAria.a Makefile.dep
+examples/%Static$(binsuffix): examples/%.$(CFILEEXT) lib/libAria.a Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXSTATICLINK)
-	strip $@
+	if test -n "$$NOSTRIP"; then strip $@; fi
 
 tests/%.so: tests/%.$(CFILEEXT) lib/libAria.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) -shared $< -o $@
 
-tests/%: tests/%.$(CFILEEXT) lib/libAria.so Makefile.dep
+tests/%$(binsuffix): tests/%.$(CFILEEXT) lib/libAria.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXLINK)
 
-tests/%Static: tests/%.$(CFILEEXT) lib/libAria.a Makefile.dep
+tests/%Static$(binsuffix): tests/%.$(CFILEEXT) lib/libAria.a Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXSTATICLINK)
-	strip $@
+	if test -n "$$NOSTRIP"; then strip $@; fi
 
 advanced/%.so: advanced/%.$(CFILEEXT) lib/libAria.so
 	$(CXX) $(CXXFLAGS) $(CXXINC) -shared $< -o $@
 
-advanced/%: advanced/%.$(CFILEEXT) lib/libAria.so Makefile.dep
+advanced/%$(binsuffix): advanced/%.$(CFILEEXT) lib/libAria.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXLINK)
 
-advanced/%Static: advanced/%.$(CFILEEXT) lib/libAria.a Makefile.dep
+advanced/%Static$(binsuffix): advanced/%.$(CFILEEXT) lib/libAria.a Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXSTATICLINK)
-	strip $@
+	#strip $@
 
-utils/%: utils/%.$(CFILEEXT) lib/libAria.so Makefile.dep
+utils/%$(binsuffix): utils/%.$(CFILEEXT) lib/libAria.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXLINK)
 
-utils/%Static: utils/%.$(CFILEEXT) lib/libAria.a Makefile.dep
+utils/%Static$(binsuffix): utils/%.$(CFILEEXT) lib/libAria.a Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXSTATICLINK)
-	strip $@
+	#strip $@
 
-utils/genCommandLineOptionDocs: utils/genCommandLineOptionDocs.cpp lib/libAria.so Makefile.dep
+utils/genCommandLineOptionDocs$(binsuffix): utils/genCommandLineOptionDocs.cpp lib/libAria.so Makefile.dep
 	$(CXX) $(CXXFLAGS) -DFOR_ARIA $(CXXINC) $< -o $@ $(CXXLINK)
+
+ifneq ($(binsuffix),)
+examples/%: examples/%$(binsuffix)
+utils/%: utils/%$(binsuffix)
+advanced/%: advanced/%$(binsuffix)
+tests/%: tests/$(binsuffix)
+endif
 
 obj/%.o : src/%.cpp Makefile.dep
 	@mkdir -p obj
@@ -589,7 +650,12 @@ obj/%.o : src/%.c Makefile.dep
 	@mjdir -p obj
 	$(CXX) -c $(CXXFLAGS) $(CXXINC) $< -o $@
 
-
+include/%.i: include/%.h Makefile.dep
+	$(CXX) -E $(CXXFLAGS) $(CXXINC) $< -o $@
+	
+src/%.i: src/%.cpp Makefile.dep
+	$(CXX) -E $(CXXFLAGS) $(CXXINC) $< -o $@
+	
 # Don't build .o files if their library is up to date with respect to source files:
 .INTERMEDIATE: $(OFILES)
 
@@ -644,6 +710,10 @@ endif
 ifndef INSTALL
 INSTALL:=install --preserve-timestamps
 endif
+
+
+dist: FORCE
+	dist/dist.sh
 
 dist-install: install
 
@@ -703,12 +773,4 @@ ifeq (Makefile.dep,$(wildcard Makefile.dep))
 include Makefile.dep
 # End of the Makefile.dep check
 endif
-
-
-### dist
-# Include rules for creating distribution packages, if enabled
-# (for MobileRobots internal use)
-dist: FORCE
-	dist/dist.sh
-
 

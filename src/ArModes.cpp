@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -38,9 +38,16 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArRobotConfigPacketReader.h"
 #include "ariaInternal.h"
 
+/** 
+  @param robot ArRobot instance to be associate with
+  @param name name of this mode
+  @param key keyboard key that activates this mode
+  @param key2 another keyboard key that activates this mode
+*/
 AREXPORT ArModeTeleop::ArModeTeleop(ArRobot *robot, const char *name, char key, char key2): 
   ArMode(robot, name, key, key2),
-  myGroup(robot)
+  myGroup(robot),
+  myEnableMotorsCB(robot, &ArRobot::enableMotors)
 {
   myGroup.deactivate();
 }
@@ -52,6 +59,7 @@ AREXPORT ArModeTeleop::~ArModeTeleop()
 
 AREXPORT void ArModeTeleop::activate(void)
 {
+  addKeyHandler('e', &myEnableMotorsCB);
   if (!baseActivate())
     return;
   myGroup.activateExclusive();
@@ -59,6 +67,7 @@ AREXPORT void ArModeTeleop::activate(void)
 
 AREXPORT void ArModeTeleop::deactivate(void)
 {
+  remKeyHandler(&myEnableMotorsCB);
   if (!baseDeactivate())
     return;
   myGroup.deactivate();
@@ -84,10 +93,15 @@ AREXPORT void ArModeTeleop::help(void)
     ArLog::log(ArLog::Terse, "%13s:  move right", "x");
   }
   ArLog::log(ArLog::Terse, "%13s:  stop", "space bar");
+  ArLog::log(ArLog::Terse, "%13s:  (re)enable motors", "e");
   if (!myRobot->hasLatVel())
-    printf("%10s %10s %10s %10s %10s %10s\n", "transVel", "rotVel", "x", "y", "th", "volts");
+    printf("%10s %10s %10s %10s %10s %10s", "transVel", "rotVel", "x", "y", "th", "volts");
   else
-    printf("%10s %10s %10s %10s %10s %10s %10s\n", "transVel", "rotVel", "latVel", "x", "y", "th", "volts");
+    printf("%10s %10s %10s %10s %10s %10s %10s", "transVel", "rotVel", "latVel", "x", "y", "th", "volts");
+  if(myRobot->haveStateOfCharge())
+    printf(" %10s", "soc");
+  printf(" %10s", ""); //flags
+  printf("\n");
 }
 
 AREXPORT void ArModeTeleop::userTask(void)
@@ -101,13 +115,19 @@ AREXPORT void ArModeTeleop::userTask(void)
 	   myRobot->getVel(), myRobot->getRotVel(), myRobot->getLatVel(),
 	   myRobot->getX(), myRobot->getY(), myRobot->getTh(), 
 	   myRobot->getRealBatteryVoltage());
+  if(myRobot->haveStateOfCharge())
+    printf(" %10.1f", myRobot->getStateOfCharge());
+  if(myRobot->isEStopPressed()) printf(" [ESTOP PRESSED]"); 
+  if(myRobot->isLeftMotorStalled() || myRobot->isRightMotorStalled()) printf(" [MOTOR STALL] ");
+  if(!myRobot->areMotorsEnabled()) printf(" [MOTORS DISABLED] ");
 }
 
 AREXPORT ArModeUnguardedTeleop::ArModeUnguardedTeleop(ArRobot *robot,
 						      const char *name, 
 						      char key, char key2): 
   ArMode(robot, name, key, key2),
-  myGroup(robot)
+  myGroup(robot),
+  myEnableMotorsCB(robot, &ArRobot::enableMotors)
 {
   myGroup.deactivate();
 }
@@ -119,6 +139,7 @@ AREXPORT ArModeUnguardedTeleop::~ArModeUnguardedTeleop()
 
 AREXPORT void ArModeUnguardedTeleop::activate(void)
 {
+  addKeyHandler('e', &myEnableMotorsCB);
   if (!baseActivate())
     return;
   myGroup.activateExclusive();
@@ -126,6 +147,7 @@ AREXPORT void ArModeUnguardedTeleop::activate(void)
 
 AREXPORT void ArModeUnguardedTeleop::deactivate(void)
 {
+  remKeyHandler(&myEnableMotorsCB);
   if (!baseDeactivate())
     return;
   myGroup.deactivate();
@@ -151,10 +173,15 @@ AREXPORT void ArModeUnguardedTeleop::help(void)
     ArLog::log(ArLog::Terse, "%13s:  move right", "x");
   }
   ArLog::log(ArLog::Terse, "%13s:  stop", "space bar");
+  ArLog::log(ArLog::Terse, "%13s:  (re)enable motors", "e");
   if (!myRobot->hasLatVel())
-    printf("%10s %10s %10s %10s %10s %10s\n", "transVel", "rotVel", "x", "y", "th", "volts");
+    printf("%10s %10s %10s %10s %10s %10s", "transVel", "rotVel", "x", "y", "th", "volts");
   else
-    printf("%10s %10s %10s %10s %10s %10s %10s\n", "transVel", "rotVel", "latVel", "x", "y", "th", "volts");
+    printf("%10s %10s %10s %10s %10s %10s %10s", "transVel", "rotVel", "latVel", "x", "y", "th", "volts");
+  if(myRobot->haveStateOfCharge())
+    printf(" %10s", "soc");
+  printf(" %10s", ""); //flags
+  printf("\n");
 }
 
 AREXPORT void ArModeUnguardedTeleop::userTask(void)
@@ -168,6 +195,11 @@ AREXPORT void ArModeUnguardedTeleop::userTask(void)
 	   myRobot->getVel(), myRobot->getRotVel(), myRobot->getLatVel(),
 	   myRobot->getX(), myRobot->getY(), myRobot->getTh(), 
 	   myRobot->getRealBatteryVoltage());
+  if(myRobot->haveStateOfCharge())
+    printf(" %10.1f", myRobot->getStateOfCharge());
+  if(myRobot->isEStopPressed()) printf(" [ESTOP PRESSED] ");
+  if(myRobot->isLeftMotorStalled() || myRobot->isRightMotorStalled()) printf(" [MOTOR STALL] ");
+  if(!myRobot->areMotorsEnabled()) printf(" [MOTORS DISABLED] ");
 }
 
 AREXPORT ArModeWander::ArModeWander(ArRobot *robot, const char *name, char key, char key2): 
@@ -453,7 +485,9 @@ AREXPORT ArModeCamera::ArModeCamera(ArRobot *robot, const char *name,
   myCom3CB(this, &ArModeCamera::com3),
   myCom4CB(this, &ArModeCamera::com4),
   myAux1CB(this, &ArModeCamera::aux1),
-  myAux2CB(this, &ArModeCamera::aux2)
+  myAux2CB(this, &ArModeCamera::aux2),
+  myPanAmount(5),
+  myTiltAmount(3)
 {
   myState = STATE_CAMERA;
   myExercising = false;
@@ -548,28 +582,28 @@ AREXPORT void ArModeCamera::left(void)
 {
   if (myExercising == true)
     myExercising = false;
-  myCam->panRel(-5);
+  myCam->panRel(-myPanAmount);
 }
 
 AREXPORT void ArModeCamera::right(void)
 {
   if (myExercising == true)
     myExercising = false;
-  myCam->panRel(5);
+  myCam->panRel(myPanAmount);
 }
 
 AREXPORT void ArModeCamera::up(void)
 {
   if (myExercising == true)
     myExercising = false;
-  myCam->tiltRel(3);
+  myCam->tiltRel(myTiltAmount);
 }
 
 AREXPORT void ArModeCamera::down(void)
 {  
   if (myExercising == true)
     myExercising = false;
-  myCam->tiltRel(-3);
+  myCam->tiltRel(-myTiltAmount);
 }
 
 AREXPORT void ArModeCamera::center(void)
@@ -947,10 +981,10 @@ void ArModeCamera::helpMovementKeys(void)
 {
   ArLog::log(ArLog::Terse, 
 	     "Camera mode will now let you move the camera.");
-  ArLog::log(ArLog::Terse, "%13s:  tilt camera up", "up arrow");
-  ArLog::log(ArLog::Terse, "%13s:  tilt camera down", "down arrow");
-  ArLog::log(ArLog::Terse, "%13s:  pan camera left", "left arrow");
-  ArLog::log(ArLog::Terse, "%13s:  pan camera right", "right arrow");
+  ArLog::log(ArLog::Terse, "%13s:  tilt camera up by %d", "up arrow", myTiltAmount);
+  ArLog::log(ArLog::Terse, "%13s:  tilt camera down by %d", "down arrow", myTiltAmount);
+  ArLog::log(ArLog::Terse, "%13s:  pan camera left by %d", "left arrow", myPanAmount);
+  ArLog::log(ArLog::Terse, "%13s:  pan camera right by %d", "right arrow", myPanAmount);
   ArLog::log(ArLog::Terse, "%13s:  center camera and zoom out", 
 	     "space bar");
   ArLog::log(ArLog::Terse, "%13s:  exercise the camera", "'e' or 'E'");
@@ -1271,12 +1305,16 @@ AREXPORT void ArModePosition::down(void)
 AREXPORT void ArModePosition::incDistance(void)
 {
   myDistance += 500;
+  puts("\n");
+  help();
 }
 
 AREXPORT void ArModePosition::decDistance(void)
 {
   myDistance -= 500;
   if(myDistance < 500) myDistance = 500;
+  puts("\n");
+  help();
 }
 
 AREXPORT void ArModePosition::left(void)
@@ -1354,7 +1392,7 @@ AREXPORT void ArModePosition::help(void)
   ArLog::log(ArLog::Terse, "%13s:  turn left 90 degrees", "left arrow");
   ArLog::log(ArLog::Terse, "%13s:  turn right 90 degrees", "right arrow");
   ArLog::log(ArLog::Terse, "%13s:  stop", "space bar");
-  ArLog::log(ArLog::Terse, "%13s:  reset position to (0, 0, 0)", "'r' or 'R'");
+  ArLog::log(ArLog::Terse, "%13s:  reset ARIA position to (0, 0, 0)", "'r' or 'R'");
   ArLog::log(ArLog::Terse, "%13s:  switch heading/velocity mode","'x' or 'X'");
   if (myGyro != NULL && myGyro->haveGottenData() && !myGyro->hasGyroOnlyMode())
     ArLog::log(ArLog::Terse, "%13s:  turn gyro on or off (stays this way in other modes)","'z' or 'Z'");
@@ -1365,12 +1403,13 @@ AREXPORT void ArModePosition::help(void)
   ArLog::log(ArLog::Terse, "Position mode shows the position stats on a robot.");
   if (myGyro != NULL && myGyro->haveGottenData() && 
       !myGyro->hasNoInternalData())
-    ArLog::log(ArLog::Terse, "%7s%7s%9s%7s%8s%7s%8s%6s%10s%10s", "x", "y", "th", "comp", "volts", "mpacs", "mode", "gyro", "gyro_th", "robot_th");
+    ArLog::log(ArLog::Terse, "%7s%7s%9s%7s%8s%7s%8s%6s%10s%10s%10s", "x", "y", "th", "comp", "volts", "mpacs", "mode", "gyro", "gyro_th", "robot_th", "raw");
   else if (myGyro != NULL && myGyro->haveGottenData() && 
 	   myGyro->hasNoInternalData())
-    ArLog::log(ArLog::Terse, "%7s%7s%9s%7s%8s%7s%8s%6s", "x", "y", "th", "comp", "volts", "mpacs", "mode", "gyro");
+    ArLog::log(ArLog::Terse, "%7s%7s%9s%7s%8s%7s%8s%6s%10s", "x", "y", "th", "comp", "volts", "mpacs", "mode", "gyro", "raw");
   else
-    ArLog::log(ArLog::Terse, "%7s%7s%9s%7s%8s%7s%8s", "x", "y", "th", "comp", "volts", "mpacs", "mode");
+    ArLog::log(ArLog::Terse, "%7s%7s%9s%7s%8s%7s%8s%10s", "x", "y", "th", "comp", "volts", "mpacs", "mode", "raw");
+
   
 }
 
@@ -1400,29 +1439,38 @@ AREXPORT void ArModePosition::userTask(void)
   else
     gyroString = "off";
 
+  ArPose raw = myRobot->getRawEncoderPose();
+
   if (myGyro != NULL && myGyro->haveGottenData() && 
       !myGyro->hasNoInternalData())
-    printf("\r%7.0f%7.0f%9.2f%7.0f%8.2f%7d%8s%6s%10.2f%10.2f", 
+    printf("\r%7.0f%7.0f%9.2f%7.0f%8.2f%7d%8s%6s%10.2f%10.2f %10.2f,%.2f,%.2f", 
 	   myRobot->getX(),  myRobot->getY(), myRobot->getTh(), 
 	   myRobot->getCompass(), voltage,
 	   myRobot->getMotorPacCount(),
 	   myMode == MODE_BOTH ? "both" : "either", 
 	   gyroString.c_str(),
 	   ArMath::subAngle(myGyro->getHeading(), myGyroZero), 
-	   ArMath::subAngle(myRobot->getRawEncoderPose().getTh(),myRobotZero));
+	   ArMath::subAngle(myRobot->getRawEncoderPose().getTh(),myRobotZero),
+	   raw.getX(), raw.getY(), raw.getTh()
+	);
   else if (myGyro != NULL && myGyro->haveGottenData() && 
       myGyro->hasNoInternalData())
-    printf("\r%7.0f%7.0f%9.2f%7.0f%8.2f%7d%8s%6s", 
+    printf("\r%7.0f%7.0f%9.2f%7.0f%8.2f%7d%8s%6s%10.2f,%.2f,%.2f", 
 	   myRobot->getX(),  myRobot->getY(), myRobot->getTh(), 
 	   myRobot->getCompass(), voltage,
 	   myRobot->getMotorPacCount(),
 	   myMode == MODE_BOTH ? "both" : "either", 
-	   gyroString.c_str());
+	   gyroString.c_str(),
+	   raw.getX(), raw.getY(), raw.getTh()
+
+  );
   else
-    printf("\r%7.0f%7.0f%9.2f%7.0f%8.2f%7d%8s", myRobot->getX(), 
+    printf("\r%7.0f%7.0f%9.2f%7.0f%8.2f%7d%8s%10.2f,%.2f,%.2f", myRobot->getX(), 
 	   myRobot->getY(), myRobot->getTh(), myRobot->getCompass(), 
 	   voltage, myRobot->getMotorPacCount(), 
-	   myMode == MODE_BOTH ? "both" : "either");
+	   myMode == MODE_BOTH ? "both" : "either",
+	   raw.getX(), raw.getY(), raw.getTh()
+    );
 }
 
 AREXPORT ArModeIO::ArModeIO(ArRobot *robot, const char *name, char key, char key2): 
@@ -1472,8 +1520,8 @@ AREXPORT void ArModeIO::userTask(void)
   char label[256];
   myOutput[0] = '\0';
 
-  if (myLastPacketTime.mSecSince(myRobot->getIOPacketTime()) == 0)
-    return;
+  //if (myLastPacketTime.mSecSince(myRobot->getIOPacketTime()) == 0)
+  //  return;
 
   if (!myExplanationReady)
     myExplanation[0] = '\0';
@@ -1871,8 +1919,12 @@ AREXPORT void ArModeLaser::switchToLaser(int laserNumber)
 }
 
 /**
-   @param acts if an acts class is passed in it'll use that instance
-   otherwise it'll make its own
+  @param robot ArRobot instance to be associate with
+  @param name name of this mode
+  @param key keyboard key that activates this mode
+  @param key2 another keyboard key that activates this mode
+  @param acts ArACTS_1_2 instance to use. If not given, then an internally
+maintained instance is created by ArModeActs.
  **/
 AREXPORT ArModeActs::ArModeActs(ArRobot *robot, const char *name, char key, 
 				char key2, ArACTS_1_2 *acts): 
@@ -1993,9 +2045,9 @@ AREXPORT void ArModeActs::userTask(void)
 {
   int myChannel;
 
-  char *acquire;
-  char *move;
-  char *blob;
+  const char *acquire;
+  const char *move;
+  const char *blob;
 
   myChannel = myGroup->getChannel();
   if(myGroup->getAcquire()) acquire = "actively acquiring";
@@ -2336,6 +2388,10 @@ void ArModeCommand::giveUpKeys(void)
 }
 
 /**
+  @param robot ArRobot instance to be associate with
+  @param name name of this mode
+  @param key keyboard key that activates this mode
+  @param key2 another keyboard key that activates this mode
    @param tcm2 if a tcm2 class is passed in it'll use that instance
    otherwise it'll make its own ArTCMCompassRobot instance.
 **/
@@ -2428,3 +2484,55 @@ AREXPORT void ArModeTCM2::userTask(void)
 	 myTCM2->getCalibrationM(), myTCM2->getPacCount());
 
 }
+
+AREXPORT ArModeConfig::ArModeConfig(ArRobot *robot, const char *name, char key1, char key2) :
+  ArMode(robot, name, key1, key2),
+  myRobot(robot),
+  myConfigPacketReader(robot, false, &myGotConfigPacketCB),
+  myGotConfigPacketCB(this, &ArModeConfig::gotConfigPacket)
+{
+}
+
+AREXPORT void ArModeConfig::help()
+{
+  ArLog::log(ArLog::Terse, "Robot Config mode requests a CONFIG packet from the robot and displays the result.");
+}
+
+AREXPORT void ArModeConfig::activate()
+{
+  baseActivate();  // returns false on double activate, but we want to use this signal to request another config packet, so ignore.
+  if(!myConfigPacketReader.requestPacket())
+    ArLog::log(ArLog::Terse, "ArModeConfig: Warning: config packet reader did not request (another) CONFIG packet.");
+}
+
+AREXPORT void ArModeConfig::deactivate()
+{
+}
+
+void ArModeConfig::gotConfigPacket()
+{
+  ArLog::log(ArLog::Terse, "\nRobot CONFIG packet received:");
+  myConfigPacketReader.log();
+  myConfigPacketReader.logMovement();
+  ArLog::log(ArLog::Terse, "Additional robot information:");
+  ArLog::log(ArLog::Terse, "HasStateOfCharge %d", myRobot->haveStateOfCharge());
+  ArLog::log(ArLog::Terse, "StateOfChargeLow %f", myRobot->getStateOfChargeLow());
+  ArLog::log(ArLog::Terse, "StateOfChargeShutdown %f", myRobot->getStateOfChargeShutdown());
+  ArLog::log(ArLog::Terse, "HasFaultFlags %d", myRobot->hasFaultFlags());
+  ArLog::log(ArLog::Terse, "HasTableIR %d", myRobot->hasTableSensingIR());
+  ArLog::log(ArLog::Terse, "NumSonar (rec'd) %d", myRobot->getNumSonar());
+  ArLog::log(ArLog::Terse, "HasTemperature (rec'd) %d", myRobot->hasTemperature());
+  ArLog::log(ArLog::Terse, "HasSettableVelMaxes %d", myRobot->hasSettableVelMaxes());
+  ArLog::log(ArLog::Terse, "HasSettableAccsDecs %d", myRobot->hasSettableAccsDecs());
+  ArLog::log(ArLog::Terse, "HasLatVel %d", myRobot->hasLatVel());
+  ArLog::log(ArLog::Terse, "HasMoveCommand %d", myRobot->getRobotParams()->hasMoveCommand());
+  ArLog::log(ArLog::Terse, "Radius %f Width %f Length %f LengthFront %f LengthRear %f Diagonal %f", 
+    myRobot->getRobotRadius(),
+    myRobot->getRobotWidth(),
+    myRobot->getRobotLength(),
+    myRobot->getRobotLengthFront(),
+    myRobot->getRobotLengthRear(),
+    myRobot->getRobotDiagonal() 
+  );
+}
+

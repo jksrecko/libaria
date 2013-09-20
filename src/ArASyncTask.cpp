@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,12 +19,12 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
-#ifndef WIN32
+#if !defined(WIN32) || defined(MINGW)
 #include <pthread.h>
 #endif
 #include "ariaOSDef.h"
@@ -58,25 +58,33 @@ AREXPORT void * ArASyncTask::runInThisThread(void *arg)
 {
   myJoinable=true;
   myRunning=true;
-#ifdef WIN32
+#if defined(WIN32) && !defined(MINGW)
   myThread=GetCurrentThreadId();
 #else
   myThread=pthread_self();
 #endif
   
   if (myName.size() == 0)
+  {
     ArLog::log(ourLogLevel, "Running anonymous thread with ID %d", 
 	       myThread);
+    //ArLog::logBacktrace(ArLog::Normal);
+  }
   else
+  {
     ArLog::log(ourLogLevel, "Running %s thread with ID %d", myName.c_str(),
 	       myThread);
+  }
   
+  addThreadToMap(myThread, this);
+  /*
   ourThreadsMutex.lock();
   // MPL BUGFIX, this wasn't workign for some reason (was printing
   // 0)...  so I got rid of it and did it the easier way anyhow
   //printf("!!!! %d\n", ourThreads.insert(MapType::value_type(myThread, this)).second);
   ourThreads[myThread] = this;
   ourThreadsMutex.unlock();
+  */
 
   return(runThread(arg));
 }

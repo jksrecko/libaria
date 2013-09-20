@@ -32,14 +32,16 @@ AREXPORT ArServerInfoRobot::ArServerInfoRobot(ArServerBase *server,
   myServer->addData("updateStrings", 
 		    "gets an update about the important robot status (you should ask for this at -1 interval since it is broadcast when the strings change)",
 		    &myUpdateStringsCB, "none",
-		    "string: status; string: mode; ", "RobotInfo",
+		    "string: status; string: mode; string: extended status (this has newlines)", "RobotInfo",
 		    "RETURN_SINGLE");
 
 
   myServer->addData("batteryInfo", 
 		    "gets the low battery voltage and shutdown voltage (you only need to request this once)",
 		    &myBatteryInfoCB, "none",
-		    "double: low battery voltage, double: shutdown battery voltage: ubyte: voltageIsStateOfCharge, if 0 voltage (including update voltage) is really voltage, if 1 voltage (including update voltage) is state of charge", "RobotInfo", "RETURN_SINGLE");
+		    "double: low battery voltage, double: shutdown battery voltage: ubyte: voltageIsStateOfCharge, if 0 voltage (including update voltage) is really voltage, if 1 voltage (including update voltage) is state of charge", 
+				"RobotInfo", 
+				"RETURN_SINGLE");
 
   myServer->addData("physicalInfo", 
 		    "gets the information about the physical robot (you only need to request this once)",
@@ -79,6 +81,15 @@ AREXPORT void ArServerInfoRobot::update(ArServerClient *client,
     sending.strToBuf("Unknown status");
     sending.strToBuf("Unknown mode");
   }
+
+
+	//ArLog::log(ArLog::Normal,
+  //                     "ArServerInfoRobot::update() havestateofcharge = %d, soc = %f, real = %f, reg = %f",
+	//											myRobot->haveStateOfCharge(),
+	//											myRobot->getStateOfCharge(),
+	//											myRobot->getRealBatteryVoltage(),
+	//											myRobot->getBatteryVoltage());
+
   if (myRobot->haveStateOfCharge())
     sending.byte2ToBuf(ArMath::roundInt(myRobot->getStateOfCharge() * 10));
   else if (myRobot->getRealBatteryVoltage() > 0)
@@ -87,6 +98,7 @@ AREXPORT void ArServerInfoRobot::update(ArServerClient *client,
   else
     sending.byte2ToBuf(ArMath::roundInt(
 	    myRobot->getBatteryVoltage() * 10));
+
   sending.byte4ToBuf((int)myRobot->getX());
   sending.byte4ToBuf((int)myRobot->getY());
   sending.byte2ToBuf((int)myRobot->getTh());
@@ -94,6 +106,7 @@ AREXPORT void ArServerInfoRobot::update(ArServerClient *client,
   sending.byte2ToBuf((int)myRobot->getRotVel());
   sending.byte2ToBuf((int)myRobot->getLatVel());
   sending.byteToBuf((char)myRobot->getTemperature());
+	//sending.byte2ToBuf((int)myRobot->getPayloadNumSlots());
   myRobot->unlock();
 
   client->sendPacketUdp(&sending);
@@ -121,6 +134,7 @@ AREXPORT void ArServerInfoRobot::updateNumbers(ArServerClient *client,
   sending.byte2ToBuf((int)myRobot->getRotVel());
   sending.byte2ToBuf((int)myRobot->getLatVel());
   sending.byteToBuf((char)myRobot->getTemperature());
+	//sending.byte2ToBuf((int)myRobot->getPayloadNumSlots());
   myRobot->unlock();
 
   client->sendPacketUdp(&sending);
@@ -134,6 +148,7 @@ AREXPORT void ArServerInfoRobot::updateStrings(ArServerClient *client,
   myRobot->lock();
   sending.strToBuf(myStatus.c_str());
   sending.strToBuf(myMode.c_str());
+  sending.strToBuf(myExtendedStatus.c_str());
   myRobot->unlock();
 
   client->sendPacketTcp(&sending);
@@ -148,19 +163,8 @@ AREXPORT void ArServerInfoRobot::batteryInfo(ArServerClient *client,
   myRobot->lock();
   if (myRobot->haveStateOfCharge())
   {
-    // this is a temporary workaround since the config packet reader
-    // in this aria doesn't get these values from the firmware
-    if (myRobot->getStateOfChargeLow() <= 0 && 
-	myRobot->getStateOfChargeShutdown() <= 0)
-    {
-      sending.doubleToBuf(20);
-      sending.doubleToBuf(3);
-    }
-    else
-    {
-      sending.doubleToBuf(myRobot->getStateOfChargeLow());
-      sending.doubleToBuf(myRobot->getStateOfChargeShutdown());
-    }
+    sending.doubleToBuf(myRobot->getStateOfChargeLow());
+    sending.doubleToBuf(myRobot->getStateOfChargeShutdown());
     // voltage is really state of charge
     sending.uByteToBuf(1);
   }
@@ -193,8 +197,10 @@ AREXPORT void ArServerInfoRobot::batteryInfo(ArServerClient *client,
 
 }
 
+
 AREXPORT void ArServerInfoRobot::physicalInfo(ArServerClient *client, 
 					     ArNetPacket *packet)
+
 {
   ArNetPacket sending;
 
@@ -239,19 +245,26 @@ void ArServerInfoRobot::userTask(void)
   if ((netMode = ArServerMode::getActiveMode()) != NULL)
   {
     myStatus = netMode->getStatus();
+    myExtendedStatus = netMode->getExtendedStatus();
+    if (myExtendedStatus.empty())
+      myExtendedStatus = myStatus;
     myMode = netMode->getMode();
   }
   else 
   {
     myStatus = "Unknown status";
+    myExtendedStatus = "Unknown extended status";
     myMode = "Unknown mode";
   }
-  if (myStatus != myOldStatus || myMode != myOldMode)
+  if (myStatus != myOldStatus || myMode != myOldMode || 
+      myExtendedStatus != myOldExtendedStatus)
   {
     sending.strToBuf(myStatus.c_str());
     sending.strToBuf(myMode.c_str());
+    sending.strToBuf(myExtendedStatus.c_str());
     myServer->broadcastPacketTcp(&sending, "updateStrings");
   }
   myOldStatus = myStatus;
   myOldMode = myMode;
+  myOldExtendedStatus = myExtendedStatus;
 }

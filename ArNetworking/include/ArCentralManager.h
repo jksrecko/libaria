@@ -14,6 +14,10 @@ public:
   AREXPORT virtual ~ArCentralManager();
   /// Logs all the connection information
   void logConnections(void);
+  /// Enforces that everything is using this protocol version
+  AREXPORT void enforceProtocolVersion(const char *protocolVersion);
+  /// Enforces that the robots that connect are this type
+  AREXPORT void enforceType(ArServerCommands::Type type);
   /// Adds a callback for when a new forwarder is added
   AREXPORT void addForwarderAddedCallback(
 	  ArFunctor1<ArCentralForwarder *> *functor, int priority = 0);
@@ -42,12 +46,17 @@ protected:
   void close(void);
   bool processFile(void);
 
+  bool removePendingDuplicateConnections(const char *robotName);
+
   ArServerBase *myRobotServer;
   ArServerBase *myClientServer;
   double myHeartbeatTimeout;
   double myUdpHeartbeatTimeout;
   double myRobotBackupTimeout;
   double myClientBackupTimeout;
+
+  std::string myEnforceProtocolVersion;
+  ArServerCommands::Type myEnforceType;
 
   int myMostForwarders;
   int myMostClients;
@@ -56,7 +65,7 @@ protected:
   std::list<ArSocket *> myClientSockets;
   std::list<std::string> myClientNames;
   std::list<ArCentralForwarder *> myForwarders;
-  std::set<int> myUsedPorts;
+  std::map<int, ArTime *> myUsedPorts;
   ArMutex myCallbackMutex;
   std::multimap<int, 
       ArFunctor1<ArCentralForwarder *> *> myForwarderAddedCBList;

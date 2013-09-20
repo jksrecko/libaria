@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,12 +19,13 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
-/*! \file ArMap.h
- *  \brief Contains the definition of the ArMap class, the primary class for Aria maps.
+/*
+ * 
+ * 
  *
  * Aria maps are implemented by a collection of classes and interfaces.  The 
  * most important is the ArMapInterface, which is defined in ArMapInterface.h
@@ -114,12 +115,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
 class ArFileParser;
 
-
-// =============================================================================
-// ArMap
-// =============================================================================
-
-/// A map of a space the robot can navigate within, and which can be updated via the Aria config
+/// A map of a two-dimensional space the robot can navigate within, and which can be updated via the Aria config
 /**
 * ArMap contains data that represents the operating space of the robot, and can
 * be used for space searching, localizing, navigating etc.  MobileRobots' ARNL
@@ -211,6 +207,7 @@ class ArFileParser;
 * default "Goal", "GoalWithHeading", and "Dock" types if you want those
 * types to remain available.
 *
+ * @ingroup OptionalClasses
 */
 class ArMap : public ArMapInterface
 {
@@ -239,6 +236,8 @@ public:
    * files when saving a map; if NULL, then the map file is written directly.  
    * Note that using a temp file reduces the risk that the map will be corrupted
    * if the application crashes.
+   * @param configProcessFilePriority priority at which ArMap's configuration
+   * parameters should be processed by ArConfig.
   **/
   AREXPORT ArMap(const char *baseDirectory = "./",
  		             bool addToGlobalConfig = true, 
@@ -248,7 +247,8 @@ public:
  		                  "Map of the environment that the robot uses for navigation",
  		             bool ignoreEmptyFileName = true,
                  ArPriority::Priority priority = ArPriority::IMPORTANT,
-                 const char *tempDirectory = NULL);
+                 const char *tempDirectory = NULL,
+		             int configProcessFilePriority = 100);
 
   /// Copy constructor
   AREXPORT ArMap(const ArMap &other);
@@ -442,15 +442,12 @@ public:
 
   AREXPORT virtual void mapChanged(void);
 
-  AREXPORT virtual void addMapChangedCB
-                            (ArFunctor *functor, 
- 				                     ArListPos::Pos position = ArListPos::LAST);
+  AREXPORT virtual void addMapChangedCB(ArFunctor *functor, int position = 50);
 
   AREXPORT virtual void remMapChangedCB(ArFunctor *functor);
 
-  AREXPORT virtual void addPreMapChangedCB
-                          (ArFunctor *functor,
-                           ArListPos::Pos position = ArListPos::LAST);
+  AREXPORT virtual void addPreMapChangedCB(ArFunctor *functor,
+					   int position = 50);
 
   AREXPORT virtual void remPreMapChangedCB(ArFunctor *functor);
 
@@ -482,6 +479,10 @@ public:
   AREXPORT virtual void addPostWriteFileCB(ArFunctor *functor,
                                            ArListPos::Pos position = ArListPos::LAST);
   AREXPORT virtual void remPostWriteFileCB(ArFunctor *functor);
+
+  /// Forces the map to reload if the config is changed/reloaded
+  AREXPORT void forceMapLoadOnConfigProcessFile(void) 
+    { myForceMapLoad = true; }
 
 #ifndef SWIG
   /** @swigomit (can't write to arguments yet) */
@@ -556,6 +557,12 @@ public:
 
   AREXPORT virtual ArMapObjectsInterface *getInactiveObjects();
 
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // Child Objects Section
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  AREXPORT virtual ArMapObjectsInterface *getChildObjects();
+
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Miscellaneous
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -626,6 +633,8 @@ public:
    bool myConfigProcessedBefore;
    /// The name of the map file specified in the Aria config parameter
    char myConfigMapName[MAX_MAP_NAME_LENGTH];
+   /// Whether we want to force loading the map for some reasing
+   bool myForceMapLoad;
  
    /// The current map used by the robot
    ArMapSimple * const myCurrentMap;

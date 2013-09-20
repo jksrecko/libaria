@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARDEVICECONNECTION_H
 #define ARDEVICECONNECTION_H
@@ -133,10 +133,52 @@ class ArDeviceConnection
   /// sees if timestamping is really going on or not
   /** @return true if real timestamping is happening, false otherwise */
   AREXPORT virtual bool isTimeStamping(void) = 0;
+
+  /// Gets the port name
+  AREXPORT const char *getPortName(void) const;
+  /// Gets the port type
+  AREXPORT const char *getPortType(void) const;
+  
+  /// Sets the device type (what this is connecting to)
+  AREXPORT void setDeviceName(const char *deviceName);
+  /// Gets the device type (what this is connecting to)
+  AREXPORT const char *getDeviceName(void) const;
+
+  /// Notifies the device connection that the start of a packet is
+  /// trying to be read
+  AREXPORT void debugStartPacket(void);
+  /// Notifies the device connection that some bytes were read (should
+  /// call with 0 if it read but got no bytes)
+  AREXPORT void debugBytesRead(int bytesRead);
+  /// Notifies the device connection that the end of a packet was
+  /// read, which will cause log messages if set to do so
+  AREXPORT void debugEndPacket(bool goodPacket, int type = 0);
+  /// Makes all device connections so that they'll dump data
+  AREXPORT static bool debugShouldLog(bool shouldLog);
  protected:
+  /// Sets the port name
+  AREXPORT void setPortName(const char *portName);
+  /// Sets the port type
+  AREXPORT void setPortType(const char *portType);
+
   void buildStrMap(void);
   static bool ourStrMapInited;
   static ArStrMap ourStrMap;
+
+  std::string myDCPortName;
+  std::string myDCPortType;
+  std::string myDCDeviceName;
+
+  static bool ourDCDebugShouldLog;
+  static ArTime ourDCDebugFirstTime;
+  bool myDCDebugPacketStarted;
+  ArTime myDCDebugStartTime;
+  ArTime myDCDebugFirstByteTime;
+  ArTime myDCDebugLastByteTime;
+  int myDCDebugBytesRead;
+  int myDCDebugTimesRead;
+  long long myDCDebugNumGoodPackets;
+  long long myDCDebugNumBadPackets;
 };
 
 #endif

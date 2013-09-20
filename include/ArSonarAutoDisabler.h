@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARSONARAUTODISABLER_H
 #define ARSONARAUTODISABLER_H
@@ -36,6 +36,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
    Note that this class assumes it is the only class turning the sonar
    on or off and that the sonar start on.
+
+    @ingroup OptionalClasses
  **/
 
 #include "ariaTypedefs.h"
@@ -51,14 +53,39 @@ public:
   AREXPORT ArSonarAutoDisabler(ArRobot *robot);
   /// Destructor
   AREXPORT virtual ~ArSonarAutoDisabler();
+  /// Supresses this disabler (which turns off the sonar)
+  void supress(void) { mySupressed = true; }
+  /// Gets the callback to supress the autodisabler
+  ArFunctor *getSupressCallback(void) { return &mySupressCB; }
+  /// Unsupresses this disabler (goes back to auto enabling/disabling)
+  void unsupress(void) { mySupressed = false; }
+  /// Gets the callback to supress the autodisabler
+  ArFunctor *getUnsupressCallback(void) { return &myUnsupressCB; }
 
+  /// Sets that we're autonomous drivign so we only enable some sonar
+  void setAutonomousDriving(void) { myAutonomousDriving = true; }
+  /// Gets the callback to set that we're driving autonomously
+  ArFunctor *getSetAutonomousDrivingCallback(void) 
+    { return &mySetAutonomousDrivingCB; }
+  /// Sets that we're driving non-autonomously so we enable all sonar
+  void clearAutonomousDriving(void) { myAutonomousDriving = false; }
+  /// Gets the callback to set that we're not driving autonomously
+  ArFunctor *getClearAutonomousDrivingCallback(void) 
+    { return &myClearAutonomousDrivingCB; }
 protected:
   /// our user task
   AREXPORT void userTask(void);
   ArRobot *myRobot;
   ArTime myLastMoved;
-  bool mySonarEnabled;
+  ArTime myLastSupressed;
+  bool mySupressed;
+  bool myAutonomousDriving;
+
   ArFunctorC<ArSonarAutoDisabler> myUserTaskCB;
+  ArFunctorC<ArSonarAutoDisabler> mySupressCB;
+  ArFunctorC<ArSonarAutoDisabler> myUnsupressCB;
+  ArFunctorC<ArSonarAutoDisabler> mySetAutonomousDrivingCB;
+  ArFunctorC<ArSonarAutoDisabler> myClearAutonomousDrivingCB;
 };
 
 #endif // ARSONARAUTODISABLER

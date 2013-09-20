@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARSONYPTZ_H
 #define ARSONYPTZ_H
@@ -59,24 +59,24 @@ public:
   AREXPORT virtual ~ArSonyPTZ();
   
   AREXPORT virtual bool init(void);
-  AREXPORT virtual bool pan(double degrees);
-  AREXPORT virtual bool panRel(double degrees);
-  AREXPORT virtual bool tilt(double degrees);
-  AREXPORT virtual bool tiltRel(double degrees);
-  AREXPORT virtual bool panTilt(double degreesPan, double degreesTilt);
-  AREXPORT virtual bool panTiltRel(double degreesPan, double degreesTilt);
+  AREXPORT virtual const char  *getTypeName() { return "sony"; }
+protected:
+  AREXPORT virtual bool pan_i(double degrees);
+  AREXPORT virtual bool panRel_i(double degrees);
+  AREXPORT virtual bool tilt_i(double degrees);
+  AREXPORT virtual bool tiltRel_i(double degrees);
+  AREXPORT virtual bool panTilt_i(double degreesPan, double degreesTilt);
+  AREXPORT virtual bool panTiltRel_i(double degreesPan, double degreesTilt);
+public:
   AREXPORT virtual bool canZoom(void) const { return true; }
   AREXPORT virtual bool zoom(int zoomValue);
   AREXPORT virtual bool zoomRel(int zoomValue);
-  AREXPORT virtual double getPan(void) const { return myPan; }
-  AREXPORT virtual double getTilt(void) const { return myTilt; }
+protected:
+  AREXPORT virtual double getPan_i(void) const { return myPan; }
+  AREXPORT virtual double getTilt_i(void) const { return myTilt; }
+public:
   AREXPORT virtual int getZoom(void) const { return myZoom; }
-  AREXPORT virtual double getMaxPosPan(void) const { return 90; }
-  AREXPORT virtual double getMaxNegPan(void) const { return -90; }
-  AREXPORT virtual double getMaxPosTilt(void) const { return 30; }
-  AREXPORT virtual double getMaxNegTilt(void) const { return -30; }
-  AREXPORT virtual int getMaxZoom(void) const { return 1024; }
-  AREXPORT virtual int getMinZoom(void) const { return 0; }
+
 
   AREXPORT virtual bool canGetFOV(void) { return true; }
   /// Gets the field of view at maximum zoom
@@ -87,12 +87,22 @@ public:
   AREXPORT bool backLightingOn(void);
   AREXPORT bool backLightingOff(void);
   //AREXPORT bool packetHandler(ArRobotPacket *packet);
+  /* unused?
   enum {
     MAX_PAN = 95, ///< maximum degrees the unit can pan (either direction)
     MAX_TILT = 25, ///< maximum degrees the unit can tilt (either direction)
     MIN_ZOOM = 0, ///< minimum value for zoom
     MAX_ZOOM = 1023 ///< maximum value for zoom
   };
+  */
+  
+  /// called automatically by Aria::init()
+  ///@since 2.7.6
+  ///@internal
+#ifndef SWIG
+  static void registerPTZType();
+#endif
+
 protected:
   void initializePackets(void);
   ArRobot *myRobot;
@@ -104,6 +114,11 @@ protected:
   ArSonyPacket myPacket;
   ArSonyPacket myZoomPacket; 
   ArSonyPacket myPanTiltPacket;
+
+  ///@since 2.7.6
+  static ArPTZ* create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot);
+  ///@since 2.7.6
+  static ArPTZConnector::GlobalPTZCreateFunc ourCreateFunc;
 };
 
 #endif // ARSONYPTZ_H

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -52,6 +52,8 @@ AREXPORT ArActionDeceleratingLimiter::ArActionDeceleratingLimiter(
 
   myLastStopped = false;
   myUseLocationDependentDevices = true;
+  myStopRotationToo = false;
+
 }
 
 AREXPORT ArActionDeceleratingLimiter::~ArActionDeceleratingLimiter()
@@ -135,7 +137,7 @@ AREXPORT void ArActionDeceleratingLimiter::addToConfig(ArConfig *config,
   name += "PaddingAtSlowSpeed";
   config->addParam(
 	  ArConfigArg(name.c_str(), &myPaddingAtSlowSpeed, 
-		      "Try to stop this far away from clearance at slow speed or below. (mm)"), 
+		      "Try to stop this far away from clearance at slow speed or below. (mm)", 0), 
 	  section, ArPriority::NORMAL);
 
   name = strPrefix;
@@ -158,7 +160,7 @@ AREXPORT void ArActionDeceleratingLimiter::addToConfig(ArConfig *config,
   name += "PaddingAtFastSpeed";
   config->addParam(
 	  ArConfigArg(name.c_str(), &myPaddingAtFastSpeed, 
-		      "Try to stop this far away from clearance at fast speed or below. (mm)"), 
+		      "Try to stop this far away from clearance at fast speed or below. (mm)", 0), 
 	  section, ArPriority::NORMAL);
 
   name = strPrefix;
@@ -428,6 +430,8 @@ ArActionDeceleratingLimiter::fire(ArActionDesired currentDesired)
       myDesired.setVel(0);
     else
       myDesired.setLeftLatVel(0);
+    if (myStopRotationToo)
+      myDesired.setRotVel(0);
     if (distInnerRangeDevice != NULL)
       ArLog::log(verboseLogLevel,
 		 "%s: Stopping (inner) because of reading from %s", getName(),
@@ -461,6 +465,12 @@ ArActionDeceleratingLimiter::fire(ArActionDesired currentDesired)
   double decelerationInner = - absVel * absVel / distInner / 2.0;
   // make sure the robot or other actions aren't already decelerating
   // more than we want to
+
+  // the reason its okay that below uses deceleration instead of
+  // decelerationInner is because unless padding is negative (no
+  // longer allowed) the deceleration before the cap will always be
+  // higher than decelerationInner
+
 
   //ArLog::log(ArLog::Normal, "%.0f %.0f %.0f %.0f", deceleration, myRobot->getTransDecel(), 	 currentDesired.getTransDecelStrength(), currentDesired.getTransDecel());
   if ((myType != LATERAL_LEFT &&  myType != LATERAL_RIGHT &&

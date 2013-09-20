@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARRANGEDEVICE_H
 #define ARRANGEDEVICE_H
@@ -41,15 +41,19 @@ class ArRobot;
     the environment.
 
     This class maintains two ArRangeBuffer objects: a current buffer
-    for storing very recent readings, and a cumulative buffer for a
+    (getCurrentBuffer())
+    for storing very recent readings, and a cumulative buffer 
+    (getCumulativeBuffer()) for a
     longer history of readings.  The maximum sizes of each buffer can
     be set in the constructor or resized later. Range device readings
     are most often represented as a point in space (X,Y) where the
     sensor detected an object.  (Therefore an ArPose object may only
-    have X and Y components set).  Some devices provide extra
-    information in a "raw" buffer, or in lists of more detailed
-    ArSensoReading objects.
+    have X and Y components set).  
 
+    Some devices provide an original set of "raw" ArSensorReading 
+    objects (getRawReadings()) (that it used to add data to the current buffer) 
+    which may also include extra device specific information as well.
+    Not all devices provide raw readings.
 
     Subclasses are used for specific sensor implementations like
     ArSick for SICK lasers and ArSonarDevice for the Pioneer sonar
@@ -68,6 +72,8 @@ class ArRobot;
     devices. For example, you can find the closest reading in a box or
     a polar section, no matter if that reading originated from the
     sonar, a laser, or other device.  
+
+    @ingroup ImportantClasses
 **/
 
 class ArRangeDevice
@@ -91,10 +97,14 @@ public:
   AREXPORT virtual ArRobot *getRobot(void);
   /// Sets the maximum size of the buffer for current readings
   AREXPORT virtual void setCurrentBufferSize(size_t size);
+  /// Gets the maximum size of the buffer for current readings
+  AREXPORT virtual size_t getCurrentBufferSize(void) const;
   /// Sets the maximum size of the buffer for cumulative readings
   AREXPORT virtual void setCumulativeBufferSize(size_t size);
+  /// Sets the maximum size of the buffer for cumulative readings
+  AREXPORT virtual size_t getCumulativeBufferSize(void) const;
   /// Adds a reading to the buffer
-  AREXPORT virtual void addReading(double x, double y);
+  AREXPORT virtual void addReading(double x, double y, bool *wasAdded = NULL);
   /// Gets if this device is location dependent or not
   bool isLocationDependent(void) { return myIsLocationDependent; }
   /// Gets the closest current reading in the given polar region
@@ -349,7 +359,7 @@ public:
     { myCumulativeBuffer.clearOlderThanSeconds(seconds); }
   
   /// Gets the maximum range for this device
-  virtual unsigned int getMaxRange(void) { return myMaxRange; }
+  virtual unsigned int getMaxRange(void) const { return myMaxRange; }
   /// Sets the maximum range for this device
   virtual void setMaxRange(unsigned int maxRange) 
     { myMaxRange = maxRange; }
@@ -381,9 +391,11 @@ public:
   /// Unlock this device
   AREXPORT virtual int unlockDevice() {return(myDeviceMutex.unlock());}
 
+  /// Internal function to filter the readings based on age and distance
+  /// @internal
+  AREXPORT void filterCallback(void);
 
 protected:
-  AREXPORT void filterCallback(void);
   /**
     This call should be called by the range device every robot cycle
     before the range device makes new readings (and even if it isn't

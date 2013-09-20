@@ -84,12 +84,12 @@ cd &quot;$(ProjectDir)&quot;
 			<Tool
 				Name="VCCustomBuildTool"
 				Description="Custom Build Step: Running C:\swig\swig.exe to generate Java wrapper code"
-				CommandLine="mkdir &quot;$(ProjectDir)\com\mobilerobots\ArNetworking&quot;
+				CommandLine="cd &quot;$(ProjectDir)&quot;
+mkdir &quot;$(ProjectDir)\com\mobilerobots\ArNetworking&quot;
 del /q  &quot;$(ProjectDir)\com\mobilerobots\*.*&quot;
-C:\swig\swig.exe -Fmicrosoft -c++ -java -package com.mobilerobots.ArNetworking -module ArNetworkingJava -DWIN32 -DAREXPORT -outdir &quot;$(ProjectDir)\com\mobilerobots\ArNetworking&quot;  -o ArNetworkingJava_wrap.cpp &quot;-I$(ProjectDir)\..\include&quot; &quot;-I$(ProjectDir)\..\ArNetworking\include&quot; &quot;$(ProjectDir)\..\ArNetworking\include\wrapper.i&quot;
-&quot;$(JAVA_BIN)\javac&quot; -classpath &quot;$(ProjectDir)\Aria.jar;$(ProjectDir)\com\mobilerobots\ArNetworking&quot; $(ProjectDir)\com\mobilerobots\ArNetworking\*.java
-cd &quot;$(ProjectDir)&quot;
-&quot;$(JAVA_BIN)\jar&quot; cf &quot;$(ProjectDir)\ArNetworking.jar&quot; com\mobilerobots\ArNetworking\*.class
+C:\swig\swig.exe -Fmicrosoft -c++ -java -package com.mobilerobots.ArNetworking -module ArNetworkingJava -DWIN32 -DAREXPORT -outdir com\mobilerobots\ArNetworking  -o ArNetworkingJava_wrap.cpp -I..\include -I..\ArNetworking\include ..\ArNetworking\include\wrapper.i
+&quot;$(JAVA_BIN)\javac&quot; -classpath &quot;Aria.jar;com\mobilerobots\ArNetworking&quot; com\mobilerobots\ArNetworking\*.java
+&quot;$(JAVA_BIN)\jar&quot; cf ArNetworking.jar com\mobilerobots\ArNetworking\*.class
 "
 				AdditionalDependencies="../ArNetworking/include/wrapper.i"
 				Outputs="$(ProjectDir)\ArNetworkingJava_wrap.cpp;$(ProjectDir)\ArNetworkingJava_wrap.h;$(ProjectDir)\com\mobilerobots\ArNetworking\ArServerBase.java;$(ProjectDir)\com\mobilerobots\ArNetworking\ArServerBase.class;$(ProjectDir)\ArNetworking.jar"/>

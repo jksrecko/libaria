@@ -1,10 +1,13 @@
 
-  ARIA
-  Adept MobileRobots Advanced Robotics Interface for Applications
+ARIA
+====
 
-  Version 2.7.5.2
+Adept MobileRobots Advanced Robotics Interface for Applications
+---------------------------------------------------------------
+
+Version 2.8.0
   
-  Linux 
+Linux 
 
 Copyright 2002, 2003, 2004, 2005 
 ActivMedia Robotics, LLC. All rights reserved.
@@ -12,15 +15,16 @@ ActivMedia Robotics, LLC. All rights reserved.
 Copyright 2006, 2007, 2008, 2009
 MobileRobots Inc. All rights reserved.
 
-Copyright 2010, 2011, 2012
+Copyright 2010, 2011, 2012, 2013
 Adept Technology. All rights reserved.
 
 See LICENSE.txt for full license information about ARIA.
 
 Please read this document for important details about using ARIA.
 
-   Contents
-   ========
+Contents
+========
+
 *  Introduction
 *  Documentation
 *  Licenses and Sharing
@@ -31,10 +35,14 @@ Please read this document for important details about using ARIA.
    *  Linux
       *  Using ARIA's Makefiles
       *  Using your own Makefile or other build system
-      *  Learning more about using Linux
+      *  Setting variables for ARIA Makefiles
+   *  Learning more about using Linux
    *  Learning more about C++
 *  Using ARIA from Python and Java
 *  Simulator
+
+Introduction
+============
 
 Welcome to the Adept MobileRobots Advanced Robotics Interface for Applications (ARIA).
 ARIA is an object-oriented, application programming interface (API) for
@@ -316,11 +324,11 @@ building multiple files and their dependencies.  If you need to
 deal with multiple files, you can copy a Makefile and modify it, 
 or create a new one.
 
-Note: In packages for Debian, the shared libraries were built with the 
-standard G++ version provided with the Debian system. You must use 
+Note: In packages for Debian and Ubuntu, the shared libraries were built with the 
+standard G++ version provided with the system. You must use 
 the same version of G++ or a compatible version to build programs that 
 link against it, or rebuild ARIA using your preferrend G++ version. (On
-Debian systems, the default g++ and gcc compiler versions may be changed
+Debian and Ubuntu systems, the default g++ and gcc compiler versions may be changed
 using the 'galternatives' program or the 'update-alternatives' command). 
 
 When compiling ARIA or its examples, you may also temporarily override the 
@@ -336,7 +344,7 @@ currently supported by MobileRobots.
 
 
 
-# Using ARIA's Makefiles on Linux: #
+### Using ARIA's Makefiles on Linux: ###
 
 The ARIA Makefile is able to build any program consisting 
 of one source code file in the 'examples', 'tests', or 'advanced' 
@@ -349,7 +357,7 @@ to learn how to use ARIA.
 
 
 
-# Using ARIA from your own Makefile or other build system: #
+### Using ARIA from your own Makefile or other build system: ###
 
 If you want to keep your program in a different place than the Aria 
 examples directory, and use your own Makefile or other build tool,
@@ -380,21 +388,68 @@ A Makefile for a program called "program" with source file "program.cpp"
 might look something like this:
 
 
-all: program
+  all: program
 
-CFLAGS=-fPIC -g -Wall
-ARIA_INCLUDE=-I/usr/local/Aria/include
-ARIA_LINK=-L/usr/local/Aria/lib -lAria -lpthread -ldl
+  CFLAGS=-fPIC -g -Wall
+  ARIA_INCLUDE=-I/usr/local/Aria/include
+  ARIA_LINK=-L/usr/local/Aria/lib -lAria -lpthread -ldl
 
-%: %.cpp
-	$(CXX) $(CFLAGS) $(ARIA_INCLUDE) $< -o $@ $(ARIA_LINK)
+  %: %.cpp
+	  $(CXX) $(CFLAGS) $(ARIA_INCLUDE) $< -o $@ $(ARIA_LINK)
 
 
 Refer to the GNU Make manual <http://www.gnu.org/software/make> or 
 other books or documentation about Make to learn more.
 
 
-# Learning more about using Linux: #
+### Setting variables for ARIA Makefiles ###
+
+You can add compile options to the following variables used in the ARIA
+Makefiles, or replace default values. These can be set on the command
+line when running `make`, for example:
+
+  make CXX="g++-4.6"
+
+CXXFLAGS    Additional compile flags passed to the C++ compiler. You
+            can add GCC options to enable profiling, optimizations, etc.  
+            For example, to rebuild ARIA optimized for the Atom CPU
+            found in the LX/MTX embedded computer, add -mtune=atom and -O2:
+              make clean; make CXXFLAGS="-mtune=atom -O2"
+            These compiler flags will be used in addition to ARIA's 
+            default flags.
+
+CXX         Specify the C++ compiler command to use. The default is g++ or c++.
+            You can use this to use a different version of g++, or to give the
+            full path to g++, or to try a different compiler other than G++.
+
+JAVAC       If rebuilding the Java wrapper library, this specifies the Java 
+            compiler command to use. Default is "javac".
+
+JAR         If rebuilding the Java wrapper library, this specifies the JAR
+            archiver command to use. Default is "jar".
+
+JAVA_BIN    If rebuilding the Java wrapper library, this specifies a directory
+            containing JDK commands such as javac and jar. 
+
+SWIG        If rebuilding the Java and/or Python wrapper libraries, this
+            specifies the swig command used.  Default is swig.
+
+PYTHON_INCLUDE  
+            If rebuilding the Python wrapper library, this specifies the Python
+            include directory. Default is /usr/include/python2.5. You usually
+            need to specify this if building on a Linux other than Debian 5.
+
+INSTALL_DIR
+SYSTEM_ETC_DIR
+            Directories used when installing ARIA from source with the 
+            `make install` command.
+
+INSTALL     How to run the `install` tool. Default is "install --preserve-timestamps"
+
+
+
+Learning more about using Linux:
+--------------------------------
 
 If you are new to using GNU/Linux, some guides on getting started can be 
 found at the following sites:
@@ -408,9 +463,15 @@ found at the following sites:
    <http://www.us.debian.org/doc/manuals/debian-tutorial>. More is at
    <http://www.debian.org/doc/>.
 
+ * If your robot is using Ubuntu 12.04, refer to
+   <http://help.ubuntu.com/12.04/ubuntu-help/index.html> for documentation
+   and help.
+
  * <http://www.tldp.org> is a repository of many different guides, FAQ and
    HOWTO documents about Linux in general, including various programming
-   and system administration tasks.
+   and system administration tasks. Note however that many details can 
+   differ between Linux distributions and not all HOWTO documents will
+   be relevant to your distribution.
 
 For more depth, there are many books about using Linux, consult your
 local computer bookseller. The ideal way to learn about Linux is to work 
@@ -445,6 +506,21 @@ some more information.
 
 More about the Python programming language is at <http://www.python.org>.
 More about the Java programming language is at <http://java.sun.com>.
+
+
+Using ARIA from Matlab or Simulink
+==================================
+
+As of ARIA 2.8, it is possible to use a small but essential subset of ARIA features
+from Matlab and Simulink.  This is done via MEX functions and a 
+pure-C wrapper library called ariac.   Matlab functions and Simulink
+blocks are provided for essential robot operation such as velocity control,
+receiving position estimate and other basic information.  New functions
+can be added to this interface using the already-implemented functions
+as examples.
+
+See matlab/README.txt for details.
+
 
 
 MobileSim Simulator

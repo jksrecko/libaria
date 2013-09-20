@@ -19,8 +19,14 @@
 const char *ArMapChanger::PROCESS_CHANGES_PACKET_NAME = 
                               "processMapChanges";
 
+const char *ArMapChanger::PROCESS_ROBOT_CHANGES_PACKET_NAME = 
+                              "processRobotMapObjectChange";
+
 const char *ArMapChanger::CHANGES_IN_PROGRESS_PACKET_NAME = 
                               "mapChangesInProgress";
+  
+const char *ArMapChanger::ROBOT_CHANGES_COMPLETE_PACKET_NAME =
+                              "robotMapObjectChangeComplete";
 
 AREXPORT ArMapChanger::ArMapChanger(ArMapInterface *map) :
   myMap(map),
@@ -29,6 +35,8 @@ AREXPORT ArMapChanger::ArMapChanger(ArMapInterface *map) :
   //myInfoCount((map != NULL) ? map->getInfoCount() : 0),
   myInfoNames(),
   myServer(NULL),
+  myClientSwitch(NULL),
+  myIsServerClientInit(false),
   myClientMutex(),
   myClient(NULL),
   myClientInfoMutex(),
@@ -42,6 +50,7 @@ AREXPORT ArMapChanger::ArMapChanger(ArMapInterface *map) :
   myPostWriteCBList(),
   myChangeCBList(),
   myHandleChangePacketCB(this, &ArMapChanger::handleChangePacket),
+  myHandleRobotReplyPacketCB(this, &ArMapChanger::handleRobotChangeReplyPacket),
   myHandleChangesInProgressPacketCB(this, &ArMapChanger::handleChangesInProgressPacket),
   myHandleReplyPacketCB(this, &ArMapChanger::handleChangeReplyPacket),
   myHandleIdleProcessingPacketCB(this, &ArMapChanger::handleIdleProcessingPacket),
@@ -60,6 +69,8 @@ AREXPORT ArMapChanger::ArMapChanger(ArServerBase *server,
  //myInfoCount((map != NULL) ? map->getInfoCount() : 0),
   myInfoNames(),
   myServer(server),
+  myClientSwitch(NULL),
+  myIsServerClientInit(false),
   myClientMutex(),
   myClient(NULL),
   myClientInfoMutex(),
@@ -73,6 +84,7 @@ AREXPORT ArMapChanger::ArMapChanger(ArServerBase *server,
   myPostWriteCBList(),
   myChangeCBList(),
   myHandleChangePacketCB(this, &ArMapChanger::handleChangePacket),
+  myHandleRobotReplyPacketCB(this, &ArMapChanger::handleRobotChangeReplyPacket),
   myHandleChangesInProgressPacketCB(this, &ArMapChanger::handleChangesInProgressPacket),
   myHandleReplyPacketCB(this, &ArMapChanger::handleChangeReplyPacket),
   myHandleIdleProcessingPacketCB(this, &ArMapChanger::handleIdleProcessingPacket),
@@ -93,6 +105,14 @@ AREXPORT ArMapChanger::ArMapChanger(ArServerBase *server,
                     "Map", 
                     "RETURN_SINGLE|IDLE_PACKET"); 
   
+  myServer->addData(PROCESS_ROBOT_CHANGES_PACKET_NAME, 
+                    "Applies changes originated by the robot to the map",
+		                &myHandleChangePacketCB,  // Same handler
+                    "Complex packet containing the map changes. See ArMapChangeDetails.", 
+                    "None",
+                    "Map", 
+                    "RETURN_SINGLE|IDLE_PACKET"); 
+ 
   myServer->addData(CHANGES_IN_PROGRESS_PACKET_NAME, 
                     "Notifies clients that changes are being applied to the map",
 		                NULL, 
@@ -100,6 +120,79 @@ AREXPORT ArMapChanger::ArMapChanger(ArServerBase *server,
                     "TODO", 
                     "Map", 
                     "RETURN_NONE"); 
+
+} // end ctor
+
+
+AREXPORT ArMapChanger::ArMapChanger(ArClientSwitchManager *clientSwitch,
+                                    ArServerBase *server,
+                                    ArMapInterface *map) :
+  myMap(map),
+  myWorkingMap(NULL),
+  myChangeDetails(NULL),
+ //myInfoCount((map != NULL) ? map->getInfoCount() : 0),
+  myInfoNames(),
+  myServer(server),
+  myClientSwitch(clientSwitch),
+  myIsServerClientInit(false),
+  myClientMutex(),
+  myClient(NULL),
+  myClientInfoMutex(),
+  myClientInfo(NULL),
+  myInterleaveMutex(),
+  myReadyForNextPacket(false),
+  myIsWaitingForReturn(false),
+  myIdleProcessingMutex(),
+  myIsIdleProcessingPending(false),
+  myPreWriteCBList(),
+  myPostWriteCBList(),
+  myChangeCBList(),
+  myHandleChangePacketCB(this, &ArMapChanger::handleChangePacket),
+  myHandleRobotReplyPacketCB(this, &ArMapChanger::handleRobotChangeReplyPacket),
+  myHandleChangesInProgressPacketCB(this, &ArMapChanger::handleChangesInProgressPacket),
+  myHandleReplyPacketCB(this, &ArMapChanger::handleChangeReplyPacket),
+  myHandleIdleProcessingPacketCB(this, &ArMapChanger::handleIdleProcessingPacket),
+  myClientShutdownCB(this, &ArMapChanger::handleClientShutdown)
+{
+  if (myMap != NULL) {
+    myInfoNames = myMap->getInfoNames();
+  }
+  if (myServer != NULL) {
+
+    myServer->addData(PROCESS_CHANGES_PACKET_NAME, 
+                      "Applies changes to the map",
+                      &myHandleChangePacketCB, 
+                      "TODO", 
+                      "TODO", 
+                      "Map", 
+                      "RETURN_SINGLE|IDLE_PACKET"); 
+    
+    myServer->addData(CHANGES_IN_PROGRESS_PACKET_NAME, 
+                      "Notifies clients that changes are being applied to the map",
+                      NULL, 
+                      "TODO", 
+                      "TODO", 
+                      "Map", 
+                      "RETURN_NONE"); 
+  }
+
+  if ((myClientSwitch != NULL) && 
+      (myClientSwitch->getCentralServerHostName() != NULL)) {
+
+    myServer->addData(PROCESS_ROBOT_CHANGES_PACKET_NAME, 
+                      "Applies ARCL/robot-originated changes to the map",
+                      NULL,
+                      "Complex packet containing the map changes. See ArMapChangeDetails.", 
+                      "None",
+                      "Map", 
+                      "RETURN_SINGLE|IDLE_PACKET"); 
+    
+    myServer->addData(ROBOT_CHANGES_COMPLETE_PACKET_NAME,
+                      "Handles notification that the ARCL/robot-originated changes are complete",
+                      &myHandleRobotReplyPacketCB, 
+                      "None",
+                      "string: robot originating changes; uByte2: status (0 = failed, 10 = success)" ); 
+  } // end if 
 
 } // end ctor
 
@@ -111,6 +204,7 @@ AREXPORT ArMapChanger::ArMapChanger(ArClientBase *client,
   //myInfoCount(infoCount),
   myInfoNames(infoNames),
   myServer(NULL),
+  myClientSwitch(NULL),
   myClientMutex(),
   myClient(client),
   myClientInfoMutex(),
@@ -213,13 +307,15 @@ AREXPORT bool ArMapChanger::sendMapChanges(ArMapChangeDetails *changeDetails)
   if (myIsWaitingForReturn)
   {
     ArLog::log(ArLog::Terse, 
-	             "ArMapChanger: already busy sending changes");
+	             "ArMapChanger::sendMapChanges() already busy sending changes");
     myInterleaveMutex.unlock();
     return false;
   }
   myIsWaitingForReturn = true;
   myReadyForNextPacket = false;
-  myInterleaveMutex.unlock();
+  ArLog::log(ArLog::Normal, 
+	             "ArMapChanger::sendMapChanges() set myIsWaitingForReturn = true && myReadyForNextPacket = false");
+   myInterleaveMutex.unlock();
 
 
 
@@ -274,9 +370,113 @@ AREXPORT bool ArMapChanger::sendMapChanges(ArMapChangeDetails *changeDetails)
   changeDetails->setOrigMapId(givenOrigMapId);
   changeDetails->setNewMapId(givenNewMapId);
 
+  ArLog::log(ArLog::Normal,
+             "ArMapChanger::sendMapChanges() changes sent (%i), deleting packet list...",
+             isSuccess);
+
+  ArUtil::deleteSet(packetList.begin(), packetList.end());
+  packetList.clear();
+
+
   return isSuccess;
 
 } // end method sendMapChanges
+  
+
+/// Sends the given map changes from the robot to the central server.
+AREXPORT bool ArMapChanger::sendRobotMapChanges(ArMapChangeDetails *changeDetails)
+{
+  // KMC TODO This looks a lot like sendMapChanges and should be refactored
+  // (presuming it works)
+
+  if (changeDetails == NULL) {
+    return false;
+  }
+  if ((myClientSwitch == NULL) ||
+      (myClientSwitch->getServerClient() == NULL)) {
+    return false;
+  }
+
+
+  bool isInterleaved = true;
+  myInterleaveMutex.lock();
+  if (myIsWaitingForReturn)
+  {
+    ArLog::log(ArLog::Terse, 
+	             "ArMapChanger: already busy sending changes");
+    myInterleaveMutex.unlock();
+    return false;
+  }
+  myIsWaitingForReturn = true;
+  myReadyForNextPacket = false;
+  ArLog::log(ArLog::Normal, 
+	             "ArMapChanger::sendRobotMapChanges() set myIsWaitingForReturn = true && myReadyForNextPacket = false");
+  myInterleaveMutex.unlock();
+
+
+
+  ArMapId givenOrigMapId;
+  ArMapId givenNewMapId;
+
+  changeDetails->getOrigMapId(&givenOrigMapId);
+  changeDetails->getNewMapId(&givenNewMapId);
+
+
+  // A giant hack to strip out the source name if we're sending the
+  // changes back to the original source.
+  myClientMutex.lock();
+  std::string robotName = ((myClientSwitch != NULL) ? myClientSwitch->getIdentifier() : "");
+  myClientMutex.unlock();
+
+  if (!ArUtil::isStrEmpty(robotName.c_str()) && 
+      !ArUtil::isStrEmpty(givenOrigMapId.getSourceName())) {
+    if (ArUtil::strcasecmp(robotName.c_str(), givenOrigMapId.getSourceName()) == 0) {
+      ArMapId modOrigMapId = givenOrigMapId;
+      modOrigMapId.setSourceName(NULL);
+      modOrigMapId.setTimestamp(-1);
+      changeDetails->setOrigMapId(modOrigMapId);
+    }
+  }
+  if (!ArUtil::isStrEmpty(robotName.c_str()) && 
+      !ArUtil::isStrEmpty(givenNewMapId.getSourceName())) {
+    if (ArUtil::strcasecmp(robotName.c_str(), givenNewMapId.getSourceName()) == 0) {
+      ArMapId modNewMapId = givenNewMapId;
+      modNewMapId.setSourceName(NULL);
+      modNewMapId.setTimestamp(-1);
+      changeDetails->setNewMapId(modNewMapId);
+    }
+  }
+
+
+  // TODO Probably just want to send each packet as created...
+  std::list<ArNetPacket*> packetList;
+  bool isSuccess = convertChangeDetailsToPacketList(changeDetails,
+                                                    &packetList);
+
+
+  if (!isSuccess) {
+
+    ArLog::log(ArLog::Normal,
+               "ArMapChanger::sendRobotMapChanges() error converting change details to network packets");
+    return false;
+  }
+  
+  isSuccess = sendRobotPacketList(packetList);
+
+  changeDetails->setOrigMapId(givenOrigMapId);
+  changeDetails->setNewMapId(givenNewMapId);
+
+  ArLog::log(ArLog::Normal,
+             "ArMapChanger::sendMapChanges() changes sent (%i), deleting packet list...",
+             isSuccess);
+
+  ArUtil::deleteSet(packetList.begin(), packetList.end());
+  packetList.clear();
+
+
+  return isSuccess;
+
+} // end method sendRobotMapChanges
 
 
 bool ArMapChanger::sendPacketList(const std::list<ArNetPacket *> &packetList) {
@@ -332,6 +532,72 @@ bool ArMapChanger::sendPacketList(const std::list<ArNetPacket *> &packetList) {
 } // end method sendPacketList
 
 
+
+bool ArMapChanger::sendRobotPacketList(const std::list<ArNetPacket *> &packetList) {
+ 
+  bool isInterleaved = true;
+  ArLog::log(ArLog::Normal,
+             "ArMapChanger::sendRobotPacketList() count = %i", packetList.size());
+
+  ArTime started;
+  started.setToNow();
+
+  for (std::list<ArNetPacket*>::const_iterator iter = packetList.begin();
+       iter != packetList.end();
+       iter++) {
+
+    started.setToNow();
+
+    ArNetPacket *packet = *iter;
+    if (packet == NULL) {
+      continue;
+    }
+    myClientMutex.lock();
+    if ((myClientSwitch != NULL) &&
+        (myClientSwitch->getServerClient() != NULL)) {
+      
+      unsigned int mapChangesCommand = myClientSwitch->getServerClient()->
+                                          findCommandFromName(PROCESS_ROBOT_CHANGES_PACKET_NAME);
+
+      packet->setCommand(mapChangesCommand);
+
+      myClientSwitch->getServerClient()->broadcastPacketTcp(packet);
+
+//                                                            PROCESS_ROBOT_CHANGES_PACKET_NAME);
+    }
+    else {
+      ArLog::log(ArLog::Terse, 
+                 "ArMapChanger::sendRobotPacketList aborted because connection lost");
+      myClientMutex.unlock();
+      return false;
+   }
+
+    myClientMutex.unlock();
+
+    /***
+    if (isInterleaved) {
+      if (!waitForReply(started)) {
+        return false;
+      }
+    } // end if interleaved
+     ***/
+  } // end for each packet
+
+/*** KMC Don't actually want to wait for the packet
+  if (!packetList.empty()) {
+    if (isInterleaved) {
+      if (!waitForCentralServerReply(started)) {
+        return false;
+      }
+    } // end if interleaved
+  }
+***/
+  return true;
+  
+} // end method sendRobotPacketList
+
+
+
 bool ArMapChanger::waitForReply(ArTime &started)
 {
   myInterleaveMutex.lock();
@@ -366,6 +632,8 @@ bool ArMapChanger::waitForReply(ArTime &started)
 	    if (started.secSince() > 30)
 	    {
         myInterleaveMutex.lock();
+        ArLog::log(ArLog::Normal, 
+	                 "ArMapChanger::waitForReply() set myIsWaitingForReturn = false");
         myIsWaitingForReturn = false;
         myInterleaveMutex.unlock();
 
@@ -383,6 +651,8 @@ bool ArMapChanger::waitForReply(ArTime &started)
 
   // Reset the flag so we'll wait for a response during the next loop iteration.
   myReadyForNextPacket = false;
+  ArLog::log(ArLog::Normal, 
+	             "ArMapChanger::waitForReply() set myReadyForNextPacket = false");
 
   myInterleaveMutex.unlock(); 
 
@@ -390,6 +660,72 @@ bool ArMapChanger::waitForReply(ArTime &started)
 
 } // end method waitForReply
 
+
+bool ArMapChanger::waitForCentralServerReply(ArTime &started)
+{
+  ArLog::log(ArLog::Normal,
+             "ArMapChanger::waitForCentralServerReply() called");
+
+  myInterleaveMutex.lock();
+
+  // myReadyForNextPacket is set to true when the response is received
+  // from the server.
+  while (!myReadyForNextPacket) 
+  {
+	  if (!myIsWaitingForReturn)
+	  {
+	    ArLog::log(ArLog::Normal, 
+                  "ArMapChanger::waitForCentralServerReply: Put was cancelled or failed.");
+	    myInterleaveMutex.unlock();
+	    return false;
+	  }
+	  myInterleaveMutex.unlock();
+
+/*** KMC TODO
+    myClientMutex.lock();
+
+    if (myClient == NULL) {
+	    ArLog::log(ArLog::Normal, 
+                  "ArMapChanger::waitForCentralServerReply: Client was shutdown.");
+      myClientMutex.unlock();
+      return false;
+    }
+    myClientMutex.unlock();
+******/
+
+	  ArUtil::sleep(1);
+
+    if (true || !isIdleProcessingPending()) {
+	    if (started.secSince() > 30)
+	    {
+        myInterleaveMutex.lock();
+        myIsWaitingForReturn = false;
+        ArLog::log(ArLog::Normal,
+                  "ArMapChanger::waitForCentralServerReply() set myIsWaitingForReturn = false (timeout)");
+        myInterleaveMutex.unlock();
+
+	      ArLog::log(ArLog::Normal, 
+                  "ArMapChanger::waitForCentralServerReply: No return from client within 30 seconds, failing put.");	 
+	      return false;
+	    }
+    }
+    else {
+      started.setToNow();
+    }
+	  myInterleaveMutex.lock();
+	  
+  } // end while not ready for next packet
+
+  // Reset the flag so we'll wait for a response during the next loop iteration.
+  ArLog::log(ArLog::Normal,
+             "ArMapChanger::waitForCentralServerReply() set myReadyForNextPacket = false");
+  myReadyForNextPacket = false;
+
+  myInterleaveMutex.unlock(); 
+
+  return true;
+
+} // end method waitForCentralServerReply
 
 bool ArMapChanger::isIdleProcessingPending()
 {
@@ -403,7 +739,10 @@ bool ArMapChanger::isIdleProcessingPending()
 
 
 AREXPORT void ArMapChanger::handleChangeReplyPacket(ArNetPacket *packet)
-{  
+{ 
+  IFDEBUG(ArLog::log(ArLog::Normal,
+                     "ArMapChanger::handleChangeReplyPacket()"));
+ 
   myInterleaveMutex.lock();
   if (!myIsWaitingForReturn)
   {
@@ -418,10 +757,15 @@ AREXPORT void ArMapChanger::handleChangeReplyPacket(ArNetPacket *packet)
   if (ret == CHANGE_SUCCESS)
   {
     myReadyForNextPacket = true;
+    ArLog::log(ArLog::Normal,
+               "ArMapChanger::handleChangeReplyPacket() set myReadyForNextPacket = false");
+
   }
   else
   {
     myIsWaitingForReturn = false;
+    ArLog::log(ArLog::Normal,
+               "ArMapChanger::handleChangeReplyPacket() set myIsWaitingForReturn = false");
   }
   myInterleaveMutex.unlock();
 
@@ -499,14 +843,19 @@ AREXPORT void ArMapChanger::handleChangePacket(ArServerClient *client,
 
   }
 
-  bool isSameMap = thisMapId.isSameFile(origMapId);
+  // KMC TODO Figure out appropriate "same map" check for deltas from robot
+  bool isSameMap = true;
 
-  if (isSameMap) {
-    if (ArUtil::strcasecmp(thisMapId.getFileName(), 
-                           newMapId.getFileName()) != 0) {
-      // Hopefully this won't happen, but make sure that the client isn't 
-      // renaming the map file.
-      isSameMap = false;
+  if (!origMapId.isNull()) {
+    isSameMap = thisMapId.isSameFile(origMapId);
+
+    if (isSameMap) {
+      if (ArUtil::strcasecmp(thisMapId.getFileName(), 
+                             newMapId.getFileName()) != 0) {
+        // Hopefully this won't happen, but make sure that the client isn't 
+        // renaming the map file.
+        isSameMap = false;
+      }
     }
   } // end if same map
 
@@ -636,7 +985,7 @@ AREXPORT void ArMapChanger::handleChangePacket(ArServerClient *client,
 
         ArMapId newMapId;
         changeDetails->getNewMapId(&newMapId);
-        bool isRepackageChanges = (newMapId.getTimestamp() == -1);
+        bool isRepackageChanges = (!newMapId.isValidTimestamp());
        
 
         if (isSuccess) {
@@ -764,8 +1113,8 @@ AREXPORT void ArMapChanger::handleChangePacket(ArServerClient *client,
       // TODO Think about adding an error message
     }
     client->sendPacketTcp(&replyPacket);
-  
-  
+ 
+ 
     if (myServer != NULL) {
       // Broadcast that changes are no longer in progress.
       //
@@ -885,6 +1234,7 @@ AREXPORT bool ArMapChanger::applyMapChanges(ArMapChangeDetails *changeDetails)
   // Apply Info changes...
   //
   isSuccess = applyInfoChanges(changeDetails) && isSuccess;
+  
 
   ArMapId mapId;
   ArMapId changesMapId;
@@ -1328,6 +1678,8 @@ bool ArMapChanger::applyObjectChanges(ArMapChangeDetails *changeDetails)
     return false;
   }
 
+  bool isSuccess = true;
+
   std::list<ArMapObject *> *mapObjectList = new std::list<ArMapObject *>
                                                     (*(myWorkingMap->getMapObjects()));
 
@@ -1338,7 +1690,7 @@ bool ArMapChanger::applyObjectChanges(ArMapChangeDetails *changeDetails)
 
     ArMapFileLineGroup &group = *dIter;
 
-    ArArgumentBuilder *objectArg = new ArArgumentBuilder();
+    ArArgumentBuilder *objectArg = new ArArgumentBuilder(512, '\0', false, true);
     objectArg->addPlain(group.getParentLine()->getLineText());
     objectArg->removeArg(0, true); // To get rid of the Cairn
 
@@ -1347,6 +1699,7 @@ bool ArMapChanger::applyObjectChanges(ArMapChangeDetails *changeDetails)
     if (objectToDelete == NULL) {
       ArLog::log(ArLog::Normal,
                  "ArMapChanger::applyObjectChanges() error creating object to delete");
+      isSuccess = false;
       continue;
       // TODO Return false?
     }
@@ -1368,6 +1721,7 @@ bool ArMapChanger::applyObjectChanges(ArMapChangeDetails *changeDetails)
     else {
       ArLog::log(ArLog::Normal, 
                  "Could not find matching map object to delete");
+      isSuccess = false;
       objectToDelete->log();
     }
 
@@ -1382,7 +1736,7 @@ bool ArMapChanger::applyObjectChanges(ArMapChangeDetails *changeDetails)
 
     ArMapFileLineGroup &group = *aIter;
 
-    ArArgumentBuilder *objectArg = new ArArgumentBuilder();
+    ArArgumentBuilder *objectArg = new ArArgumentBuilder(512, '\0', false, true);
     objectArg->addPlain(group.getParentLine()->getLineText());
     objectArg->removeArg(0, true); // To get rid of the Cairn
 
@@ -1391,6 +1745,7 @@ bool ArMapChanger::applyObjectChanges(ArMapChangeDetails *changeDetails)
     if (objectToAdd == NULL) {
       ArLog::log(ArLog::Normal,
                  "ArMapChanger::applyObjectChanges() error creating object to add");
+      isSuccess = false;
       continue;
       // TODO Return false?
     }
@@ -1407,7 +1762,7 @@ bool ArMapChanger::applyObjectChanges(ArMapChangeDetails *changeDetails)
   ArUtil::deleteSet(mapObjectList->begin(), mapObjectList->end());
   delete mapObjectList;
 
-  return true;
+  return isSuccess;
 
 } // end method applyObjectChanges
   
@@ -1595,7 +1950,7 @@ bool ArMapChanger::applyInfoChanges(ArMapChangeDetails *changeDetails)
           if (lineGroup.getParentLine()->getLineNum() <= lineNum) {
 
             // Add arg for parent
-            ArArgumentBuilder *newArg = new ArArgumentBuilder();
+            ArArgumentBuilder *newArg = new ArArgumentBuilder(512, '\0', false, true);
             newArg->addPlain(lineGroup.getParentLine()->getLineText());
             newArg->removeArg(0, true); // To get rid of info name
 
@@ -1614,7 +1969,7 @@ bool ArMapChanger::applyInfoChanges(ArMapChangeDetails *changeDetails)
 
               lineNum++;
               ArMapFileLine &line = *cIter;
-              ArArgumentBuilder *childArg = new ArArgumentBuilder();
+              ArArgumentBuilder *childArg = new ArArgumentBuilder(512, '\0', false, true);
               childArg->addPlain(line.getLineText());
               childArg->removeArg(0, true); // To get rid of info name
 
@@ -2351,8 +2706,6 @@ bool ArMapChanger::unpackFileLineSet(ArNetPacket *packet,
   }
 
 
-
-
   ArMapFileLineSet *fileLineSet = NULL;
   
   switch (dataType) {
@@ -2373,7 +2726,9 @@ bool ArMapChanger::unpackFileLineSet(ArNetPacket *packet,
         }
       } // end for
     } // end if 
-    fileLineSet = changeDetails->getChangedInfoLines(infoName, changeType);
+    if (infoName != NULL) {
+      fileLineSet = changeDetails->getChangedInfoLines(infoName, changeType);
+    }
     }
     break;
   case OBJECTS_DATA:
@@ -2663,16 +3018,51 @@ AREXPORT bool ArMapChanger::remChangeCB
   return true;
 
 }
+  
+AREXPORT bool ArMapChanger::addRobotChangeReplyCB
+                          (ArFunctor2<ArServerClient *, ArNetPacket *>  *functor)
+{
+  if (functor == NULL) {
+    return false;
+  }
+  myRobotChangeReplyCBList.push_back(functor);
+  return true;
+
+} // end method addRobotChangeReplyCB
+
+
+AREXPORT bool ArMapChanger::remRobotChangeReplyCB
+                          (ArFunctor2<ArServerClient *, ArNetPacket *>  *functor)
+{
+  if (functor == NULL) {
+    return false;
+  }
+  // TODO Improve return val
+  myRobotChangeReplyCBList.remove(functor); 
+  return true;
+
+} // end method remRobotChangeReplyCB
 
 // -----------------------------------------------------------------------------
 
 ArMapChanger::ClientChangeInfo::ClientChangeInfo(ArServerClient *client) :
   myClient(client),
+  myForwarder(NULL),
   myStartTime(),
   myLastActivityTime(),
   myPacketList()
 {
 }
+
+ArMapChanger::ClientChangeInfo::ClientChangeInfo(ArCentralForwarder *forwarder) :
+  myClient(NULL),
+  myForwarder(forwarder),
+  myStartTime(),
+  myLastActivityTime(),
+  myPacketList()
+{
+}
+
 
 ArMapChanger::ClientChangeInfo::~ClientChangeInfo()
 {
@@ -2766,4 +3156,57 @@ AREXPORT void ArMapChanger::remFromCallbackList(ArFunctor *functor,
   cbList->remove(functor);
 
 } // end method remFromCallbackList
+
+
+AREXPORT void ArMapChanger::handleRobotChangeReplyPacket(ArServerClient *client, 
+                                                         ArNetPacket *packet)
+{
+  IFDEBUG(ArLog::log(ArLog::Normal,
+                     "ArMapChanger::handleRobotChangeReplyPacket()"));
+ 
+  myInterleaveMutex.lock();
+  if (!myIsWaitingForReturn)
+  {
+    myInterleaveMutex.unlock();
+    return;
+  }
+  
+  char robotName[512];
+  packet->bufToStr(robotName, sizeof(robotName)); 
+  
+  int ret = packet->bufToUByte2();
+
+  // packet->bufToStr(fileName, sizeof(fileName));
+  // if (myInterleaved && ret == 10)
+  if (ret == CHANGE_SUCCESS)
+  {
+    myReadyForNextPacket = true;
+    myIsWaitingForReturn = false;
+    ArLog::log(ArLog::Normal,
+               "ArMapChanger::handleRobotChangeReplyPacket() set myReadyForNextPacket = true && myIsWaitingForReturn = false");
+  }
+  else
+  {
+    myIsWaitingForReturn = false;
+    ArLog::log(ArLog::Normal,
+               "ArMapChanger::handleRobotChangeReplyPacket() set myIsWaitingForReturn = false");
+  }
+  
+  myInterleaveMutex.unlock();
+          
+  for (std::list< ArFunctor2<ArServerClient *, ArNetPacket *> *>::iterator cbIter = 
+                                                                          myRobotChangeReplyCBList.begin();
+       cbIter != myRobotChangeReplyCBList.end();
+       cbIter++) {
+
+    packet->resetRead();
+
+    ArFunctor2<ArServerClient *, ArNetPacket *> *functor = *cbIter;
+
+    if (functor != NULL) {
+      functor->invoke(client, packet);
+    }
+  } 
+} // end method handleRobotChangeReplyPacket
+
 

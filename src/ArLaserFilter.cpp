@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,14 +19,16 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ArLaserFilter.h"
 #include "ArRobot.h"
 #include "ArConfig.h"
+
+//#define DEBUGRANGEFILTER
 
 AREXPORT ArLaserFilter::ArLaserFilter(
 	ArLaser *laser, const char *name) :
@@ -56,8 +58,10 @@ AREXPORT ArLaserFilter::ArLaserFilter(
   myAngleToCheck = 1;
   myAnyFactor = -1;
   myAllFactor = -1;
-  myMaxRange = -1;
-
+  myAnyMinRange = -1;
+  myAnyMinRangeLessThanAngle = -180;
+  myAnyMinRangeGreaterThanAngle = 180;
+  
   setCurrentDrawingData(
 	  new ArDrawingData(*(myLaser->getCurrentDrawingData())),
 	  true);
@@ -69,14 +73,21 @@ AREXPORT ArLaserFilter::ArLaserFilter(
   // laser parameters
   setInfoLogLevel(myLaser->getInfoLogLevel());
   setConnectionTimeoutSeconds(myLaser->getConnectionTimeoutSeconds());
+  setCumulativeBufferSize(myLaser->getCumulativeBufferSize());
   setCumulativeCleanDist(myLaser->getCumulativeCleanDist());
   setCumulativeCleanInterval(myLaser->getCumulativeCleanInterval());
   setCumulativeCleanOffset(myLaser->getCumulativeCleanOffset());
 
-  setSensorPosition(myLaser->getSensorPosition());
+  setSensorPosition(myLaser->getSensorPosition(), 
+		    myLaser->getSensorPositionZ());
   laserSetAbsoluteMaxRange(myLaser->getAbsoluteMaxRange());
+  // set our max range to the laser we're filtering... then set the
+  // max range on the laser we're filtering to 0, so that it's over
+  // max range values don't get set to ignore, since then we can't
+  // clear cumulatives beyond that value
   setMaxRange(myLaser->getMaxRange());
-  
+  myLaser->setMaxRange(0);
+
   // base range device parameters
   setMaxSecondsToKeepCurrent(myLaser->getMaxSecondsToKeepCurrent());
   setMinDistBetweenCurrent(getMinDistBetweenCurrent());
@@ -86,6 +97,10 @@ AREXPORT ArLaserFilter::ArLaserFilter(
   setMaxInsertDistCumulative(myLaser->getMaxInsertDistCumulative());
   setCurrentDrawingData(myLaser->getCurrentDrawingData(), false);
   setCumulativeDrawingData(myLaser->getCumulativeDrawingData(), false);
+
+  // turn off the cumulative buffer on the original to save CPU
+  myLaser->setCumulativeBufferSize(0);
+
 
   // now all the specific laser settings (this should already be taken
   // care of when this is created, but the code existed for the
@@ -131,7 +146,6 @@ AREXPORT ArLaserFilter::ArLaserFilter(
   laserSetDefaultTcpPort(myLaser->getDefaultTcpPort());
   laserSetDefaultPortType(myLaser->getDefaultPortType());
 
-
 }
 
 AREXPORT ArLaserFilter::~ArLaserFilter()
@@ -149,50 +163,64 @@ AREXPORT void ArLaserFilter::addToConfig(ArConfig *config,
 {
   std::string name;
   
+  config->addSection(ArConfig::CATEGORY_ROBOT_OPERATION,
+                     sectionName,
+                     "");
+
   config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), sectionName,
-		     ArPriority::TRIVIAL);
+		     ArPriority::FACTORY);
   name = prefix;
   name += "AngleSpread";
   config->addParam(
 	  ArConfigArg(name.c_str(), &myAngleToCheck,
-	      "The angle spread to check on either side of each reading",
+	      "Filter settings.  The angle spread to check on either side of each reading",
 		      0),
-	  sectionName, ArPriority::TRIVIAL);
+	  sectionName, ArPriority::FACTORY);
 
   name = prefix;
   name += "AnyNeighborFactor";
   config->addParam(
 	  ArConfigArg(name.c_str(), &myAnyFactor,
-	      "If a reading (decided by the anglespread) is further than any of its neighbor reading times this factor, it is ignored... so a value between 0 and 1 will check if they're all closer, a value greater than 1 will see if they're all further, negative values means this factor won't be used",
+	      "Filter settings.  If a reading (decided by the anglespread) is further than any of its neighbor reading times this factor, it is ignored... so a value between 0 and 1 will check if they're all closer, a value greater than 1 will see if they're all further, negative values means this factor won't be used",
 		      -1),
-	  sectionName, ArPriority::TRIVIAL);
+	  sectionName, ArPriority::FACTORY);
 
   name = prefix;
   name += "AllNeighborFactor";
   config->addParam(
 	  ArConfigArg(name.c_str(), &myAllFactor,
-	      "If a reading (decided by the anglespread) is further than all of its neighbor reading times this factor, it is ignored... so a value between 0 and 1 will check if they're all closer, a value greater than 1 will see if they're all further, negative values means this factor won't be used",
+	      "Filter settings.  If a reading (decided by the anglespread) is further than all of its neighbor reading times this factor, it is ignored... so a value between 0 and 1 will check if they're all closer, a value greater than 1 will see if they're all further, negative values means this factor won't be used",
 		      -1),
-	  sectionName, ArPriority::TRIVIAL);
-
-  name = prefix;
-  name += "MaxRange";
-  config->addParam(
-	  ArConfigArg(name.c_str(), &myMaxRange,
-		      "If a reading is further than this max range it will be ignored, -1 will use the base range device's max range",
-		      -1),
-	  sectionName, ArPriority::TRIVIAL);
-
-  name = prefix;
-  name += "CumulativeKeepDist";
-  config->addParam(
-	  ArConfigArg(name.c_str(), &myMaxDistToKeepCumulative,
-		      "Distance cumulative readings can be from current pose",
-		      -1),
-	  sectionName, ArPriority::TRIVIAL);
+	  sectionName, ArPriority::FACTORY);
 
   config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), sectionName,
-		   ArPriority::TRIVIAL);
+		   ArPriority::FACTORY);
+
+  name = prefix;
+  name += "AnyNeighborMinRange";
+  config->addParam(
+	  ArConfigArg(name.c_str(), &myAnyMinRange,
+	      "Filter settings.  If a reading itself, or if it has a neighbor (decided by the anglespread) that is closer than this value (in mm) it is ignored... negative values means this factor won't be used",
+		      -1),
+	  sectionName, ArPriority::FACTORY);
+
+  name = prefix;
+  name += "AnyNeighborMinRangeLessThanAngle";
+  config->addParam(
+	  ArConfigArg(name.c_str(), &myAnyMinRangeLessThanAngle,
+	      "Filter settings.  The AnyNeighborMinRange will only be applied to angles LESS than this (so the AnyNeighborMinRange filter will only apply angles below this, or above GreatestAngle)"),
+	  sectionName, ArPriority::FACTORY);
+
+  name = prefix;
+  name += "AnyNeighborMinRangeGreaterThanAngle";
+  config->addParam(
+	  ArConfigArg(name.c_str(), &myAnyMinRangeGreaterThanAngle,
+	      "Filter settings.  The AnyNeighborMinRange will only be applied to angles GREATER than this (so the AnyNeighborMinRange filter will only apply above this, or below LeastAngle)"),
+	  sectionName, ArPriority::FACTORY);
+
+  config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), sectionName,
+		   ArPriority::FACTORY);
+
 }
 
 AREXPORT void ArLaserFilter::setRobot(ArRobot *robot)
@@ -243,7 +271,8 @@ void ArLaserFilter::processReadings(void)
 
 #ifdef DEBUGRANGEFILTER
   FILE *file = NULL;
-  file = ArUtil::fopen("/mnt/rdsys/tmp/filter", "w");
+  //file = ArUtil::fopen("/mnt/rdsys/tmp/filter", "w");
+  file = ArUtil::fopen("/tmp/filter", "w");
 #endif
 
   std::map<int, ArSensorReading *> readingMap;
@@ -257,15 +286,30 @@ void ArLaserFilter::processReadings(void)
     rdReading = (*rdIt);
     reading = (*it);
     *reading = *rdReading;
-    
+
     readingMap[numReadings] = reading;
     numReadings++;
+  }
+
+  // if we're not doing any filtering, just short circuit out now
+  if (myAllFactor <= 0 && myAnyFactor <= 0 && myAnyMinRange <= 0)
+  {
+    laserProcessReadings();
+    copyReadingCount(myLaser);
+
+    selfUnlockDevice();
+    myLaser->unlockDevice();
+#ifdef DEBUGRANGEFILTER
+    if (file != NULL)
+      fclose(file);
+#endif
+    return;
   }
   
   char buf[1024];
   int i;
   int j;
-  ArSensorReading *lastAddedReading = NULL;
+  //ArSensorReading *lastAddedReading = NULL;
   
   // now walk through the readings to filter them
   for (i = 0; i < numReadings; i++)
@@ -276,12 +320,35 @@ void ArLaserFilter::processReadings(void)
     if (reading->getIgnoreThisReading())
       continue;
 
+    /* Taking this check out since the base class does it now and if
+     * it gets marked ignore now it won't get used for clearing
+     * cumulative readings
+
     if (myMaxRange >= 0 && reading->getRange() > myMaxRange)
     {
+#ifdef DEBUGRANGEFILTER
+      if (file != NULL)
+	fprintf(file, "%.1f beyond max range at %d\n", 
+		reading->getSensorTh(), reading->getRange());
+#endif
       reading->setIgnoreThisReading(true);
       continue;
     }
-      
+    */
+    if (myAnyMinRange >= 0 && reading->getRange() < myAnyMinRange &&
+	(reading->getSensorTh() < myAnyMinRangeLessThanAngle ||
+	 reading->getSensorTh() > myAnyMinRangeGreaterThanAngle))
+    {
+#ifdef DEBUGRANGEFILTER
+      if (file != NULL)
+	fprintf(file, "%.1f within min range at %d\n", 
+		reading->getSensorTh(), reading->getRange());
+#endif
+      reading->setIgnoreThisReading(true);
+      continue;
+    }
+
+    /*
     if (lastAddedReading != NULL)
     {
 
@@ -305,10 +372,12 @@ void ArLaserFilter::processReadings(void)
 			reading->getPose()));
 #endif
     }
+    */
 
     buf[0] = '\0';
     bool goodAll = true;
     bool goodAny = false;
+    bool goodMinRange = true;
     if (myAnyFactor <= 0)
       goodAny = true;
     for (j = i - 1; 
@@ -317,6 +386,7 @@ void ArLaserFilter::processReadings(void)
 				reading->getSensorTh())) <= myAngleToCheck);
 	 j--)
     {
+      /* You can't skip these, or you get onesided filtering
       if (readingMap[j]->getIgnoreThisReading())
       {
 #ifdef DEBUGRANGEFILTER
@@ -324,6 +394,7 @@ void ArLaserFilter::processReadings(void)
 #endif
 	continue;
       }
+      */
 #ifdef DEBUGRANGEFILTER
       sprintf(buf, "%s %6d", buf, readingMap[j]->getRange());
 #endif
@@ -335,6 +406,12 @@ void ArLaserFilter::processReadings(void)
 	  checkRanges(reading->getRange(), 
 		      readingMap[j]->getRange(), myAnyFactor))
 	goodAny = true;
+      if (myAnyMinRange > 0 && 
+	  (reading->getSensorTh() < myAnyMinRangeLessThanAngle ||
+	   reading->getSensorTh() > myAnyMinRangeGreaterThanAngle) &&
+	  readingMap[j]->getRange() <= myAnyMinRange)
+	goodMinRange = false;
+	
     }
 #ifdef DEBUGRANGEFILTER
     sprintf(buf, "%s %6d*", buf, reading->getRange());
@@ -345,6 +422,8 @@ void ArLaserFilter::processReadings(void)
 				reading->getSensorTh())) <= myAngleToCheck);
 	 j++)
     {
+      // you can't ignore these or you get one sided filtering
+      /*
       if (readingMap[j]->getIgnoreThisReading())
       {
 #ifdef DEBUGRANGEFILTER
@@ -352,6 +431,7 @@ void ArLaserFilter::processReadings(void)
 #endif
 	continue;
       }
+      */
 #ifdef DEBUGRANGEFILTER
       sprintf(buf, "%s %6d", buf, readingMap[j]->getRange());
 #endif
@@ -363,18 +443,25 @@ void ArLaserFilter::processReadings(void)
 	  checkRanges(reading->getRange(), 
 		       readingMap[j]->getRange(), myAnyFactor))
 	goodAny = true;
+      if (myAnyMinRange > 0 && 
+	  (reading->getSensorTh() < myAnyMinRangeLessThanAngle ||
+	   reading->getSensorTh() > myAnyMinRangeGreaterThanAngle) &&
+	  readingMap[j]->getRange() <= myAnyMinRange)
+	goodMinRange = false;
     }
     
-    if (!goodAll || !goodAny)
+
+    if (!goodAll || !goodAny || !goodMinRange)
       reading->setIgnoreThisReading(true);
+    /*
     else
       lastAddedReading = reading;
-
+    */
 #ifdef DEBUGRANGEFILTER
     if (file != NULL)
       fprintf(file, 
 	      "%5.1f %6d %c\t%s\n", reading->getSensorTh(), reading->getRange(),
-	      good ? 'g' : 'b', buf);
+	      goodAll && goodAny && goodMinRange ? 'g' : 'b', buf);
 #endif
 	    
   }
@@ -386,6 +473,7 @@ void ArLaserFilter::processReadings(void)
 #endif
 
   laserProcessReadings();
+  copyReadingCount(myLaser);
 
   selfUnlockDevice();
   myLaser->unlockDevice();

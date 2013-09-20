@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARFUNCTOR_H
 #define ARFUNCTOR_H
@@ -31,7 +31,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include <stdarg.h>
 #include <stdio.h>
 
-/// Base class for functors
+/// An object which allows storing a generalized reference to a method with an object instance to call later (used for callback functions)
 /**
   Functors are meant to encapsulate the idea of a pointer to a function
   which is a member of a class. To use a pointer to a member function,
@@ -102,6 +102,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
   @javanote You can subclass ArFunctor and override invoke().
 
   @see @ref functorExample.cpp
+
+  @ingroup ImportantClasses
 **/
 class ArFunctor
 {
@@ -296,6 +298,69 @@ public:
 };
 
 
+/// Base class for functors with 5 parameters
+/**
+   This is the base class for functors with 5 parameters. Code that has a
+   reference to a functor that takes 5 parameters should use this class
+   name. This allows the code to know how to invoke the functor without
+   knowing which class the member function is in.
+   
+   For an overall description of functors, see ArFunctor.
+*/
+template<class P1, class P2, class P3, class P4, class P5>
+class ArFunctor5 : public ArFunctor4<P1, P2, P3, P4>
+{
+public:
+
+  /// Destructor
+  virtual ~ArFunctor5() {}
+
+  /// Invokes the functor
+  virtual void invoke(void) = 0;
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+  */
+  virtual void invoke(P1 p1) = 0;
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual void invoke(P1 p1, P2 p2) = 0;
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+  */
+  virtual void invoke(P1 p1, P2 p2, P3 p3) = 0;
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+ */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4) = 0;
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p4 fifth parameter
+ */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) = 0;
+
+};
+
+
 
 
 /// Base class for functors with a return value
@@ -485,6 +550,68 @@ public:
      @param p4 fourth parameter
   */
   virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4) = 0;
+};
+
+/// Base class for functors with a return value with 5 parameters
+/**
+   This is the base class for functors with a return value and take 5
+   parameters. Code that has a reference to a functor that returns a value
+   and takes 5 parameters should use this class name. This allows the code
+   to know how to invoke the functor without knowing which class the member
+   function is in.
+   
+   For an overall description of functors, see ArFunctor.
+*/
+template<class Ret, class P1, class P2, class P3, class P4, class P5>
+class ArRetFunctor5 : public ArRetFunctor4<Ret, P1, P2, P3, P4>
+{
+public:
+
+  /// Destructor
+  virtual ~ArRetFunctor5() {}
+
+  /// Invokes the functor with return value
+  virtual Ret invokeR(void) = 0;
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+  */
+  virtual Ret invokeR(P1 p1) = 0;
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2) = 0;
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3) = 0;
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4) = 0;
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p4 fifth parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) = 0;
 };
 
 
@@ -912,6 +1039,167 @@ protected:
   P4 myP4;
 };
 
+
+/// Functor for a global function with 5 parameters
+/**
+   This is a class for global functions which take 5 parameters. This ties
+   a C style function pointer into the functor class hierarchy as a
+   convience. Code that has a reference to this class and treat it as
+   an ArFunctor can use it like any other functor.
+   
+   For an overall description of functors, see ArFunctor.
+*/
+template<class P1, class P2, class P3, class P4, class P5>
+class ArGlobalFunctor5 : public ArFunctor5<P1, P2, P3, P4, P5>
+{
+public:
+
+  /// Constructor
+  ArGlobalFunctor5() {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param func global function pointer
+  */
+  ArGlobalFunctor5(void (*func)(P1, P2, P3, P4, P5)) :
+    myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+  */
+  ArGlobalFunctor5(void (*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArGlobalFunctor5(void (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArGlobalFunctor5(void (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+   /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+ */
+  ArGlobalFunctor5(void (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+   /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+ */
+  ArGlobalFunctor5(void (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+  /// Destructor
+  virtual ~ArGlobalFunctor5() {}
+
+  /// Invokes the functor
+  virtual void invoke(void) {(*myFunc)(myP1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+  */
+  virtual void invoke(P1 p1) {(*myFunc)(p1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual void invoke(P1 p1, P2 p2) {(*myFunc)(p1, p2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+  */
+  virtual void invoke(P1 p1, P2 p2, P3 p3) {(*myFunc)(p1, p2, p3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+  */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4) {(*myFunc)(p1, p2, p3, p4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p5 fifth parameter
+  */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) {(*myFunc)(p1, p2, p3, p4, p5);}
+
+  /// Set the default parameter
+  /**
+     @param p1 default first parameter
+  */
+  virtual void setP1(P1 p1) {myP1=p1;}
+
+  /// Set the default 2nd parameter
+  /**
+     @param p2 default second parameter
+  */
+  virtual void setP2(P2 p2) {myP2=p2;}
+
+  /// Set the default third parameter
+  /**
+     @param p3 default third parameter
+  */
+  virtual void setP3(P3 p3) {myP3=p3;}
+
+  /// Set the default fourth parameter
+  /**
+     @param p4 default fourth parameter
+  */
+  virtual void setP4(P4 p4) {myP4=p4;}
+
+  /// Set the default fifth parameter
+  /**
+     @param p4 default fifth parameter
+  */
+  virtual void setP5(P5 p5) {myP5=p5;}
+
+protected:
+
+  void (*myFunc)(P1, P2, P3, P4, P5);
+  P1 myP1;
+  P2 myP2;
+  P3 myP3;
+  P4 myP4;
+  P5 myP5;
+};
+
 #endif // Omitting ArGlobalFunctor from Swig
 
 
@@ -1233,16 +1521,16 @@ public:
   /**
      @param func global function pointer
   */
-  ArGlobalRetFunctor4(Ret (*func)(P1, P2, P3)) :
-    myFunc(func), myP1(), myP2(), myP3() {}
+  ArGlobalRetFunctor4(Ret (*func)(P1, P2, P3, P4)) :
+    myFunc(func), myP1(), myP2(), myP3(), myP4() {}
 
   /// Constructor - supply function pointer, default parameters
   /**
      @param func global function pointer
      @param p1 default first parameter
   */
-  ArGlobalRetFunctor4(Ret (*func)(P1, P2, P3), P1 p1) :
-    myFunc(func), myP1(p1), myP2(), myP3() {}
+  ArGlobalRetFunctor4(Ret (*func)(P1, P2, P3, P4), P1 p1) :
+    myFunc(func), myP1(p1), myP2(), myP3(), myP4() {}
 
   /// Constructor - supply function pointer, default parameters
   /**
@@ -1250,8 +1538,8 @@ public:
      @param p1 default first parameter
      @param p2 default second parameter
   */
-  ArGlobalRetFunctor4(Ret (*func)(P1, P2, P3), P1 p1, P2 p2) :
-    myFunc(func), myP1(p1), myP2(p2), myP3() {}
+  ArGlobalRetFunctor4(Ret (*func)(P1, P2, P3, P4), P1 p1, P2 p2) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(), myP4() {}
 
   /// Constructor - supply function pointer, default parameters
   /**
@@ -1342,6 +1630,166 @@ protected:
   P2 myP2;
   P3 myP3;
   P4 myP4;
+};
+
+
+/// Functor for a global function with 5 parameters and return value
+/**
+   This is a class for global functions which take 5 parameters and return
+   a value. This ties a C style function pointer into the functor class
+   hierarchy as a convience. Code that has a reference to this class
+   and treat it as an ArFunctor can use it like any other functor.
+   
+   For an overall description of functors, see ArFunctor.
+*/
+template<class Ret, class P1, class P2, class P3, class P4, class P5>
+class ArGlobalRetFunctor5 : public ArRetFunctor5<Ret, P1, P2, P3, P4, P5>
+{
+public:
+
+  /// Constructor
+  ArGlobalRetFunctor5() {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param func global function pointer
+  */
+  ArGlobalRetFunctor5(Ret (*func)(P1, P2, P3, P4, P5)) :
+    myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+  */
+  ArGlobalRetFunctor5(Ret (*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArGlobalRetFunctor5(Ret (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+ */
+  ArGlobalRetFunctor5(Ret (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+	/// Constructor - supply function pointer, default parameters
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+ */
+  ArGlobalRetFunctor5(Ret (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+  /**
+     @param func global function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+	 @param p5 default fifth parameter
+ */
+  ArGlobalRetFunctor5(Ret (*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+  /// Destructor
+  virtual ~ArGlobalRetFunctor5() {}
+
+  /// Invokes the functor with return value
+  virtual Ret invokeR(void) {return (*myFunc)(myP1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+  */
+  virtual Ret invokeR(P1 p1) {return (*myFunc)(p1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2) {return (*myFunc)(p1, p2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3) {return (*myFunc)(p1, p2, p3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+ */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4) {return (*myFunc)(p1, p2, p3, p4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p5 fifth parameter
+ */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) {return (*myFunc)(p1, p2, p3, p4, p5);}
+
+  /// Set the default parameter
+  /**
+     @param p1 default first parameter
+  */
+  virtual void setP1(P1 p1) {myP1=p1;}
+
+  /// Set the default 2nd parameter
+  /**
+     @param p2 default second parameter
+  */
+  virtual void setP2(P2 p2) {myP2=p2;}
+
+  /// Set the default third parameter
+  /**
+     @param p3 default third parameter
+  */
+  virtual void setP3(P3 p3) {myP3=p3;}
+  
+  /// Set the default fourth parameter
+  /**
+     @param p4 default fourth parameter
+  */
+  virtual void setP4(P4 p4) {myP4=p4;}
+
+  /// Set the default fifth parameter
+  /**
+     @param p4 default fifth parameter
+  */
+  virtual void setP5(P5 p5) {myP5=p5;}
+
+protected:
+
+  Ret (*myFunc)(P1, P2, P3, P4, P5);
+  P1 myP1;
+  P2 myP2;
+  P3 myP3;
+  P4 myP4;
+  P5 myP5;
 };
 
 #endif // omitting ArGlobalRetFunctor from SWIG
@@ -1991,6 +2439,252 @@ protected:
   P2 myP2;
   P3 myP3;
   P4 myP4;
+};
+
+
+/// Functor for a member function with 5 parameters
+/**
+   This is a class for member functions which take 5 parameters. This class
+   contains the knowledge on how to call a member function on a particular
+   instance of a class. This class should be instantiated by code that
+   wishes to pass off a functor to another piece of code.
+   
+   For an overall description of functors, see ArFunctor.
+*/
+template<class T, class P1, class P2, class P3, class P4, class P5>
+class ArFunctor5C : public ArFunctor5<P1, P2, P3, P4, P5>
+{
+public:
+
+  /// Constructor
+  ArFunctor5C() {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+  */
+  ArFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5)) :
+    myObj(&obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+  */
+  ArFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+ */
+  ArFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+  
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+ */
+ArFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+  myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+  */
+  ArFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5)) :
+    myObj(obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+  */
+  ArFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+  */
+  ArFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+  */
+  ArFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+	
+  /// Destructor
+  virtual ~ArFunctor5C() {}
+
+  /// Invokes the functor
+  virtual void invoke(void) {(myObj->*myFunc)(myP1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+  */
+  virtual void invoke(P1 p1) {(myObj->*myFunc)(p1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual void invoke(P1 p1, P2 p2) {(myObj->*myFunc)(p1, p2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+  */
+  virtual void invoke(P1 p1, P2 p2, P3 p3) {(myObj->*myFunc)(p1, p2, p3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+ */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4) {(myObj->*myFunc)(p1, p2, p3, p4, myP5);}
+
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p5 fifth parameter
+ */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) {(myObj->*myFunc)(p1, p2, p3, p4, p5);}
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T *obj) {myObj=obj;}
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T &obj) {myObj=&obj;}
+
+  /// Set the default parameter
+  /**
+     @param p1 default first parameter
+  */
+  virtual void setP1(P1 p1) {myP1=p1;}
+
+  /// Set the default 2nd parameter
+  /**
+     @param p2 default second parameter
+  */
+  virtual void setP2(P2 p2) {myP2=p2;}
+
+  /// Set the default third parameter
+  /**
+     @param p3 default third parameter
+  */
+  virtual void setP3(P3 p3) {myP3=p3;}
+
+  /// Set the default fourth parameter
+  /**
+     @param p4 default fourth parameter
+  */
+  virtual void setP4(P4 p4) {myP4=p4;}
+
+  /// Set the default fifth parameter
+  /**
+     @param p4 default fifth parameter
+  */
+  virtual void setP5(P5 p5) {myP5=p5;}
+
+
+protected:
+
+  T *myObj;
+  void (T::*myFunc)(P1, P2, P3, P4, P5);
+  P1 myP1;
+  P2 myP2;
+  P3 myP3;
+  P4 myP4;
+  P5 myP5;
 };
 
 
@@ -2655,6 +3349,259 @@ protected:
 };
 
 
+
+/// Functor for a member function with return value and 5 parameters
+/**
+   This is a class for member functions which take 5 parameters and return
+   a value. This class contains the knowledge on how to call a member
+   function on a particular instance of a class. This class should be
+   instantiated by code that wishes to pass off a functor to another
+   piece of code.
+   
+   For an overall description of functors, see ArFunctor.
+*/
+template<class Ret, class T, class P1, class P2, class P3, class P4, class P5>
+class ArRetFunctor5C : public ArRetFunctor5<Ret, P1, P2, P3, P4, P5>
+{
+public:
+
+  /// Constructor
+  ArRetFunctor5C() {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+  */
+  ArRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5)) :
+    myObj(&obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+  */
+  ArRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+  */
+  ArRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+  */
+  ArRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+  */
+  ArRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5)) :
+    myObj(obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+  */
+  ArRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+ */
+  ArRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+ */
+  ArRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+  /// Destructor
+  virtual ~ArRetFunctor5C() {}
+
+  /// Invokes the functor with return value
+  virtual Ret invokeR(void) {return (myObj->*myFunc)(myP1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+  */
+  virtual Ret invokeR(P1 p1) {return (myObj->*myFunc)(p1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2) {return (myObj->*myFunc)(p1, p2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3) 
+    {return (myObj->*myFunc)(p1, p2, p3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+ */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4) 
+    {return (myObj->*myFunc)(p1, p2, p3, p4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p5 fifth parameter
+ */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) 
+    {return (myObj->*myFunc)(p1, p2, p3, p4, p5);}
+
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T *obj) {myObj=obj;}
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T &obj) {myObj=&obj;}
+
+  /// Set the default parameter
+  /**
+     @param p1 default first parameter
+  */
+  virtual void setP1(P1 p1) {myP1=p1;}
+
+  /// Set the default 2nd parameter
+  /**
+     @param p2 default second parameter
+  */
+  virtual void setP2(P2 p2) {myP2=p2;}
+
+  /// Set the default third parameter
+  /**
+     @param p3 default third parameter
+  */
+  virtual void setP3(P3 p3) {myP3=p3;}
+
+  /// Set the default fourth parameter
+  /**
+     @param p4 default fourth parameter
+  */
+  virtual void setP4(P4 p4) {myP4=p4;}
+
+  /// Set the default fifth parameter
+  /**
+     @param p4 default fifth parameter
+  */
+  virtual void setP5(P5 p5) {myP5=p5;}
+
+protected:
+
+  T *myObj;
+  Ret (T::*myFunc)(P1, P2, P3, P4, P5);
+  P1 myP1;
+  P2 myP2;
+  P3 myP3;
+  P4 myP4;
+  P4 myP5;
+};
+
+
 /// Swig doesn't like the const functors
 #ifndef SWIG
 
@@ -3302,6 +4249,252 @@ protected:
   P2 myP2;
   P3 myP3;
   P4 myP4;
+};
+
+/// Functor for a const member function with 5 parameters
+/**
+   This is a class for const member functions which take 5
+   parameters. This class contains the knowledge on how to call a
+   const member function on a particular instance of a class. This
+   class should be instantiated by code that wishes to pass off a
+   functor to another piece of code.
+   
+   For an overall description of functors, see ArFunctor.  */
+template<class T, class P1, class P2, class P3, class P4, class P5>
+class ArConstFunctor5C : public ArFunctor5<P1, P2, P3, P4, P5>
+{
+public:
+
+  /// Constructor
+  ArConstFunctor5C() {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+  */
+  ArConstFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5) const) :
+    myObj(&obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+  */
+  ArConstFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArConstFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArConstFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+      @param p4 default fourth parameter
+ */
+  ArConstFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+ */
+  ArConstFunctor5C(T &obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+  */
+  ArConstFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5) const) :
+    myObj(obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+  */
+  ArConstFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArConstFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArConstFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+  */
+  ArConstFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+  */
+  ArConstFunctor5C(T *obj, void (T::*func)(P1, P2, P3, P4, P5), P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+	
+  /// Destructor
+  virtual ~ArConstFunctor5C() {}
+
+  /// Invokes the functor
+  virtual void invoke(void) {(myObj->*myFunc)(myP1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+  */
+  virtual void invoke(P1 p1) {(myObj->*myFunc)(p1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual void invoke(P1 p1, P2 p2) {(myObj->*myFunc)(p1, p2, myP3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+  */
+  virtual void invoke(P1 p1, P2 p2, P3 p3) {(myObj->*myFunc)(p1, p2, p3, myP4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+ */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4) {(myObj->*myFunc)(p1, p2, p3, p4, myP5);}
+
+  /// Invokes the functor
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p5 fifth parameter
+ */
+  virtual void invoke(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) {(myObj->*myFunc)(p1, p2, p3, p4, p5);}
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T *obj) {myObj=obj;}
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T &obj) {myObj=&obj;}
+
+  /// Set the default parameter
+  /**
+     @param p1 default first parameter
+  */
+  virtual void setP1(P1 p1) {myP1=p1;}
+
+  /// Set the default 2nd parameter
+  /**
+     @param p2 default second parameter
+  */
+  virtual void setP2(P2 p2) {myP2=p2;}
+
+  /// Set the default third parameter
+  /**
+     @param p3 default third parameter
+  */
+  virtual void setP3(P3 p3) {myP3=p3;}
+
+  /// Set the default fourth parameter
+  /**
+     @param p4 default fourth parameter
+  */
+  virtual void setP4(P4 p4) {myP4=p4;}
+
+  /// Set the default fifth parameter
+  /**
+     @param p5 default fifth parameter
+  */
+  virtual void setP5(P5 p5) {myP5=p5;}
+
+
+protected:
+
+  T *myObj;
+  void (T::*myFunc)(P1, P2, P3, P4, P5) const;
+  P1 myP1;
+  P2 myP2;
+  P3 myP3;
+  P4 myP4;
+  P4 myP5;
 };
 
 
@@ -3957,6 +5150,259 @@ protected:
   P2 myP2;
   P3 myP3;
   P4 myP4;
+};
+
+
+
+
+/// Functor for a const member function with return value and 5 parameters
+/**
+   This is a class for const member functions which take 5 parameters
+   and return a value. This class contains the knowledge on how to
+   call a member function on a particular instance of a class. This
+   class should be instantiated by code that wishes to pass off a
+   functor to another piece of code.
+   
+   For an overall description of functors, see ArFunctor.  */
+template<class Ret, class T, class P1, class P2, class P3, class P4, class P5>
+class ArConstRetFunctor5C : public ArRetFunctor5<Ret, P1, P2, P3, P4, P5>
+{
+public:
+
+  /// Constructor
+  ArConstRetFunctor5C() {}
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+  */
+  ArConstRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5) const) :
+    myObj(&obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+  */
+  ArConstRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArConstRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArConstRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2, P3 p3) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+  */
+  ArConstRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+     @param p5 default fifth parameter
+  */
+  ArConstRetFunctor5C(T &obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myObj(&obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+
+
+  /// Constructor - supply function pointer
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+  */
+  ArConstRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5) const) :
+    myObj(obj), myFunc(func), myP1(), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+  */
+  ArConstRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+  */
+  ArConstRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+  */
+  ArConstRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2, P3 p3) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(), myP5() {}
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+ */
+  ArConstRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2, P3 p3, P4 p4) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5() {}
+
+
+  /// Constructor - supply function pointer, default parameters
+  /**
+     @param obj object to call function on
+     @param func const member function pointer
+     @param p1 default first parameter
+     @param p2 default second parameter
+     @param p3 default third parameter
+     @param p4 default fourth parameter
+	 @param p5 default fifth parameter
+ */
+  ArConstRetFunctor5C(T *obj, Ret (T::*func)(P1, P2, P3, P4, P5) const, P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) :
+    myObj(obj), myFunc(func), myP1(p1), myP2(p2), myP3(p3), myP4(p4), myP5(p5) {}
+
+  /// Destructor
+  virtual ~ArConstRetFunctor5C() {}
+
+  /// Invokes the functor with return value
+  virtual Ret invokeR(void) {return (myObj->*myFunc)(myP1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+  */
+  virtual Ret invokeR(P1 p1) {return (myObj->*myFunc)(p1, myP2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2) {return (myObj->*myFunc)(p1, p2, myP3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 second parameter
+  */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3) 
+    {return (myObj->*myFunc)(p1, p2, p3, myP4, myP5);}
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+ */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4) 
+    {return (myObj->*myFunc)(p1, p2, p3, p4, myP5);}
+
+
+  /// Invokes the functor with return value
+  /**
+     @param p1 first parameter
+     @param p2 second parameter
+     @param p3 third parameter
+     @param p4 fourth parameter
+     @param p5 fifth parameter
+ */
+  virtual Ret invokeR(P1 p1, P2 p2, P3 p3, P4 p4, P5 p5) 
+    {return (myObj->*myFunc)(p1, p2, p3, p4, p5);}
+
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T *obj) {myObj=obj;}
+
+  /// Set the 'this' pointer
+  /**
+     @param obj the 'this' pointer
+  */
+  virtual void setThis(T &obj) {myObj=&obj;}
+
+  /// Set the default parameter
+  /**
+     @param p1 default first parameter
+  */
+  virtual void setP1(P1 p1) {myP1=p1;}
+
+  /// Set the default 2nd parameter
+  /**
+     @param p2 default second parameter
+  */
+  virtual void setP2(P2 p2) {myP2=p2;}
+
+  /// Set the default third parameter
+  /**
+     @param p3 default third parameter
+  */
+  virtual void setP3(P3 p3) {myP3=p3;}
+
+  /// Set the default fourth parameter
+  /**
+     @param p4 default fourth parameter
+  */
+  virtual void setP4(P4 p4) {myP4=p4;}
+
+  /// Set the default fifth parameter
+  /**
+     @param p5 default fifth parameter
+  */
+  virtual void setP5(P5 p5) {myP5=p5;}
+
+protected:
+
+  T *myObj;
+  Ret (T::*myFunc)(P1, P2, P3, P4, P5) const;
+  P1 myP1;
+  P2 myP2;
+  P3 myP3;
+  P4 myP4;
+  P5 myP5;
 };
 
 

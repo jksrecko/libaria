@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARVCC4_H
 #define ARVCC4_H
@@ -188,18 +188,23 @@ public:
   AREXPORT bool getPower(void) { return myPowerState; }
   AREXPORT virtual bool init(void) { myInitRequested = true; return true; }
   AREXPORT virtual void reset(void) { ArPTZ::reset(); init(); }
+  AREXPORT virtual const char  *getTypeName() { return "vcc4"; }
 
   /// Returns true if the camera has been initialized
-  AREXPORT bool isInitted(void) { return myCameraIsInitted; }
+   bool isInitted(void) { return myCameraIsInitted; }
   AREXPORT virtual void connectHandler(void);
   AREXPORT virtual bool packetHandler(ArBasePacket *packet);
 
-  AREXPORT virtual bool pan(double deg) { return panTilt(deg, myTiltDesired); }
-  AREXPORT virtual bool panRel(double deg) { return panTilt(myPanDesired + deg, myTiltDesired); }
-  AREXPORT virtual bool tilt(double deg) { return panTilt(myPanDesired, deg); }
-  AREXPORT virtual bool tiltRel(double deg) { return panTilt(myPanDesired, myTiltDesired + deg); }
-  AREXPORT virtual bool panTiltRel(double pdeg, double tdeg) { return panTilt(myPanDesired + pdeg, myTiltDesired + tdeg); }
+protected:
+   virtual bool pan_i(double deg) { return panTilt_i(deg, myTiltDesired); }
+   virtual bool panRel_i(double deg) { return panTilt_i(myPanDesired + deg, myTiltDesired); }
+   virtual bool tilt_i(double deg) { return panTilt_i(myPanDesired, deg); }
+   virtual bool tiltRel_i(double deg) { return panTilt_i(myPanDesired, myTiltDesired + deg); }
+   virtual bool panTiltRel_i(double pdeg, double tdeg) { return panTilt_i(myPanDesired + pdeg, myTiltDesired + tdeg); }
 
+public:
+
+  /*
   AREXPORT virtual double getMaxPosPan(void) const 
     { if (myInverted) return invert(MIN_PAN); else return MAX_PAN; }
   AREXPORT virtual double getMaxNegPan(void) const 
@@ -208,6 +213,7 @@ public:
     { if (myInverted) return invert(MIN_TILT); else return MAX_TILT; }
   AREXPORT virtual double getMaxNegTilt(void) const
     { if (myInverted) return invert(MAX_TILT); else return MIN_TILT; }
+ */
 
   /// Requests that a packet be sent to the camera to retrieve what
   /// the camera thinks are its pan/tilt positions. getPan() and getTilt()
@@ -221,7 +227,10 @@ public:
 
   AREXPORT virtual bool canZoom(void) const { return true; }
 
-  AREXPORT virtual bool panTilt(double pdeg, double tdeg);
+protected:
+  AREXPORT virtual bool panTilt_i(double pdeg, double tdeg);
+
+public:
   AREXPORT virtual bool zoom(int deg);
   /// adjust the digital zoom amount.  Has four states, takes 0-3 for:
   /// 1x, 2x, 4x, 8x
@@ -244,12 +253,16 @@ public:
   AREXPORT bool panSlew(double deg) { myPanSlewDesired = deg; return true; }
   /// Sets the rate the unit tilts at 
   AREXPORT bool tiltSlew(double deg) { myTiltSlewDesired = deg; return true; }
+  bool canSetPanTiltSlew() { return true; }
 
   /// Adds device ID and delimeter to packet buffer
   AREXPORT void preparePacket(ArVCC4Packet *packet);
 
-  AREXPORT virtual double getPan(void) const { return myPanDesired; }
-  AREXPORT virtual double getTilt(void) const { return myTiltDesired; }
+protected:
+  AREXPORT virtual double getPan_i(void) const { return myPanDesired; }
+  AREXPORT virtual double getTilt_i(void) const { return myTiltDesired; }
+
+public:
   AREXPORT virtual int getZoom(void) const { return myZoomDesired; }
   AREXPORT double getDigitalZoom(void) const { return myDigitalZoomDesired; }
 
@@ -370,9 +383,9 @@ protected:
   };
 
   // flips the sign if needed
-  double invert(double before) const
-    { if (myInverted) return -before; else return before; }
-  bool myInverted;
+  //double invert(double before) const
+  //  { if (myInverted) return -before; else return before; }
+ // bool myInverted;
 
   // true if there was an error during the last cycle
   bool myWasError;
@@ -567,6 +580,19 @@ protected:
 
   // the list of error callbacks to step through when a error occurs
   std::list<ArFunctor *> myErrorCBList;
+
+  /// Used by ArPTZConnector to create an ArVCC4 object based on robot parameters and program options.
+  /// @since 2.7.6
+  /// @internal
+  static ArPTZ* create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot);
+  /// Used by ArPTZConnector to create an ArVCC4 object based on robot parameters and program options.
+  /// @since 2.7.6
+  /// @internal
+  static ArPTZConnector::GlobalPTZCreateFunc ourCreateFunc;
+public:
+#ifndef SWIG
+  static void registerPTZType(); ///<@internal Called by Aria::init() toregister this class with ArPTZConnector for vcc4 and vcc50i PTZ types. @since 2.7.6
+#endif
 };
 
 #endif // ARVCC4_H

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,18 +19,22 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include <errno.h>
 #include <time.h>
 #include <math.h>
+#include <sys/time.h>
+#include <string.h>
 #include "ariaOSDef.h"
 #include "ArCondition.h"
 #include "ArLog.h"
-#include <sys/time.h>
+
+#include <time.h>
+
 
 ArStrMap ArCondition::ourStrMap;
 
@@ -38,7 +42,7 @@ ArStrMap ArCondition::ourStrMap;
 AREXPORT ArCondition::ArCondition() :
   myFailedInit(false),
   myCond(),
-  myMutex()
+  myMutex(false)
 {
   myMutex.setLogName("ArCondition::myMutex");
   pthread_condattr_t attr;
@@ -153,8 +157,6 @@ AREXPORT int ArCondition::timedWait(unsigned int msecs)
 {
   int ret;
   int retUnlock;
-  struct timespec spec;
-  struct timeval  tp;
 
   if (myFailedInit)
   {
@@ -171,6 +173,7 @@ AREXPORT int ArCondition::timedWait(unsigned int msecs)
       return(STATUS_MUTEX_FAILED);
   }
 
+  /*
   gettimeofday(&tp, NULL);
   // convert time of day to pthread time structure
   spec.tv_sec = tp.tv_sec;
@@ -181,8 +184,36 @@ AREXPORT int ArCondition::timedWait(unsigned int msecs)
   // 1 millisecond = 1000 micro seconds = 1000000 nanoseconds
   spec.tv_nsec += (long int)( ( msecs % 1000 ) * 1000000);
 //   printf("input millisecond=%d :: sec=%ld nsec=%ld curtime=%ld %ld\n", msecs, spec.tv_sec, spec.tv_nsec, tp.tv_sec, tp.tv_usec * 1000);
+*/
+  struct timespec spec;
+#ifdef _POSIX_TIMERS
+  clock_gettime(CLOCK_REALTIME, &spec);
+#else
+#warning posix realtime timer not available so using gettimeofday instead of clock_gettime
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  spec.tv_sec = tp.tv_sec;
+  spec.tv_nsec = tp.tv_usec * 1000;
+#endif
 
+  spec.tv_sec += msecs / 1000;
+  spec.tv_nsec += msecs * 1000 * 1000;
+  if (spec.tv_nsec > 1000 * 1000 * 1000)
+  {
+    spec.tv_sec += 1;
+    spec.tv_nsec -= 1000 * 1000 * 1000;
+  }
+  
+
+  int timedWaitErrno;
+  
   ret=pthread_cond_timedwait(&myCond, &myMutex.getMutex(), &spec);
+  timedWaitErrno = errno;
+
+  /*
+  if (ret != 0)
+    ArLog::logErrorFromOS(ArLog::Terse, "ArCondition::timedWait: Unknown error while trying to wait on the condition. Ret %d, %s", ret, strerror(ret));
+  */
 
   // must unlock the mutex, even if we fail, since we reacquire lock
   // after timedwait times out
@@ -196,7 +227,10 @@ AREXPORT int ArCondition::timedWait(unsigned int msecs)
       return(STATUS_WAIT_TIMEDOUT);
     else
     {
-      ArLog::log(ArLog::Terse, "ArCondition::timedWait: Unknown error while trying to wait on the condition.");
+      ArLog::logErrorFromOS(ArLog::Terse, "ArCondition::timedWait: Unknown error while trying to wait on the condition. Ret %d, %s.  Errno %d, %s.", 
+			    ret, strerror(ret),
+			    timedWaitErrno, strerror(timedWaitErrno));
+
       return(STATUS_FAILED);
     }
   }

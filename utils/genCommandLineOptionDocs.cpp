@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "Aria.h"
@@ -47,15 +47,18 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
  * 
  * If FOR_ARIA is defined, then the classes whose options are included are:
  *   ArRobotConnector
- *   ArLaserConnector with LMS2xx
- *   ArLaserConnector with LMS1xx
+ *   ArLaserConnector with Sick LMS2xx
+ *   ArLaserConnector with Sick LMS1xx
  *   ArLaserConnector with URG 1.0
  *   ArLaserConnector with URG 2.0
  *   ArLaserConnector with LMS5xx
  *   ArLaserConnector with SICK S3xxx Series
  *   ArLaserConnector with Keyence SZ Series
+ *   ArLaserConnector with SICK TiM3XX
+ *   ArPTZConnector
  *   ArGPSConnector
  *   ArCompassConnector
+ *   ArSonarConnector
  *   [ArDaemonizer?]
  * 
  * If FOR_ARNETWORKING is defined, then these classes are also included:
@@ -67,7 +70,10 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
 
 /* Wrapper classes provide a standardized publically accessible logOptions()
- * method for each class that have the ability to log options in some way. */
+ * method for each class that have the ability to log options in some way. 
+ * (They can all be stored as Wrapper classes below, and they expose
+ * logOptions() as a public method instead of private.)
+ */
 
 class Wrapper {
 public:
@@ -80,6 +86,8 @@ public:
 #include "ArRobotConnector.h"
 #include "ArGPSConnector.h"
 #include "ArTCM2.h"
+#include "ArSonarConnector.h"
+#include "ArPTZConnector.h"
 
 class ArRobotConnectorWrapper : 
   public ArRobotConnector,  public virtual Wrapper
@@ -95,6 +103,20 @@ public:
   }
 };
 
+class ArPTZConnectorWrapper :
+  public ArPTZConnector, public virtual Wrapper
+{
+public:
+  ArPTZConnectorWrapper(ArArgumentParser *argParser) :
+    ArPTZConnector(argParser, NULL)
+  {
+  }
+  virtual void logOptions()
+  {
+    ArPTZConnector::logOptions();
+  }
+};
+
 
 class ArLaserConnectorWrapper : 
   public ArLaserConnector,  public virtual Wrapper
@@ -107,11 +129,13 @@ class ArLaserConnectorWrapper :
   ArLMS1XX lms5xxLaser;
   ArS3Series s3xxLaser;
   ArSZSeries szLaser;
+  ArLMS1XX tim3xxLaser;
 public:
   ArLaserConnectorWrapper(ArArgumentParser *argParser) :
     ArLaserConnector(argParser, NULL, NULL),
-    lms2xxLaser(1), urgLaser(1), urg2Laser(1), lms1xxLaser(1),
-    lms5xxLaser(1, "lms5xx", true), s3xxLaser(1), szLaser(1)
+    lms2xxLaser(1), urgLaser(1), urg2Laser(1), lms1xxLaser(1, "lms1xx", ArLMS1XX::LMS1XX),
+    lms5xxLaser(1, "lms5xx", ArLMS1XX::LMS5XX), s3xxLaser(1), szLaser(1),
+    tim3xxLaser(1, "tim3XX", ArLMS1XX::TiM3XX)
   {
   }
   virtual void logOptions()
@@ -173,6 +197,11 @@ public:
     puts("\nFor laser type \"s3series\" (SICK S-300, S-3000, etc.):\n");
     addPlaceholderLaser(&s3xxLaser, 1); // replace previous
     ArLaserConnector::logLaserOptions(myLasers[1], false, false);
+
+    // TiM3xx
+    puts("\nFor laser type \"tim3XX\" (SICK TiM300):\n");
+    addPlaceholderLaser(&tim3xxLaser, 1); // replace previous
+    ArLaserConnector::logLaserOptions(myLasers[1], false, false);
   }
 };
 
@@ -203,6 +232,21 @@ public:
   virtual void logOptions()
   {
     ArCompassConnector::logOptions();
+  }
+};
+
+class ArSonarConnectorWrapper:
+  public ArSonarConnector,
+  public virtual Wrapper
+{
+public:
+  ArSonarConnectorWrapper(ArArgumentParser *argParser) :
+    ArSonarConnector(argParser, NULL, NULL)
+  {
+  }
+  virtual void logOptions()
+  {
+    ArSonarConnector::logOptions();
   }
 };
 #endif
@@ -289,8 +333,10 @@ int main(int argc, char **argv)
 #ifdef FOR_ARIA
   wrappers.push_back(WrapPair("ArRobotConnector", new ArRobotConnectorWrapper(&argParser)));
   wrappers.push_back(WrapPair("ArLaserConnector", new ArLaserConnectorWrapper(&argParser)));
+  wrappers.push_back(WrapPair("ArPTZConnector", new ArPTZConnectorWrapper(&argParser)));
   wrappers.push_back(WrapPair("ArGPSConnector", new ArGPSConnectorWrapper(&argParser)));
   wrappers.push_back(WrapPair("ArCompassConnector", new ArCompassConnectorWrapper(&argParser)));
+  wrappers.push_back(WrapPair("ArSonarConnector", new ArSonarConnectorWrapper(&argParser)));
 #endif
 
 #ifdef FOR_ARNETWORKING

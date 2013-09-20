@@ -4,7 +4,8 @@ CFILEEXT:=cpp
 ifndef CXX
 CXX=g++
 endif
-CXXFLAGS+= -fPIC -g -Wall -D_REENTRANT -fno-exceptions
+BARECXXFLAGS:=-fPIC -g -Wall -D_REENTRANT  #-pg -fprofile-arcs
+CXXFLAGS+=$(BARECXXFLAGS) -fno-exceptions 
 CXXINC:=-I../include -Iinclude 
 CXXLINK:=-L../lib -lAria -lArNetworking -lpthread -ldl -lrt \
 	-Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
@@ -59,6 +60,7 @@ CFILES:= \
 	ArServerSimpleCommands.cpp \
 	ArServerSimpleOpener.cpp \
 	ArServerUserInfo.cpp \
+	ArTempDirectoryHelper.cpp \
 	md5.cpp
 
 
@@ -82,22 +84,22 @@ dirs:
 	@mkdir -p -v ../obj
 	@mkdir -p -v ../lib
 
-../lib/libArNetworking.so: $(OFILES) Makefile.dep 
+../lib/libArNetworking.so: $(OFILES) ../lib/libAria.so Makefile.dep 
 	@mkdir -p -v ../obj
 	@mkdir -p -v ../lib
 	$(CXX) -shared 	-Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic -o $(@) $(OFILES) 
 
-../lib/libArNetworking.a: $(OFILES) Makefile.dep
+../lib/libArNetworking.a: $(OFILES) ../lib/libAria.a Makefile.dep
 	@mkdir -p -v ../obj
 	@mkdir -p -v ../lib
 	ar -cr $(@) $(OFILES)
 	ranlib $(@)
 
 
-examples: dirs $(EXAMPLES) Makefile.dep ../lib/libArNetworking.so
+examples: dirs $(EXAMPLES) Makefile.dep 
 
 
-tests: dirs $(TESTS) Makefile.dep ../lib/libArNetworking.so
+tests: dirs $(TESTS) Makefile.dep 
 
 clean: cleanExamples
 	rm -f ../lib/libArNetworking.so ../lib/libArNetworking.a \
@@ -117,7 +119,7 @@ cleanDoc:
 	-rm -f docs/*.html docs/*.png docs/*.png
 	-rm -rf docs/tmp
 
-cleanAll: clean cleanExamples cleanJava cleanPython cleanDoc
+fullClean: clean cleanExamples cleanJava cleanPython cleanDoc
 
 docs: doc
 doc: docs/index.html
@@ -131,7 +133,7 @@ docs/index.html: $(SRC_FILES) $(HEADER_FILES) $(EXAMPLES_CPP) doxygen.conf docs/
 
 #doxygen.conf: FORCE
 #	$(MAKE) -C .. ArNetworking/$@
-
+#
 #CommandLineOptions.txt: FORCE
 #	$(MAKE) -C .. ArNetworking/$@
 
@@ -165,10 +167,10 @@ dep: clean
 # But don't delete .o files if we do make them in order to make a library:
 .PRECIOUS: $(OFILES)
 
-examples/%: examples/%.$(CFILEEXT) ../lib/libArNetworking.so Makefile.dep
+examples/%: examples/%.$(CFILEEXT) ../lib/libAria.so ../lib/libArNetworking.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXLINK)
 
-tests/%: tests/%.$(CFILEEXT) ../lib/libArNetworking.so Makefile.dep
+tests/%: tests/%.$(CFILEEXT) ../lib/libAria.so ../lib/libArNetworking.so Makefile.dep
 	$(CXX) $(CXXFLAGS) $(CXXINC) $< -o $@ $(CXXLINK)
 
 
@@ -192,7 +194,9 @@ genCommandLineOptionDocs: ../utils/genCommandLineOptionDocs.cpp ../lib/libAria.s
 ifdef PYTHON_INCLUDE
 PYTHON_INCLUDE_FLAGS=-I$(PYTHON_INCLUDE)
 else
+ifdef DIST_INSTALL
 $(warning WARNING using default value of /usr/include/python2.5 for PYTHON_INCLUDE directory. Set PYTHON_INCLUDE environment variable if you would like to use a different version of the Python C development library to build the Python ARIA wrapper.)
+endif
 PYTHON_INCLUDE:=/usr/include/python2.5
 PYTHON_INCLUDE_FLAGS=-I/usr/include/python2.5
 endif
@@ -206,12 +210,12 @@ ariaPython:
 	cd ../python; swig -c++ -python -module ArNetworkingPy -Dlinux -DAREXPORT -o ArNetworkingPy_wrap.cpp -I../include -I../ArNetworking/include ../ArNetworking/include/wrapper.i  
 
 ../python/_ArNetworkingPy.so: ../obj/ArNetworkingPy_wrap.o ../lib/libArNetworking.so Makefile.dep
-	$(CXX) -shared -o $(@) ../obj/ArNetworkingPy_wrap.o -lpthread -ldl -lrt \
+	$(CXX) $(BARECXXFLAGS) -shared -o $(@) ../obj/ArNetworkingPy_wrap.o -lpthread -ldl -lrt \
 	-L../lib -lAria -lArNetworking
 
 ../obj/ArNetworkingPy_wrap.o: ../python/ArNetworkingPy_wrap.cpp
 	@ if test -z "$(PYTHON_INCLUDE)"; then echo "*** Error: PYTHON_INCLUDE is not set, cannot build ArNetworking python wrapper! ***"; exit 1; fi
-	$(CXX) -c -fPIC -Wall -D_REENTRANT -g $(CXXINC) -I$(PYTHON_INCLUDE) $< -o $@
+	$(CXX) -c $(BARECXXFLAGS) -g $(CXXINC) -I$(PYTHON_INCLUDE) $< -o $@
 
 
 ## Java SWIG wrapper ##
@@ -238,11 +242,11 @@ cleanJava:
 	-rm ../java/ArNetworkingJava_wrap.* ../obj/ArNetworkingJava_wrap.o ../lib/libArNetworkingJava.so
 
 ../lib/libArNetworkingJava.so: ../obj/ArNetworkingJava_wrap.o Makefile.dep ../lib/libArNetworking.so
-	$(CXX) -shared -o $(@) ../obj/ArNetworkingJava_wrap.o -lpthread -ldl -lrt -L../lib -lAria -lArNetworking
+	$(CXX) $(BARECXXFLAGS) -shared -o $(@) ../obj/ArNetworkingJava_wrap.o -lpthread -ldl -lrt -L../lib -lAria -lArNetworking
 
 ../obj/ArNetworkingJava_wrap.o: ../java/ArNetworkingJava_wrap.cpp
 	@ if test -z "$(JAVA_INCLUDE)"; then echo "*** Error: JAVA_INCLUDE is not set, building ArNetworkingPy_wrap.cpp will probably fail! ***"; fi
-	$(CXX) -c $(CXXFLAGS) $(CXXINC) -I$(JAVA_INCLUDE) -I$(JAVA_INCLUDE)/linux $< -o $@
+	$(CXX) -c $(BARECXXFLAGS) $(CXXINC) -I$(JAVA_INCLUDE) -I$(JAVA_INCLUDE)/linux $< -o $@
 
 FORCE:
 
@@ -254,15 +258,3 @@ include Makefile.dep
 # End of the Makefile.dep check
 endif
 
-
-### dist
-# Include rules for creating distribution packages, if enabled
-# (for MobileRobots internal use)
-ifdef ARIA_DIST
-ifeq (../dist/Makefile.aria-dist,$(wildcard ../dist/Makefile.aria-dist))
-$(info in ArNetworking/Makfeile ARIA_DIST variable is set and ../dist/Makefile.aria-dist exists, including it)
-include ../dist/Makefile.aria-dist
-else
-$(warning in ArNetworking/Makefile ARIA_DIST variable is set but ../dist/Makefile.aria-dist not found, skipping it)
-endif
-endif

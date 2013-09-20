@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "Aria.h"
 //#include <time.h>
@@ -48,6 +48,7 @@ void *TestThread::runThread(void *arg)
 {
   unsigned int interval;
 
+puts("new thread running...");
   while (myRunning)
   {
     // Yield the processor here so that the other threads get a chance
@@ -72,6 +73,8 @@ void *TestThread::runThread(void *arg)
 
 int main(int argc, char **argv) 
 {
+puts("Aria init...");
+fflush(stdout);
   Aria::init(Aria::SIGHANDLE_THREAD, false);
 
   ArMutex mutex;
@@ -86,9 +89,11 @@ int main(int argc, char **argv)
   thread2.setThreadName("thread2");
   thread3.setThreadName("thread3");
   thread4.setThreadName("thread4");
+puts("srand...");
   srand(time(0));
 
 
+puts("creating 3 threads...");
   thread1.create();
   thread2.create();
   thread3.create();
@@ -98,6 +103,8 @@ int main(int argc, char **argv)
   printf("thread2 thread name=\"%s\", OS handle=%lu, OS pointer=0x%x\n", thread2.getThreadName(), thread2.getOSThread(), (unsigned int) thread2.getThread());
   printf("thread3 thread name=\"%s\", OS handle=%lu, OS pointer=0x%x\n", thread3.getThreadName(), thread3.getOSThread(), (unsigned int) thread3.getThread());
   printf("thread4 (not created yet) thread name=\"%s\", OS handle=%lu, OS pointer=0x%x\n", thread4.getThreadName(), thread4.getOSThread(), (unsigned int) thread4.getThread());
+
+#ifndef MINGW
   if(ArThread::getThisOSThread() == thread1.getOSThread() ||
      ArThread::getThisOSThread() == thread2.getOSThread() ||
      ArThread::getThisOSThread() == thread3.getOSThread() ||
@@ -118,10 +125,13 @@ int main(int argc, char **argv)
     puts("error, some thread IDs are the same!");
     return 5;
   }
+#endif
 
+puts("run thread 4 in main thread");
   thread4.runInThisThread();
 
-  Aria::shutdown();
+puts("exit");
+  Aria::exit(0);
 
   return(0);
 }

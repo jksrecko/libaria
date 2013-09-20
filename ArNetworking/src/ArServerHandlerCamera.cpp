@@ -536,9 +536,9 @@ AREXPORT void ArServerHandlerCamera::handleGetCameraInfo(ArServerClient *client,
   double maxZoom = 100;
   bool isZoomAvailable = myCamera->canZoom();
 
-  ArLog::log(ArLog::Normal, 
-             "minPan %f maxPan %f minTilt %f maxTilt %f minZoom %f maxZoom %f isZoomAvailable %d", 
-             minPan, maxPan, minTilt, maxTilt, minZoom, maxZoom, isZoomAvailable);
+  ArLog::log(ArLog::Verbose, 
+             "ArServerHandlerCamera: client requested camera info (my camera name is %s), returning: minPan %f maxPan %f minTilt %f maxTilt %f minZoom %f maxZoom %f isZoomAvailable %d", 
+             myCameraName.c_str(), minPan, maxPan, minTilt, maxTilt, minZoom, maxZoom, isZoomAvailable);
 
   myRobot->unlock();
 

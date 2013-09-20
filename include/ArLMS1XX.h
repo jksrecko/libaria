@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARLMS1XX_H
 #define ARLMS1XX_H
@@ -101,6 +101,10 @@ public:
 					 bool shortcut = false, 
 					 bool ignoreRemainders = false);
 
+  AREXPORT ArLMS1XXPacket *receiveTiMPacket(unsigned int msWait = 0,
+					 bool shortcut = false, 
+					 bool ignoreRemainders = false);
+
   /// Sets the device this instance receives packets from
   AREXPORT void setDeviceConnection(ArDeviceConnection *conn);
   /// Gets the device this instance receives packets from
@@ -109,10 +113,13 @@ public:
   // PS - added to pass info to this class
   AREXPORT void	setmyInfoLogLevel(ArLog::LogLevel infoLogLevel)
   { myInfoLogLevel = infoLogLevel; }
-  AREXPORT void setmyIsLMS5XX(bool isLMS5xx)
-  { myIsLMS5XX = isLMS5xx; }
+  AREXPORT void setLaserModel(int laserModel)
+  { myLaserModel = laserModel; }
   AREXPORT void setmyName(const char *name )
   { strcpy(myName, name); }
+  AREXPORT void setReadTimeout(int timeout )
+  { myReadTimeout = timeout; }
+
 
 protected:
   ArDeviceConnection *myConn;
@@ -129,7 +136,10 @@ protected:
   unsigned int myNameLength;
   char myReadBuf[100000];
   int myReadCount;
-  bool myIsLMS5XX;
+	int myReadTimeout;
+
+	int myLaserModel;
+
   ArLog::LogLevel myInfoLogLevel;
 };
 
@@ -137,17 +147,35 @@ protected:
   @since Aria 2.7.2
   @see ArLaserConnector
   Use ArLaserConnector to connect to a laser, determining type based on robot and program configuration  parameters.
+
+  This is the ArLaser implementation for SICK LMS1xx, LMS5xx, and TiM3xx lasers. To use these lasers with ArLaserConnector, specify 
+  the appropriate type in program configuration (lms1xx, lms6xx, or tim3xx).
 */
 class ArLMS1XX : public ArLaser
 {
 public:
+
+	enum LaserModel
+	{
+		LMS1XX, 
+		LMS5XX,
+		TiM3XX
+	};
+
   /// Constructor
 	  AREXPORT ArLMS1XX(int laserNumber,
-			    const char *name = "lms1or5xx",
-			    bool laserIslms500 = true);
+			    const char *name,
+					LaserModel laserModel);
+
   /// Destructor
   AREXPORT ~ArLMS1XX();
   AREXPORT virtual bool blockingConnect(void);
+
+	// specific init routine per laser
+  AREXPORT virtual bool lms5xxConnect(void);
+  AREXPORT virtual bool lms1xxConnect(void);
+  AREXPORT virtual bool tim3xxConnect(void);
+
   AREXPORT virtual bool asyncConnect(void);
   AREXPORT virtual bool disconnect(void);
   AREXPORT virtual bool isConnected(void) { return myIsConnected; }
@@ -163,6 +191,8 @@ public:
 
   /// Logs the information about the sensor
   AREXPORT void log(void);
+
+
 protected:
   AREXPORT virtual void laserSetName(const char *name);
   AREXPORT virtual void * runThread(void *arg);
@@ -172,7 +202,11 @@ protected:
   void sensorInterp(void);
   void failedToConnect(void);
   void clear(void);
-  bool myIsLMS5XX;
+	bool validateCheckSum(ArLMS1XXPacket *packet);
+
+  LaserModel myLaserModel;
+  //bool myIsLMS5XX;
+
   bool myIsConnected;
   bool myTryingToConnect;
   bool myStartConnect;

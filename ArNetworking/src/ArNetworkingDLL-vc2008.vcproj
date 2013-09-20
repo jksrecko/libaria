@@ -503,6 +503,10 @@
 				RelativePath=".\ArServerUserInfo.cpp"
 				>
 			</File>
+			<File
+				RelativePath=".\ArTempDirectoryHelper.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -674,6 +678,10 @@
 			</File>
 			<File
 				RelativePath="..\include\ArServerUserInfo.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\ArTempDirectoryHelper.h"
 				>
 			</File>
 			<File

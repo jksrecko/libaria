@@ -55,11 +55,16 @@ AREXPORT void ArServerInfoStrings::buildStringsInfoPacket(void)
 AREXPORT void ArServerInfoStrings::buildStringsPacket(void)
 {
   myStringsMutex.lock();
+
+  /* This part didn't work since the last string packet build was
+   * never set, so just commenting it since it caused problems when
+   * the value wrapped
   if (myLastStringPacketBuild.mSecSince() < 100)
   {
     myStringsMutex.unlock();
     return;
   }
+  */
 
   myStringPacket.empty();
   std::list<ArStringInfoHolder *>::iterator it;
@@ -109,3 +114,25 @@ AREXPORT void ArServerInfoStrings::addString(
 }
 
 
+AREXPORT ArStringInfoHolder *ArServerInfoStrings::internalGetStringInfoHolder(
+	const char *name)
+{
+  myStringsMutex.lock();
+  std::list<ArStringInfoHolder *>::iterator it;
+  ArStringInfoHolder *info;
+  
+  for (it = myStrings.begin(); it != myStrings.end(); it++)
+  {
+    info = (*it);
+    if (ArUtil::strcasecmp(info->getName(), name) == 0)
+    {
+      myStringsMutex.unlock();
+      return info;
+    }
+    myStringInfoPacket.strToBuf(info->getName());
+    myStringInfoPacket.uByte2ToBuf(info->getMaxLength());
+  }
+    
+  myStringsMutex.unlock();
+  return NULL;
+}

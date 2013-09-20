@@ -1,5 +1,123 @@
+Aria 2.8.0
+August 22, 2013
+---------------------------
+
+This release adds support for the Pioneer LX. The Pioneer LX is the first 
+of a new type of robots referred to as the MTX generation or type.  MTX is
+largely compatible with previous Pioneer type robots, with the exception of
+connections to sonar, battery, LCD, IO and some other components.  The 
+ARIA API is largely the same, remaining transparently compatible, but you may
+need to use some MTX-specific classes for certain MTX-specific fetaures, in
+particular general purpose IO via the ArMTXIO class.  See the MTX-specific
+example programs in the examples/ directory for examples of use of these
+features. A more detailed summary of classes added or changes made for MTX is
+below.
+
+2.8.0 has been released for Linux only.  A release with Windows support is
+forthcoming.
+
+MTX LCD display implementation is incomplete in 2.8.0. An update will be
+released in the future with complete LCD support (with robot firmware upgrade
+if needed.)
+
+Analog IO support is incomplete, this will also be added in the next update.
+
+Additional changes made in this release of ARIA include:
+  * Support for the SICK TiM300 laser rangefinder. Use the tim3xx laser type
+    identifier in robot configuration or command-line parameters.  (Implemented
+    internally as a variant in ArLMS1xx class)
+  * ArRobot disables the robot motors explicitly before disconnecting on exit
+  * ArActionDeceleratingLimiter now has option to limit rotation as well as
+    translation
+  * ArActionLimiterRot added, which can be used to limit rotation separately
+    from other actions.
+  * ArActionTriangleDriveTo improved
+  * List parameter type added (and other API changes) to ArConfig, though not 
+    generally used in ARIA or ARNL yet.
+  * ArRobotJoyHandler can now be connected to ArConfig for user control of
+    some parameters.
+  * SICK S300 support has been improved
+  * RS-422 support in ArSerialConnection now available in Windows as well as
+    Linux
+  * ArSonarAutoDisabler can now be temporarily supressed with a method or 
+    functor call.
+  * ArSoundsQueue can call callbacks before and after each item is played.
+  * Signed and unsigned long int values can now be added to ArStringInfoGroup
+  * strSuffixCmp(), strSuffixCaseCmp(), stripQuotes() methods added to ArUtil
+  * Equal and not equal (== and !=) operators added to ArLine
+  * Negative and positive rotational velocity limits separated in
+    ArActionDesired
+  * ArArgumentBuilder handling of spaces and quotes can be customized a bit
+  * State of charge, lateral velocity, and battery data added to ArDataLogger.
+  * ArLog::logBacktrace() added for Linux, which calls Linux backtrace() system
+    call.
+  * Diagnostic ArMutex lock timing can be used on Windows now.
+  * ArFunctor classes added which can pass five arguments
+   
+ArNetworking changes include:
+  * Number of connected clients can be limited in ArServerBase
+  * ArServerHandlerMapping can call callbacks before and after mapping is done,
+    and can also be given additional ArLaser interfaces to include in the scan
+    log.
+  * ArServerMode objects have a new "extended status" field which can hold 
+    details in addition to mode name and status field.  This is also provided
+    to clients for the active server mode by ArServerInfoRobot in addition to
+    existing mode name and status. Extended status may contain multiple lines
+    (normal status is expected to not contain any newlines)
+
+Details of MTX (Pioneer LX) additions:
+  * ArMTXIO class added. Communicates with "mtx" operating system driver to
+    interface with MTX digital general purpose IO and power control.
+  * ArSonarConnector and ArSonarMTX classes.  By default the connection to MTX sonar
+    is handled automatically by ArRobotConnector, no changes to existing
+    software need to be made. The existing ArSonarDevice and ArRobot API can be 
+    used with MTX sonar.
+  * ArBatteryConnector and ArBatteryMTX classes. By default, the connection to MTX 
+    battery is handled automatically by ArRobotConnector, no changes to existing
+    software needs to be made. The state of charge and other information is
+    available in the existing ArRobot API.  Extra diagnostic information about
+    the batter(ies) is provided in ArBatteryMTX objects which can be obtained 
+    from ArRobot.
+  * Default Pioneer LX parameters have been built in to ARIA  for "pioneer-lx"
+    type robots and a pioneer-lx.p 
+    parameter file is included in the params directory.  Early revisions of 
+    the MTX core report a robot subtype of "marc_devel" which is assumed to be
+    an LX.  
+  * A Pioneer LX model has been added to MobileSim  0.7.3
+  * mtxIO, mtxPowerControl and mtxWheelLights examples added. Other examples
+    including demo have been updated to use ArRobotConnector and other current
+    classes for MTX/LX compatability.  
+  * New command identifiers added to ArCommands
+  
+  
+
+Aria 2.7.6
+March 29, 2013
+---------------------------
+* Added ArPTZConnector, which can automatically create ArPTZ subclass instances 
+  based on configuration information read from robot parameer files (params/<type>.p,
+  params/<name>.p) and program command line arguments.   (See also the new ArVideo library
+  now available with this ARIA release.)  Some common functionality (inverted, limits) has
+  also been moved from individual ArPTZ subclasses into the ArPTZ class.
+* Robot parameters (ArRobotParams, defaults, and .p files) now contain parameters for PTZ and video devices
+  (used by new ArPTZConnector and ArVideo library)
+* The way subclasses of ArPTZ implement methods has changed. Inverting the axes
+  and other common functionality is now done in ArPTZ, subclasses implement _i
+  internal methods instead.  This is transparent to most users, but if you have
+  created a new subclass of ArPTZ you may need to update your class.
+* Increased GPS connection timeout to 20sec.
+* Added support for simulated or dummy GPS
+* Added new NMEA messages: GPHDG, GPHDM, GPHDT (for receivers with integrated compass)
+* Misc. documentation fixes and improvements, including class categories (e.g. essential,
+  optional, device interfaces, actions, etc.)
+* Desired sound playback volume can be set in ArSoundPlayer (implemented for Linux with 
+  sox tool).
+* Some SWIG and Windows DLL export fixes.
+* ArUtil::isOnlyNumeric() and ArUtil::isOnlyAlphaNumeric() now accept '+' and
+  '-' characters as valid parts of numeric and alphanumeric strings.
+
 Aria 2.7.5.2
-August 02, 2012
+August 2, 2012
 ---------------------------
 
 * Fixed regression in which start and end FOV angles couldn't be set in 
@@ -112,6 +230,7 @@ Bugs fixed:
 
 This version of libAria is compatible with libAria 2.7.0 and dependent
 libraries built with 2.7.0 will work with this version.
+
 
 
 Aria 2.7.0

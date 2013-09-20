@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARLOG_H
 #define ARLOG_H
@@ -43,6 +43,8 @@ class ArConfig;
    turned off completely. Logging by default is set to stdout. The level
    of logging can be changed as well. Allowed levels are Terse, Normal,
    and Verbose. By default the level is set to Normal.
+
+   @ingroup ImportantClasses
 */
 class ArLog
 {
@@ -98,6 +100,8 @@ public:
    * @swigomit */
   AREXPORT static void logNoLock(LogLevel level, const char *str, ...);
 #endif 
+  /// If possible (only in Linux right now) log the backtrace
+  AREXPORT static void logBacktrace(LogLevel level);
   // We use this to print to a Colbert stream, if available
   AREXPORT static void (* colbertPrint)(int i, const char *str);
 
@@ -114,6 +118,8 @@ public:
   
   /// Internal functor to be called when a log message is made (this shouldn't really be used)
   AREXPORT static void setFunctor(ArFunctor1<const char *> *functor);
+  /// Internal function to force a lockup, only for debugging
+  AREXPORT static void internalForceLockup(void);
 protected:
   AREXPORT static bool processFile(void);
 #ifndef ARINTERFACE
@@ -141,12 +147,15 @@ protected:
   static bool ourConfigAlsoPrint;
   static ArGlobalRetFunctor<bool> ourConfigProcessFileCB;
 
+#ifndef ARINTERFACE
   static char ourAramConfigLogLevel[1024];
   static double ourAramConfigLogSize;
   static ArGlobalRetFunctor<bool> ourAramConfigProcessFileCB;
   static bool ourUseAramBehavior;
   static double ourAramLogSize;
   static std::string ourAramPrefix;
+#endif
+
   static bool ourAramDaemonized;
   
   static ArFunctor1<const char *> *ourFunctor;

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARACTIONTRIANGLEDRIVETO
 #define ARACTIONTRIANGLEDRIVETO
@@ -30,7 +30,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArAction.h"
 #include "ArLineFinder.h"
 
-/// Action to drive up to a triangle target found from an ArLineFinder
+/// Action to drive up to a triangle target (e.g. docking station) found from an ArLineFinder
 /**
  * This action uses ArLineFinder to find continuous "lines" in
  * laser range finder data that meet at an angle, forming the point of a
@@ -64,6 +64,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
    If you want the action to position using the front of the robot
    then use setPositionFront().
+
+   @ingroup ActionClasses
  **/
 
 class ArActionTriangleDriveTo : public ArAction
@@ -105,7 +107,11 @@ public:
   void setVertexOffset(int localXOffset, int localYOffset, double thOffset) 
     { myLocalXOffset = localXOffset; myLocalYOffset = localYOffset; 
     myThOffset = thOffset; } 
-
+  /// Sets if we should use the legacy vertex mode or not
+  void setUseLegacyVertexOffset(bool useLegacyVertexOffset)
+    { myUseLegacyVertexOffset = useLegacyVertexOffset; }
+  /// Gets if we are use the legacy vertex mode or not
+  bool getUseLegacyVertexOffset(void) { return myUseLegacyVertexOffset; }
   /// Gets whether it always goto the vertex and not the point in front
   bool getGotoVertex(void) { return myGotoVertex; }
   /// Sets whether it always goto the vertex and not the point in front
@@ -119,7 +125,7 @@ public:
   /// Gets the distance to the triangle at which we start ignoring it
   double getIgnoreTriangleDist(void) { return myIgnoreTriangleDist; }
   /// Gets if we're ignoring the triangle in goto vertex mode
-  bool getUseIgnoreInGOtoVertexMode(void) { return myUseIgnoreInGoto; }
+  bool getUseIgnoreInGotoVertexMode(void) { return myUseIgnoreInGoto; }
   /// How long to keep going without having seen the vertex (0 is no timeout)
   void setVertexUnseenStopMSecs(int vertexUnseenStopMSecs = 4000)
     { myVertexUnseenStopMSecs = vertexUnseenStopMSecs; }
@@ -146,7 +152,10 @@ public:
     STATE_SUCCEEDED, ///< pointing at the target
     STATE_FAILED ///< if we're not acquiring and we lost the vertex we fail
   };
+  /// Gets the state
   State getState(void) { return myState; }
+  /// Gets if we've seen the vertex ever for this attempted drive (it gets reset in searching, but that's the only time, so will only be set once an activation by default (unless setAcquire is called)
+  bool getVertexSeen(void) { return myVertexSeen; }
   /// Sets the line finder to use
   AREXPORT void setLineFinder(ArLineFinder *lineFinder);
   /// Sets the line finder used
@@ -263,6 +272,7 @@ protected:
   int myLocalXOffset;
   int myLocalYOffset;
   double myThOffset;
+  bool myUseLegacyVertexOffset;
   double myIgnoreTriangleDist;
   bool myUseIgnoreInGoto;
   int myMaxDistBetweenLinePoints;

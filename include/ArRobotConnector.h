@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARROBOTCONNECTOR_H
 #define ARROBOTCONNECTOR_H
@@ -34,8 +34,12 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaUtil.h"
 
 class ArRobot;
+class ArSonarConnector;
+class ArBatteryConnector;
+//class ArLCDConnector;
 
-/**
+/** Connect to robot or simulator based on program command line parameters.
+
    ArRobotConnector makes a robot connection either through a TCP
    port (for the simulator or for robots with Ethernet-serial bridge
    devices instead of onboard computers), or through a direct serial 
@@ -57,23 +61,20 @@ class ArRobot;
    The following command-line arguments are checked:
    @verbinclude ArRobotConnector_options
 
-   You can prepare an ArRobot object for connection (with various connection
+   You can then prepare an ArRobot object for connection (with various connection
    options configured via the command line parameters) and initiate the connection
    attempt by that object by calling connectRobot().
     
    After it's connected, you must then begin the robot processing cycle by calling
    ArRobot::runAsync() or ArRobot::run().
 
-   You can then configure ArRobotConnector for the SICK laser based on the robot connection, and 
-   command line parameters with setupLaser(). After calling setupLaser(),
-   you must then run the laser processing thread (with ArRangeDeviceLaser::runAsync() or
-   ArRangeDeviceLaser()::run()) and then use ArRobotConnector::connectLaser() to connect
-   with the laser if specifically requested on the command line using the -connectLaser option
-   (or simply call ArRangeDeviceLaser::blockingConnect() (or similar) to attempt a laser connection regardless
-   of whether or not the -connectLaser option was given; use this latter technique if your program 
-   always prefers or requires use of the laser).
+   @sa ArLaserConnector
+   @sa ArRobot
 
    @since 2.7.0
+
+   @ingroup ImportantClasses
+   @ingroup DeviceClasses
 
 **/
 class ArRobotConnector
@@ -81,7 +82,7 @@ class ArRobotConnector
 public:
   /// Constructor that takes argument parser
   AREXPORT ArRobotConnector(ArArgumentParser *parser, ArRobot *robot, 
-			    bool autoParseArgs = true);
+			    bool autoParseArgs = true, bool connectAllComponents = true);
   /// Destructor
   AREXPORT ~ArRobotConnector(void);
   /// Sets up the given robot to be connected
@@ -102,6 +103,8 @@ public:
   AREXPORT const char *getRemoteHost(void) const;
   /// Gets if the remote connection is a sim
   AREXPORT bool getRemoteIsSim(void) const;
+  /// Call for forcing the remote to be a sim (mostly for internal use)
+  AREXPORT void setRemoteIsSim(bool remoteIsSim);
   /// Gets the robot this connector is using (mostly for backwards compatibility stuff)
   AREXPORT ArRobot *getRobot(void);
 protected:
@@ -135,8 +138,11 @@ protected:
   // if we're auto parsing the arguments when setupRobot or
   // connectRobot are called
   bool myAutoParseArgs;
-  /// If we've parsed the args already or not
+  // If we've parsed the args already or not
   bool myHaveParsedArgs;
+
+  // If true, create additional connectors such as sonar, battery, lcd.
+  bool myConnectAllComponents;
   
 
   // our parser
@@ -149,6 +155,10 @@ protected:
 
   ArRetFunctorC<bool, ArRobotConnector> myParseArgsCB;
   ArConstFunctorC<ArRobotConnector> myLogOptionsCB;
+
+//  ArLCDConnector *myLCDConnector;
+  ArBatteryConnector *myBatteryConnector;
+  ArSonarConnector *mySonarConnector;
 };
 
 

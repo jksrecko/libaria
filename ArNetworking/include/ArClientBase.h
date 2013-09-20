@@ -2,6 +2,8 @@
 #define NLCLIENTBASE_H
 
 #include "Aria.h"
+#include "ArClientCommands.h"
+#include "ArServerCommands.h"
 #include "ArNetPacket.h"
 #include "ArNetPacketSenderTcp.h"
 #include "ArNetPacketReceiverTcp.h"
@@ -79,7 +81,7 @@ public:
   AREXPORT bool getDebugLogging(void);
 
   /// Connect to a server
-  AREXPORT bool blockingConnect(const char *host, int port, bool print = true,
+  AREXPORT bool blockingConnect(const char *host, int port, bool log = true,
 				const char *user = NULL, 
 				const char *password = NULL,
 				const char *openOnIP = NULL);
@@ -142,8 +144,15 @@ public:
 
   
   /// Sets the 'key' needed to connect to the server
-  AREXPORT void setServerKey(const char *serverKey, bool print = true);
+  AREXPORT void setServerKey(const char *serverKey, bool log = true);
   
+  /// Enforces the that the server is using this protocol version
+  AREXPORT void enforceProtocolVersion(const char *protocolVersion, 
+				       bool log = true);
+
+  /// Enforces that the robots that connect are this type
+  AREXPORT void enforceType(ArServerCommands::Type type, bool log = true);
+
   /// Gets the last time a packet was received
   AREXPORT ArTime getLastPacketReceived(void);
 
@@ -252,12 +261,12 @@ public:
   AREXPORT struct in_addr *getTcpAddr(void) { return myTcpSocket.inAddr(); }
   /// Internal function that'll do the connection (mainly for switch connections)
   AREXPORT bool internalBlockingConnect(
-	  const char *host, int port, bool print, const char *user, 
+	  const char *host, int port, bool log, const char *user, 
 	  const char *password, ArSocket *tcpSocket, 
 	  const char *openOnIP = NULL);
   /// Internal function that'll start the non blocking connection (mainly for switch connections)
   AREXPORT NonBlockingConnectReturn internalNonBlockingConnectStart(
-	  const char *host, int port, bool print, const char *user, 
+	  const char *host, int port, bool log, const char *user, 
 	  const char *password, ArSocket *tcpSocket, 
 	  const char *openOnIP = NULL);
   /// Internal function that'll start the non blocking connection (mainly for switch connections)
@@ -299,7 +308,11 @@ protected:
   std::string myRobotName;
   /// Optional prefix to be inserted at the start of log messages
   std::string myLogPrefix;
-  
+  /// If we're enforcing the version of the protocol or not
+  std::string myEnforceProtocolVersion;
+  /// if we're a particular type
+  ArServerCommands::Type myEnforceType;
+
   AREXPORT bool setupPacket(ArNetPacket *packet);
   ArTime myLastPacketReceived;
   std::list<ArFunctor *> myServerShutdownCBList;

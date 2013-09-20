@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARSERIALCONNECTION_H
 #define ARSERIALCONNECTION_H
@@ -30,12 +30,10 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaTypedefs.h"
 #include "ArDeviceConnection.h"
 
-#ifndef WIN32
-#define TIOGETTIMESTAMP         0x5480
-#define TIOSTARTTIMESTAMP       0x5481
-#endif
-
-/// For connecting to devices through a serial port
+/// Utility for connecting to and communicating with devices through a serial port
+/** @ingroup UtilityClasses
+  @ingroup DeviceClasses
+*/
 class ArSerialConnection: public ArDeviceConnection
 {
  public:
@@ -129,8 +127,9 @@ class ArSerialConnection: public ArDeviceConnection
 
 #ifndef WIN32
   int myPort;
-  bool myIs422;
 #endif // ifdef linux
+
+  bool myIs422;
 
 #ifdef WIN32
   HANDLE myPort;

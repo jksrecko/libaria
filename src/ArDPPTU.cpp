@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -109,10 +109,15 @@ AREXPORT ArDPPTU::ArDPPTU(ArRobot *robot, DeviceType deviceType, int deviceIndex
 
   switch(myDeviceType) {
     case PANTILT_PTUD47:
+	  myPanConvert = 0.0514;
+      myTiltConvert = 0.0129;
+	  ArPTZ::setLimits(158, -158, 30, -46);
+	  /*
       myMaxPan = 158;
       myMinPan = -158;
       myMaxTilt = 30;
       myMinTilt = -46;
+	  */
       myMaxPanSlew = 149;
       myMinPanSlew = 2;
       myMaxTiltSlew = 149;
@@ -121,17 +126,21 @@ AREXPORT ArDPPTU::ArDPPTU(ArRobot *robot, DeviceType deviceType, int deviceIndex
       myMinPanAccel = 2;
       myMaxTiltAccel = 102;
       myMinTiltAccel = 2;
-      myPanConvert = 0.0514;
-      myTiltConvert = 0.0129;
       myPanSlew = 40;
       myTiltSlew = 40;
       break;
     case PANTILT_PTUD46:
-    case PANTILT_DEFAULT:  // in init() we will query the PTU to get the real conversion factors
+    case PANTILT_DEFAULT:  
+	  // if DEFAULT, then in init() we will query the PTU to get the real conversion factors and limits (but start out assuming same as D46)
+	  myPanConvert = 0.0514;
+      myTiltConvert = 0.0514;
+	  ArPTZ::setLimits(158, -158, 30, -46);
+	  /*
       myMaxPan = 158;
       myMinPan = -158;
       myMaxTilt = 30;
       myMinTilt = -46;
+	  */
       myMaxPanSlew = 149;
       myMinPanSlew = 2;
       myMaxTiltSlew = 149;
@@ -140,8 +149,6 @@ AREXPORT ArDPPTU::ArDPPTU(ArRobot *robot, DeviceType deviceType, int deviceIndex
       myMinPanAccel = 2;
       myMaxTiltAccel = 102;
       myMinTiltAccel = 2;
-      myPanConvert = 0.0514;
-      myTiltConvert = 0.0514;
       myPanSlew = 40; //Default to 1000 positions/sec
       myTiltSlew = 40; //Defaults to 1000 positions/sec
     default:
@@ -262,6 +269,7 @@ AREXPORT bool ArDPPTU::init(void)
     // We can't distinguish PR and TR responses based on their content alone, so
     // we have to query pan resolution (PR), then after receiving resolution
     // response, query TR. (see readPacket() for TR).
+	///@todo query the device for pan and tilt limits, and when response is received, call ArPTZ::setLimits() to change.
   }
 
   query();   // do first position query
@@ -281,19 +289,19 @@ AREXPORT bool ArDPPTU::blank(void)
   return sendPacket(&myPacket);
 }
 
-AREXPORT bool ArDPPTU::pan(double pdeg)
+AREXPORT bool ArDPPTU::pan_i(double pdeg)
 {
   //ArLog::log(ArLog::Normal, "ArDPPTU::panTilt(%f, %f)", pdeg, tdeg);
-  if (pdeg > getMaxPosPan())
-    pdeg = getMaxPosPan();
-  if (pdeg < getMaxNegPan())
-    pdeg = getMaxNegPan();
+  if (pdeg > getMaxPosPan_i())
+    pdeg = getMaxPosPan_i();
+  if (pdeg < getMaxNegPan_i())
+    pdeg = getMaxNegPan_i();
 
   if (pdeg != myPanSent)
   {
 	  DEBUG_CMD(ArLog::log(ArLog::Normal, 
       "ArDPPTU::pan: sending command to pan to %f deg (maxPosPan=%f, minNegPan=%f, myPanSent=%f)", 
-      pdeg, getMaxPosPan(), getMaxNegPan(), myPanSent); 
+      pdeg, getMaxPosPan_i(), getMaxNegPan_i(), myPanSent); 
     )
     preparePacket();
     myPacket.byteToBuf('P');
@@ -307,18 +315,18 @@ AREXPORT bool ArDPPTU::pan(double pdeg)
 return true;
 }
 
-AREXPORT bool ArDPPTU::tilt(double tdeg)
+AREXPORT bool ArDPPTU::tilt_i(double tdeg)
 {
-  if (tdeg > getMaxPosTilt())
-    tdeg = getMaxPosTilt();
-  if (tdeg < getMaxNegTilt())
-    tdeg = getMaxNegTilt();
+  if (tdeg > getMaxPosTilt_i())
+    tdeg = getMaxPosTilt_i();
+  if (tdeg < getMaxNegTilt_i())
+    tdeg = getMaxNegTilt_i();
 
   if (tdeg != myTiltSent)
   {
 	  DEBUG_CMD(ArLog::log(ArLog::Normal, 
       "ArDPPTU::tilt: sending command to tilt to %f deg (maxPosTilt=%f, minNegTilt=%f, myTiltSent=%f)", 
-      tdeg, getMaxPosTilt(), getMaxNegTilt(), myTiltSent)
+      tdeg, getMaxPosTilt_i(), getMaxNegTilt_i(), myTiltSent)
     );
     preparePacket();
     myPacket.byteToBuf('T');
@@ -773,7 +781,13 @@ AREXPORT ArBasePacket *ArDPPTU::readPacket()
           }
         }
         break;
-    
+
+      case end:
+      default:
+        // fall out of switch, end is a special flag state checked outside this switch
+        // where action is taken based on what data was received from the dpptu,
+        // then state is reset to start.
+        break;
     }
 
     if(state == end)
@@ -885,4 +899,17 @@ void ArDPPTU::query()
     if(myConn->write("PP\rTP\r", 2*2+2) <= 0) return;
     myLastQuerySent.setToNow();
   }
+}
+
+
+ArPTZConnector::GlobalPTZCreateFunc ArDPPTU::ourCreateFunc(&ArDPPTU::create);
+
+ArPTZ* ArDPPTU::create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot)
+{
+  return new ArDPPTU(robot);
+}
+
+void ArDPPTU::registerPTZType()
+{
+  ArPTZConnector::registerPTZType("dpptu", &ourCreateFunc);
 }

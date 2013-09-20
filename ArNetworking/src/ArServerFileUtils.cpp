@@ -940,10 +940,9 @@ AREXPORT void ArServerFileFromClient::internalPutFile(ArServerClient *client,
     }
     else
     {
-      ArLog::log(ArLog::Normal, 
+      ArLog::logErrorFromOS(ArLog::Normal, 
                  "ArServerFileFromClient: Can't open tmp file for '%s' (tried '%s')", 
                  fileNameRaw, tempFileName);
-      perror("can't open tmp file");
       sendPacket.uByte2ToBuf(5);
       sendPacket.strToBuf(fileNameRaw);
       client->sendPacketTcp(&sendPacket);

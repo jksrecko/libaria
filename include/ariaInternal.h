@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARIAINTERNAL_H
 #define ARIAINTERNAL_H
@@ -35,13 +35,18 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArStringInfoGroup.h"
 class ArRobot;
 class ArRobotJoyHandler;
+class ArSonarMTX;
+class ArBatteryMTX;
+class ArLCDMTX;
 #endif // ARINTERFACE
 
 class ArKeyHandler;
 class ArJoyHandler;
 
 
-/// This class performs global initialization and deinitialization
+/** Contains global initialization, deinitialization and other global functions
+    @ingroup ImportantClasses
+*/
 class Aria
 {
 public:
@@ -136,6 +141,9 @@ public:
   
   /// Gets a list of the possible deviceConnection types
   AREXPORT static const char *deviceConnectionGetTypes(void);
+
+  /// Gets a list of the possible deviceConnection types (for use in the config)
+  AREXPORT static const char *deviceConnectionGetChoices(void);
   
   /// Creates a deviceConnection of the given type
   AREXPORT static ArDeviceConnection *deviceConnectionCreate(
@@ -174,6 +182,29 @@ public:
   /// Sets the maximum number of lasers to use
   AREXPORT static void setMaxNumLasers(int maxNumLasers);
 
+  /// Gets the maximum number of sonars to use
+  AREXPORT static int getMaxNumSonarBoards(void);
+
+  /// Sets the maximum number of sonars to use
+  AREXPORT static void setMaxNumSonarBoards(int maxNumSonarBoards);
+
+  /// Gets the maximum number of batteris to use
+  AREXPORT static int getMaxNumBatteries(void);
+
+  /// Sets the maximum number of batteries to use
+  AREXPORT static void setMaxNumBatteries(int maxNumBatteries);
+
+  /// Gets the maximum number of lcds to use
+  AREXPORT static int getMaxNumLCDs(void);
+
+  /// Sets the maximum number of batteries to use
+  AREXPORT static void setMaxNumLCDs(int maxNumLCDs);
+
+  /// Creates a laser of the given type
+  AREXPORT static ArLaser *laserCreate(
+	  const char *laserType, int laserNumber,
+	  const char *prefix = "Aria::laserCreate");
+
   /// Adds a type of laser for Aria to be able to create
   AREXPORT static bool laserAddCreator(
 	  const char *laserType, 
@@ -181,12 +212,72 @@ public:
   
   /// Gets a list of the possible laser types
   AREXPORT static const char *laserGetTypes(void);
+
+  /// Gets a list of the possible laser types (for use in the config)
+  AREXPORT static const char *laserGetChoices(void);
   
-  /// Creates a laser of the given type
-  AREXPORT static ArLaser *laserCreate(
-	  const char *laserType, int laserNumber,
-	  const char *prefix = "Aria::laserCreate");
+  /// Creates a battery of the given type
+  AREXPORT static ArBatteryMTX *batteryCreate(
+	  const char *batteryType, int batteryNumber,
+	  const char *prefix = "Aria::batteryCreate");
+
+  /// Adds a type of battery for Aria to be able to create
+  AREXPORT static bool batteryAddCreator(
+	  const char *batteryType, 
+	  ArRetFunctor2<ArBatteryMTX *, int, const char *> *creator);
+  
+  /// Gets a list of the possible battery types
+  AREXPORT static const char *batteryGetTypes(void);
+  /// Gets a list of the possible battery types (for use in the config)
+  AREXPORT static const char *batteryGetChoices(void);
+
+  /// Creates a lcd of the given type
+  AREXPORT static ArLCDMTX *lcdCreate(
+	  const char *lcdType, int lcdNumber,
+	  const char *prefix = "Aria::lcdCreate");
+
+  /// Adds a type of lcd for Aria to be able to create
+  AREXPORT static bool lcdAddCreator(
+	  const char *lcdType, 
+	  ArRetFunctor2<ArLCDMTX *, int, const char *> *creator);
+  
+  /// Gets a list of the possible lcd types
+  AREXPORT static const char *lcdGetTypes(void);
+  /// Gets a list of the possible lcd types (for use in the config)
+  AREXPORT static const char *lcdGetChoices(void);
+
+  /// Creates a sonar of the given type
+  AREXPORT static ArSonarMTX *sonarCreate(
+	  const char *sonarType, int sonarNumber,
+	  const char *prefix = "Aria::sonarCreate");
+
+  /// Adds a type of sonar for Aria to be able to create
+  AREXPORT static bool sonarAddCreator(
+	  const char *sonarType, 
+	  ArRetFunctor2<ArSonarMTX *, int, const char *> *creator);
+  
+  /// Gets a list of the possible sonar types
+  AREXPORT static const char *sonarGetTypes(void);
+  /// Gets a list of the possible sonar types (for use in the config)
+  AREXPORT static const char *sonarGetChoices(void);
+  
+  /// Set maximum limit on video devices (used by ArVideo library)
+  AREXPORT static void setMaxNumVideoDevices(size_t n); 
+  /// Get maximum limit on video devices (used by ArVideo library)
+  AREXPORT static size_t getMaxNumVideoDevices(); 
+ 
+  /// Set maximum limit on PTZ or PTU devices, used by ArPTZConnector. Call before connecting to PTZ devices with ArPTZConnector. 
+  AREXPORT static void setMaxNumPTZs(size_t n); 
+  /// Set maximum limit on PTZ or PTU devices, used by ArPTZConnector.
+  AREXPORT static size_t getMaxNumPTZs();  
 #endif // ARINTERFACE
+
+  /// Gets the identifier (for humans) used for this instance of Aria
+  AREXPORT static const char *getIdentifier(void);
+  /// Sets the identifier (for humans) used for this instance of Aria
+  AREXPORT static void setIdentifier(const char *identifier);
+
+
 protected:
   static bool ourInited;
   static ArGlobalFunctor1<int> ourSignalHandlerCB;
@@ -205,8 +296,21 @@ protected:
   static ArConfig ourConfig;
   static ArStringInfoGroup ourInfoGroup;
   static int ourMaxNumLasers;
+	static int ourMaxNumSonarBoards;
+	static int ourMaxNumBatteries;
+	static int ourMaxNumLCDs;
   static std::map<std::string, ArRetFunctor2<ArLaser *, int, const char *> *, ArStrCaseCmpOp> ourLaserCreatorMap;
   static std::string ourLaserTypes;
+  static std::string ourLaserChoices;
+  static std::map<std::string, ArRetFunctor2<ArBatteryMTX *, int, const char *> *, ArStrCaseCmpOp> ourBatteryCreatorMap;
+  static std::string ourBatteryTypes;
+  static std::string ourBatteryChoices;
+  static std::map<std::string, ArRetFunctor2<ArLCDMTX *, int, const char *> *, ArStrCaseCmpOp> ourLCDCreatorMap;
+  static std::string ourLCDTypes;
+  static std::string ourLCDChoices;
+  static std::map<std::string, ArRetFunctor2<ArSonarMTX *, int, const char *> *, ArStrCaseCmpOp> ourSonarCreatorMap;
+  static std::string ourSonarTypes;
+  static std::string ourSonarChoices;
 #endif // ARINTERFACE
   static ArMutex ourExitCallbacksMutex;
   static std::multimap<int, ArFunctor *> ourExitCallbacks;
@@ -217,6 +321,12 @@ protected:
   static ArLog::LogLevel ourExitCallbacksLogLevel;
   static std::map<std::string, ArRetFunctor3<ArDeviceConnection *, const char *, const char *, const char *> *, ArStrCaseCmpOp> ourDeviceConnectionCreatorMap;
   static std::string ourDeviceConnectionTypes;
+  static std::string ourDeviceConnectionChoices;
+  static std::string ourIdentifier;
+#ifndef ARINTERFACE
+  static size_t ourMaxNumVideoDevices;
+  static size_t ourMaxNumPTZs;
+#endif
 };
 
 

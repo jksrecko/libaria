@@ -77,9 +77,13 @@ AREXPORT bool ArNetPacketReceiverTcp::readData(void)
     ret = readPacket(100);
     if (ret == RET_TIMED_OUT)
     {
-      if (!myQuiet)
-	ArLog::log(ArLog::Terse, "%sReadTcp timed out",
-		   myLoggingPrefix.c_str());
+      // commenting this out since it can happen really often
+      // sometimes and there's an actual timeout that causes the
+      // connect to get dropped so the informational printf isn't
+      // needed
+      //if (!myQuiet)
+      //ArLog::log(ArLog::Normal, "%sReadTcp timed out",
+      //myLoggingPrefix.c_str());
       return true;
     }
     else if (ret == RET_CONN_CLOSED)
@@ -89,24 +93,20 @@ AREXPORT bool ArNetPacketReceiverTcp::readData(void)
 		   myLoggingPrefix.c_str(), mySocket->getIPString());
       return false;
     }
+    else if (ret == RET_CONN_ERROR)
+    {
+      if (!myQuiet)
+	ArLog::log(ArLog::Terse, 
+		   "%sConnection to %s had an error and is being closed",
+		   myLoggingPrefix.c_str(), mySocket->getIPString());
+      return false;
+    }
     else if (ret == RET_FAILED_READ)
     {
-      // if neither of these true's trap it the false is returned cause it was some bad error
-#ifdef WIN32
-      if (WSAGetLastError() == WSAEWOULDBLOCK)
-	return true;
-      else if (!myQuiet)
-	ArLog::log(ArLog::Terse, "%sFailed on read TCP, error %d", myLoggingPrefix.c_str(), WSAGetLastError());
-#endif
-#ifndef WIN32
-      if (errno == EAGAIN)
-	return true;
-      else if (!myQuiet)
-	ArLog::log(ArLog::Terse, "%sFailed on read TCP, error %d", myLoggingPrefix.c_str(), errno);
-#endif
-      if (!myQuiet)
-	ArLog::log(ArLog::Terse, "%sFailed on the tcp read", myLoggingPrefix.c_str());
-      return false;
+      // this now just returns true since the previous checks for if
+      // the failed read was an error or not are handled by readpacket
+      // now
+      return true;
     }
     else if (ret == RET_BAD_PACKET)
     {
@@ -140,7 +140,11 @@ AREXPORT ArNetPacketReceiverTcp::Ret ArNetPacketReceiverTcp::readPacket(int msWa
 
   ArTime timeDone;
   timeDone.setToNow();
-  timeDone.addMSec(msWait);
+  if (!timeDone.addMSec(msWait)) {
+    ArLog::log(ArLog::Normal,
+               "ArNetPacketReceiverTcp::readPacket() error adding msecs (%i)",
+               msWait);
+  }
 
   //printf("Read packet!\n");
   do
@@ -154,14 +158,20 @@ AREXPORT ArNetPacketReceiverTcp::Ret ArNetPacketReceiverTcp::readPacket(int msWa
       c = 0;
       if ((ret = mySocket->read((char *)&c, 1, 0/*timeToRunFor*/)) == -1) 
       {
-        if (myState == STATE_SYNC1)
+        if (!mySocket->getBadRead() && myState == STATE_SYNC1)
         {
           return RET_FAILED_READ;
         }
         else
         {
-          //ArUtil::sleep(1);
-          continue;
+	  // if the read is fine, just return timed out
+	  if (!mySocket->getBadRead())
+	    return RET_TIMED_OUT;
+	  // otherwise return the connection is closed (since that's
+	  // some -1 error other than to try again, meaning a socket
+	  // error of some kind)
+	  else
+	    return RET_CONN_ERROR;
         }
       }
       else if (ret == 0)

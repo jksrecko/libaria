@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARLASERCONNECTOR_H
 #define ARLASERCONNECTOR_H
@@ -39,21 +39,15 @@ class ArRobot;
 
 
 
-/// Connect to robot and laser based on run-time availablitily and command-line arguments
+/// Create laser interface objects (for any kind of laser supported by ARIA) and connect to lasers based on parameters from robot parameter file and command-line arguments
 /**
 
-   ArLaserConnector makes a laser connection either through a serial port 
-   connection, or through a TCP
-   port (for the simulator or for robots with Ethernet-serial bridge
-   devices instead of onboard computers).
-   Normally, it first attempts a TCP connection on 
-   @a localhost port 8101, to use a simulator if running. If the simulator
-   is not running, then it normally then connects using the serial port
-   Various connection
-   parameters are configurable through command-line arguments or in the robot
-   parameter file. (Though the internal interface used by ARIA to do this is also
-   available if you need to use it: See addLaser(); otherwise don't use
-   addLaser(), setupLaser(), etc.).
+   ArLaserConnector makes a laser connection (e.g. through serial port, 
+   TCP network connection, or to simulator connection as a special case if
+   the robot connection is to a simulator.)
+   Parameters are configurable through command-line arguments or in the robot
+   parameter file. 
+
   
    When you create your ArLaserConnector, pass it command line parameters via
    either the argc and argv variables from main(), or pass it an
@@ -63,28 +57,37 @@ class ArRobot;
    ArLaserConnector registers a callback with the global Aria class. Use
    Aria::parseArgs() to parse all command line parameters to the program, and
    Aria::logOptions() to print out information about all registered command-line parameters.
+   ArLaserConnector will be included in these.
 
-   The following command-line arguments are checked:
-   @verbinclude ArLaserConnector_options
-
-   To connect to any lasers that were set up in the robot parameter file or
+   Then, to connect to any lasers that were set up in the robot parameter file or
    via command line arguments, call connectLasers().  If successful, 
    connectLasers() will return true and add an entry for each laser connected
    in the ArRobot object's list of lasers.  These ArLaser objects can be
    accessed from your ArRobot object via ArRobot::findLaser() or ArRobot::getLaserMap(). 
    
+   (The internal interface used by ARIA to connect to configured lasers and add
+   them to ArRobot is also
+   available if you need to use it: See addLaser(); but this is normally not
+neccesary for almost all cases.)
+
+   The following command-line arguments are checked:
+   @verbinclude ArLaserConnector_options
 
    @since 2.7.0
-
+   @ingroup ImportantClasses
+   @ingroup DeviceClasses
  **/
 class ArLaserConnector
 {
 public:
   /// Constructor that takes argument parser
-  AREXPORT ArLaserConnector(ArArgumentParser *parser, 
-			    ArRobot *robot, ArRobotConnector *robotConnector,
-			    bool autoParseArgs = true,
-			    ArLog::LogLevel infoLogLevel = ArLog::Verbose);
+  AREXPORT ArLaserConnector(
+	  ArArgumentParser *parser, 
+	  ArRobot *robot, ArRobotConnector *robotConnector,
+	  bool autoParseArgs = true,
+	  ArLog::LogLevel infoLogLevel = ArLog::Verbose,
+	  ArRetFunctor1<bool, const char *> *turnOnPowerOutputCB = NULL,
+	  ArRetFunctor1<bool, const char *> *turnOffPowerOutputCB = NULL);
   /// Destructor
   AREXPORT ~ArLaserConnector(void);
   /// Connects all the lasers the robot has that should be auto connected
@@ -92,7 +95,8 @@ public:
 			      bool addConnectedLasersToRobot = true,
 			      bool addAllLasersToRobot = false,
 			      bool turnOnLasers = true,
-			      bool powerCycleLaserOnFailedConnect = true);
+			      bool powerCycleLaserOnFailedConnect = true,
+			      int *failedOnLaser = NULL);
   /// Sets up a laser to be connected
   AREXPORT bool setupLaser(ArLaser *laser, 
 			   int laserNumber = 1);
@@ -235,6 +239,9 @@ protected:
   ArRobotConnector *myRobotConnector;
 
   ArLog::LogLevel myInfoLogLevel;
+
+  ArRetFunctor1<bool, const char *> *myTurnOnPowerOutputCB;
+  ArRetFunctor1<bool, const char *> *myTurnOffPowerOutputCB;
 
   ArRetFunctorC<bool, ArLaserConnector> myParseArgsCB;
   ArConstFunctorC<ArLaserConnector> myLogOptionsCB;

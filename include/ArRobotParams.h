@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,15 +19,105 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARROBOTPARAMS_H
 #define ARROBOTPARAMS_H
 
 #include "ariaTypedefs.h"
 #include "ArConfig.h"
+#include <vector>
+
+#ifndef SWIG
+
+/// Stores a set of video device parameters read from one of the video sections of a robot parameter file.
+/// @internal
+/// @swigomit
+class ArVideoParams
+{
+public:
+	std::string type;
+	bool connect; bool connectSet;
+	int imageWidth;
+	int imageHeight;
+	int deviceIndex;
+	std::string deviceName;
+	int channel; 
+	std::string analogSignalFormat;
+	std::string address;
+	int tcpPort; bool tcpPortSet;
+	bool inverted; bool invertedSet;
+	ArVideoParams() :
+		type("unknown"),
+		connect(false),
+		connectSet(false),
+		imageWidth(-1),
+		imageHeight(-1),
+		deviceIndex(-1),
+		deviceName("none"),
+		channel(1),
+		analogSignalFormat(""),
+		address("192.168.0.90"),
+		tcpPort(80),
+		tcpPortSet(false),
+		inverted(false),
+		invertedSet(false)
+	{}
+	/// Copy values of any parameters in @a other into @a this, if given in @a other
+	AREXPORT void merge(const ArVideoParams& other);
+	void setType(const std::string& t) { type = t; }
+	void setConnect(bool c) { connect = c; connectSet = true; }
+	void setImageSize(int w, int h) { imageWidth = w; imageHeight = h; }
+	void setInverted(bool i) { inverted = i; invertedSet = true; }
+	void setDevice(const std::string& name, int idx, int chan) 
+	{
+		deviceName = name;
+		deviceIndex = idx;
+		channel = chan;
+	}
+	void setAddress(const std::string& a) { address = a; }
+	void setTCPPort(int p) { tcpPort = p; tcpPortSet = true; }
+};
+
+/// Stores a set of PTZ/PTU device parameters read from one of the PTZ sections of a robot parameter file.
+/// @internal
+/// @swigomit
+class ArPTZParams
+{
+public:
+	std::string type;
+	bool connect; bool connectSet;
+	std::string serialPort;
+	int robotAuxPort;
+	std::string address;
+	int tcpPort; bool tcpPortSet;
+	bool inverted; bool invertedSet;
+	ArPTZParams() :
+		type("unknown"),
+		connect(false),
+		connectSet(false),
+		serialPort("none"),
+		robotAuxPort(-1),
+		address("192.168.0.90"),
+		tcpPort(80),
+		tcpPortSet(false),
+		inverted(false),
+		invertedSet(false)
+	{}
+	/// Copy values of any parameters in @a other into @a this, if given in @a other
+	void merge(const ArPTZParams& other);
+	void setType(const std::string& t) { type = t; }
+	void setConnect(bool c) { connect = c; connectSet = true; }
+	void setSerialPort(const std::string& sp) { serialPort = sp; }
+	void setTcpPort(int p) { tcpPort = p; tcpPortSet = true; }
+	void setRobotAuxPort(int p) { robotAuxPort = p; }
+	void setInverted(bool i) { inverted = i; invertedSet = true; }
+	void setAddress(const std::string& a) { address = a; }
+};
+
+#endif // ifndef SWIG
 
 ///Stores parameters read from the robot's parameter files
 /** 
@@ -159,49 +249,11 @@ public:
 	return 0;
       return (*it2).second;
     }
+
   /// Returns the number of sonar
   int getNumSonar(void) const { return myNumSonar; }
-  /// Returns if the sonar of the given number is valid
-  bool haveSonar(int number) const
-    {
-      if (mySonarMap.find(number) != mySonarMap.end())
-	return true;
-      else
-	return false;
-    }
-  /// Returns the X location of the given numbered sonar disc
-  int getSonarX(int number) const
-    {
-      std::map<int, std::map<int, int> >::const_iterator it;
-      std::map<int, int>::const_iterator it2;
-      if ((it = mySonarMap.find(number)) == mySonarMap.end())
-	return 0;
-      if ((it2 = (*it).second.find(SONAR_X)) == (*it).second.end())
-	return 0;
-      return (*it2).second;
-    }
-  /// Returns the Y location of the given numbered sonar disc
-  int getSonarY(int number) const
-    {
-      std::map<int, std::map<int, int> >::const_iterator it;
-      std::map<int, int>::const_iterator it2;
-      if ((it = mySonarMap.find(number)) == mySonarMap.end())
-	return 0;
-      if ((it2 = (*it).second.find(SONAR_Y)) == (*it).second.end())
-	return 0;
-      return (*it2).second;
-    }
-  /// Returns the heading of the given numbered sonar disc
-  int getSonarTh(int number) const
-    {
-      std::map<int, std::map<int, int> >::const_iterator it;
-      std::map<int, int>::const_iterator it2;
-      if ((it = mySonarMap.find(number)) == mySonarMap.end())
-	return 0;
-      if ((it2 = (*it).second.find(SONAR_TH)) == (*it).second.end())
-	return 0;
-      return (*it2).second;
-    }
+
+
   /// Returns if the robot has a laser (according to param file)
   /**
      @deprecated
@@ -389,6 +441,386 @@ public:
 	return NULL;
     }
 
+  /// Gets the name of the section the laser information is in (this
+  /// mostly doesn't mean anything except for commercial)
+  const char *getLaserSection(int laserNumber = 1) const
+    {
+      if (getLaserData(laserNumber) != NULL)
+	return getLaserData(laserNumber)->mySection; 
+      else
+	return NULL;
+    }
+
+  /// Gets which power output that turns the laser on/off 
+  const char *getLaserPowerOutput(int laserNumber = 1) const
+    {
+      if (getLaserData(laserNumber) != NULL)
+	return getLaserData(laserNumber)->myLaserPowerOutput; 
+      else
+	return NULL;
+    }
+
+	/// PS 8/21/12 - new code to support BatteryMTX
+	/// What type of battery this is
+	const char *getBatteryMTXBoardType (int batteryNumber = 1) const
+	{
+		if (getBatteryMTXBoardData (batteryNumber) != NULL)
+			return getBatteryMTXBoardData (batteryNumber)->myBatteryMTXBoardType;
+		else
+			return NULL;
+	}
+	/// What type of port the battery is on
+	const char *getBatteryMTXBoardPortType (int batteryNumber = 1) const
+	{
+		if (getBatteryMTXBoardData (batteryNumber) != NULL)
+			return getBatteryMTXBoardData (batteryNumber)->myBatteryMTXBoardPortType;
+		else
+			return NULL;
+	}
+	/// What port the battery is on
+	const char *getBatteryMTXBoardPort (int batteryNumber = 1) const
+	{
+		if (getBatteryMTXBoardData (batteryNumber) != NULL)
+			return getBatteryMTXBoardData (batteryNumber)->myBatteryMTXBoardPort;
+		else
+			return NULL;
+	}
+	/// Gets the int that is the baud for the battery
+	int getBatteryMTXBoardBaud (int batteryNumber = 1) const
+	{
+		if (getBatteryMTXBoardData (batteryNumber) != NULL)
+			return getBatteryMTXBoardData (batteryNumber)->myBatteryMTXBoardBaud;
+		else
+			return 0;
+	}
+	/// Gets a bool that specifies weather to auto connect or not
+	bool getBatteryMTXBoardAutoConn (int batteryNumber = 1) const
+	{
+		if (getBatteryMTXBoardData (batteryNumber) != NULL)
+			return getBatteryMTXBoardData (batteryNumber)->myBatteryMTXBoardAutoConn;
+		else
+			return false;
+	}
+
+
+	/// PS 9/4/12 - new code to support LCDMTX
+	/// What type of LCD this is
+	const char *getLCDMTXBoardType (int lcdNumber = 1) const
+	{
+		if (getLCDMTXBoardData (lcdNumber) != NULL)
+			return getLCDMTXBoardData (lcdNumber)->myLCDMTXBoardType;
+		else
+			return NULL;
+	}
+	/// What type of port the lcd is on
+	const char *getLCDMTXBoardPortType (int lcdNumber = 1) const
+	{
+		if (getLCDMTXBoardData (lcdNumber) != NULL)
+			return getLCDMTXBoardData (lcdNumber)->myLCDMTXBoardPortType;
+		else
+			return NULL;
+	}
+	/// What port the lcd is on
+	const char *getLCDMTXBoardPort (int lcdNumber = 1) const
+	{
+		if (getLCDMTXBoardData (lcdNumber) != NULL)
+			return getLCDMTXBoardData (lcdNumber)->myLCDMTXBoardPort;
+		else
+			return NULL;
+	}
+	/// Gets the int that is the baud for the lcd
+	int getLCDMTXBoardBaud (int lcdNumber = 1) const
+	{
+		if (getLCDMTXBoardData (lcdNumber) != NULL)
+			return getLCDMTXBoardData (lcdNumber)->myLCDMTXBoardBaud;
+		else
+			return 0;
+	}
+	/// Gets a bool that specifies weather to auto connect or not
+	bool getLCDMTXBoardAutoConn (int lcdNumber = 1) const
+	{
+		if (getLCDMTXBoardData (lcdNumber) != NULL)
+			return getLCDMTXBoardData (lcdNumber)->myLCDMTXBoardAutoConn;
+		else
+			return false;
+	}
+	/// Gets a bool that specifies weather to disconnect on conn failure or not
+	bool getLCDMTXBoardConnFailOption (int lcdNumber = 1) const
+	{
+		if (getLCDMTXBoardData (lcdNumber) != NULL)
+			return getLCDMTXBoardData (lcdNumber)->myLCDMTXBoardConnFailOption;
+		else
+			return false;
+	}
+
+	/// Gets which power controls this LCD
+	const char * getLCDMTXBoardPowerOutput (int lcdNumber = 1) const
+	{
+		if (getLCDMTXBoardData (lcdNumber) != NULL)
+		  return getLCDMTXBoardData (lcdNumber)->myLCDMTXBoardPowerOutput;
+		else
+		  return NULL;
+	}
+
+
+
+	/// PS 8/21/12 - new code to support SonarMTX
+	/// What type of sonar this is
+	const char *getSonarMTXBoardType (int sonarNumber = 1) const
+	{
+		if (getSonarMTXBoardData (sonarNumber) != NULL)
+			return getSonarMTXBoardData (sonarNumber)->mySonarMTXBoardType;
+		else
+			return NULL;
+	}
+	/// What type of port the sonar is on
+	const char *getSonarMTXBoardPortType (int sonarNumber = 1) const
+	{
+		if (getSonarMTXBoardData (sonarNumber) != NULL)
+			return getSonarMTXBoardData (sonarNumber)->mySonarMTXBoardPortType;
+		else
+			return NULL;
+	}
+	/// What port the sonar is on
+	const char *getSonarMTXBoardPort (int sonarNumber = 1) const
+	{
+		if (getSonarMTXBoardData (sonarNumber) != NULL)
+			return getSonarMTXBoardData (sonarNumber)->mySonarMTXBoardPort;
+		else
+			return NULL;
+	}
+	/// Gets the int that is the baud for the sonar
+	int getSonarMTXBoardBaud (int sonarNumber = 1) const
+	{
+		if (getSonarMTXBoardData (sonarNumber) != NULL)
+			return getSonarMTXBoardData (sonarNumber)->mySonarMTXBoardBaud;
+		else
+			return 0;
+	}
+	/// Gets a bool that specifies weather to auto connect or not
+	bool getSonarMTXBoardAutoConn (int sonarNumber = 1) const
+	{
+		if (getSonarMTXBoardData (sonarNumber) != NULL)
+			return getSonarMTXBoardData (sonarNumber)->mySonarMTXBoardAutoConn;
+		else
+			return false;
+	}
+
+  /// What delay the sonar board has
+  int getSonarMTXBoardDelay(int sonarBoardNum = 1) const 
+    { 
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->mySonarDelay; 
+      else
+	return 0;
+    }
+
+  /// What default gain the sonar board has
+  int getSonarMTXBoardGain(int sonarBoardNum = 1) const 
+    { 
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->mySonarGain; 
+      else
+	return 0;
+    }
+
+	/*
+  /// What delay the sonar has
+  int getSonarMTXBoardNoiseDelta(int sonarBoardNum = 1) const 
+    { 
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->mySonarGain; 
+      else
+	return 0;
+    }
+	*/
+
+  /// What delay the sonar has
+  int getSonarMTXBoardDetectionThreshold(int sonarBoardNum = 1) const 
+    { 
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->mySonarDetectionThreshold; 
+      else
+	return 0;
+    }
+
+  /// What max range the sonar has
+  int getSonarMTXBoardMaxRange(int sonarBoardNum = 1) const 
+    { 
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->mySonarMaxRange; 
+      else
+	return 0;
+    }
+
+  /// What autonomous driving flage the sonar has
+  int getSonarMTXBoardUseForAutonomousDriving(int sonarBoardNum = 1) const 
+    { 
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->mySonarUseForAutonomousDriving; 
+      else
+	return 0;
+    }
+
+  /// Gets which power output turns the sonar board on or off
+  const char *getSonarMTXBoardPowerOutput(int sonarBoardNum = 1) const 
+    { 
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->mySonarMTXBoardPowerOutput; 
+      else
+	return NULL;
+    }
+
+  /// get number of units (ie transducers) configured on a specific board 
+  int getNumSonarOnMTXBoard(int sonarBoardNum = 1) const 
+    { 
+
+      if (getSonarMTXBoardData(sonarBoardNum) != NULL)
+	return getSonarMTXBoardData(sonarBoardNum)->myNumSonarTransducers; 
+      else
+	return 0;
+    }
+
+  /// get number of units (ie transducers) configued 
+  int getNumSonarUnits() const 
+    { 
+      return myNumSonarUnits;
+    }
+
+  /// MPL TODO discuss boardNum here?
+  /// Returns if the sonar of the given number is valid
+  bool haveSonar(int boardNum) const
+    {
+      if (mySonarMap.find(boardNum) != mySonarMap.end())
+	return true;
+      else
+	return false;
+    }
+  /// Returns the X location of the given numbered sonar disc
+  int getSonarX(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_X)) == (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+  /// Returns the Y location of the given numbered sonar disc
+  int getSonarY(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_Y)) == (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+  /// Returns the heading of the given numbered sonar disc
+  int getSonarTh(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_TH)) == (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+  /// Returns the gain of the given numbered sonar disc (only
+  /// valid for MTX sonar)
+  int getSonarGain(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_GAIN)) == (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+  /// Returns the noise delta of the given numbered sonar disk (only
+  /// valid for MTX sonar)
+	/*
+  int getSonarNoiseDelta(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_NOISE_DELTA)) == (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+	*/
+  /// Returns the detection threshold of the given numbered sonar disc (only
+  /// valid for MTX sonar)
+  int getSonarDetectionThreshold(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_DETECTION_THRESHOLD)) == 
+	  (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+  /// Returns the thres med of the given numbered sonar disc (only
+  /// valid for MTX sonar)
+  int getSonarMaxRange(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_MAX_RANGE)) == 
+	  (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+
+  /// Returns the useforautonomousdriving of the given numbered sonar disc (only
+  /// valid for MTX sonar)
+  int getSonarUseForAutonomousDriving(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_USE_FOR_AUTONOMOUS_DRIVING)) == 
+	  (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+
+  /// Returns the board a sonar is on
+  int getSonarMTXBoard(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_BOARD)) == (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+
+  /// Returns the unit on the board a sonar transducer is on
+  int getSonarMTXBoardUnitPosition(int number) const
+    {
+      std::map<int, std::map<int, int> >::const_iterator it;
+      std::map<int, int>::const_iterator it2;
+      if ((it = mySonarMap.find(number)) == mySonarMap.end())
+	return 0;
+      if ((it2 = (*it).second.find(SONAR_BOARDUNITPOSITION)) == (*it).second.end())
+	return 0;
+      return (*it2).second;
+    }
+
+
 
   /// Gets whether the VelMax values are settable or not
   bool hasSettableVelMaxes(void) const { return mySettableVelMaxes; }
@@ -427,11 +859,77 @@ public:
   const char *getGPSPort() const { return myGPSPort; }
   const char *getGPSType() const { return myGPSType; }
 
-  // What kind of compass the robot has
+  // The Baud rate to use when connecting to the Sonar
+  //int getSonarBaud() const { return mySonarBaud; }
+  /// The serial port the Sonar is on
+  //const char *getSonarPort() const { return mySonarPort; }
+  //const char *getSonarType() const { return mySonarType; }
+
+  /// What kind of compass the robot has
   const char *getCompassType() const { return myCompassType; }
+  /// Gets what port the compass is on
   const char *getCompassPort() const { return myCompassPort; }
 
+  /// For internal use only, gets a pointer to the dist conv factor value
+  double *internalGetDistConvFactorPointer(void) { return &myDistConvFactor; }
+  
+  /// Internal function to set if we use the default behavior
+  /// (shouldn't be used outside of core developers)
+  static void internalSetUseDefaultBehavior(bool useDefaultBehavior,
+					    const char *owerOutputDisplayHint);
+
+  /// Internal function to get if we use the default behavior
+  /// (shouldn't be used outside of core developers)
+  static bool internalGetUseDefaultBehavior(void);
+
+  /// Adds things to the config for the commercial software
+  void internalAddToConfigCommercial(ArConfig *config);
+
+  /// Internal call that adds to this config the same way it's always
+  /// been done (this is only exposed for some internal testing)
+  void internalAddToConfigDefault(void);
+
+  /// return a const reference to the video device parameters
+  const std::vector<ArVideoParams>& getVideoParams() const { return myVideoParams; }
+  
+  /// return a const reference to the PTU/PTZ parameters
+  const std::vector<ArPTZParams>& getPTZParams() const { return myPTZParams; }
+
 protected:
+  static bool ourUseDefaultBehavior;
+  static std::string ourPowerOutputChoices;
+
+  // Adds a laser to the config
+  AREXPORT void addLaserToConfig(int laserNumber, ArConfig *config, 
+				 bool useDefaultBehavior, 
+				 const char *section);
+
+  // Adds a battery to the config 
+  AREXPORT void addBatteryToConfig(int batteryNumber, ArConfig *config, 
+				   bool useDefaultBehavior);
+
+  // Adds an LCD to the config 
+  AREXPORT void addLCDToConfig(int lcdNumber, ArConfig *config, 
+			       bool useDefaultBehavior);
+
+  // Adds the sonar to the config (it's added automatically for
+  // non-commercial)
+  AREXPORT void addSonarToConfigCommercial(ArConfig *config, bool isMTXSonar);
+
+  // Processes the 
+  AREXPORT void processSonarCommercial(ArConfig *config);
+
+  // Adds a sonarBoard to the config 
+  AREXPORT void addSonarBoardToConfig(int sonarBoardNumber, 
+				      ArConfig *config,
+				      bool useDefaultBehavior);
+
+  AREXPORT void addPTZToConfig(int i, ArConfig *config);
+  AREXPORT void addVideoToConfig(int i, ArConfig *config);
+  
+  // Processes the config for commercial
+  AREXPORT bool commercialProcessFile(void);
+    
   char myClass[1024];
   char mySubClass[1024];
   double myRobotRadius;
@@ -488,6 +986,8 @@ protected:
 	myLaserReflectorBitsChoice[0] = '\0';
 	myLaserStartingBaudChoice[0] = '\0';
 	myLaserAutoBaudChoice[0] = '\0';
+	mySection[0] = '\0';
+	myLaserPowerOutput[0] = '\0';
       }
     virtual ~LaserData() {}
   
@@ -513,6 +1013,8 @@ protected:
     char myLaserReflectorBitsChoice[256];
     char myLaserStartingBaudChoice[256];
     char myLaserAutoBaudChoice[256];
+    char mySection[256];
+    char myLaserPowerOutput[256];
   };
   std::map<int, LaserData *> myLasers;
 
@@ -534,6 +1036,152 @@ protected:
 	return NULL;
     }
 
+  class BatteryMTXBoardData
+  {
+  public:
+    BatteryMTXBoardData()
+      {
+	myBatteryMTXBoardType[0] = '\0';
+	myBatteryMTXBoardPortType[0] = '\0';
+	//sprintf((char *)myBatteryMTXBoardPortType, "serial");
+	myBatteryMTXBoardPort[0] = '\0';
+	myBatteryMTXBoardBaud = 0;
+	myBatteryMTXBoardAutoConn = false;
+      }
+    virtual ~BatteryMTXBoardData() {}
+  
+    char myBatteryMTXBoardType[256];
+    char myBatteryMTXBoardPortType[256];
+    char myBatteryMTXBoardPort[256];
+    int myBatteryMTXBoardBaud;
+    bool myBatteryMTXBoardAutoConn;
+  };
+  std::map<int, BatteryMTXBoardData *> myBatteryMTXBoards;
+
+  const BatteryMTXBoardData *getBatteryMTXBoardData(int batteryBoardNum) const
+    {
+      std::map<int, BatteryMTXBoardData *>::const_iterator it;
+      if ((it = myBatteryMTXBoards.find(batteryBoardNum)) != myBatteryMTXBoards.end())
+	return (*it).second;
+      else
+	return NULL;
+    }
+
+  BatteryMTXBoardData *getBatteryMTXBoardData(int batteryBoardNum) 
+    {
+      std::map<int, BatteryMTXBoardData *>::const_iterator it;
+      if ((it = myBatteryMTXBoards.find(batteryBoardNum)) != myBatteryMTXBoards.end())
+	return (*it).second;
+      else
+	return NULL;
+    }
+
+
+  class LCDMTXBoardData
+  {
+  public:
+    LCDMTXBoardData()
+      {
+	myLCDMTXBoardType[0] = '\0';
+	myLCDMTXBoardPortType[0] = '\0';
+	//sprintf((char *)myLCDMTXBoardPortType, "serial");
+	myLCDMTXBoardPort[0] = '\0';
+	myLCDMTXBoardBaud = 0;
+	myLCDMTXBoardAutoConn = false;
+	myLCDMTXBoardConnFailOption = false;
+	myLCDMTXBoardPowerOutput[0] = '\0';
+      }
+    virtual ~LCDMTXBoardData() {}
+  
+    char myLCDMTXBoardType[256];
+    char myLCDMTXBoardPortType[256];
+    char myLCDMTXBoardPort[256];
+    int myLCDMTXBoardBaud;
+    bool myLCDMTXBoardAutoConn;
+    bool myLCDMTXBoardConnFailOption;
+    char myLCDMTXBoardPowerOutput[256];
+  };
+  std::map<int, LCDMTXBoardData *> myLCDMTXBoards;
+
+  const LCDMTXBoardData *getLCDMTXBoardData(int lcdBoardNum) const
+    {
+      std::map<int, LCDMTXBoardData *>::const_iterator it;
+      if ((it = myLCDMTXBoards.find(lcdBoardNum)) != myLCDMTXBoards.end())
+	return (*it).second;
+      else
+	return NULL;
+    }
+
+  LCDMTXBoardData *getLCDMTXBoardData(int lcdBoardNum) 
+    {
+      std::map<int, LCDMTXBoardData *>::const_iterator it;
+      if ((it = myLCDMTXBoards.find(lcdBoardNum)) != myLCDMTXBoards.end())
+	return (*it).second;
+      else
+	return NULL;
+    }
+
+
+  class SonarMTXBoardData
+  {
+  public:
+    SonarMTXBoardData()
+      {
+			mySonarMTXBoardType[0] = '\0';
+			mySonarMTXBoardPortType[0] = '\0';
+			mySonarMTXBoardPort[0] = '\0';
+			mySonarMTXBoardBaud = 0;
+			mySonarMTXBoardAutoConn = false;
+			myNumSonarTransducers = 0;
+			mySonarDelay = 2;
+			mySonarGain = 10;
+			/*
+			mySonarNoiseDelta = 1250;
+			*/
+			mySonarDetectionThreshold = 25;
+			mySonarMaxRange = 255 * 17;
+			mySonarUseForAutonomousDriving = false;
+			mySonarMTXBoardPowerOutput[0] = '\0';
+      }
+    virtual ~SonarMTXBoardData() {}
+  
+    char mySonarMTXBoardType[256];
+    char mySonarMTXBoardPortType[256];
+    char mySonarMTXBoardPort[256];
+    int mySonarMTXBoardBaud;
+    bool mySonarMTXBoardAutoConn;
+    int myNumSonarTransducers;
+    int mySonarBaud;
+    int mySonarDelay;
+    int mySonarGain;
+		/*
+    int mySonarNoiseDelta;
+		*/
+    int mySonarDetectionThreshold;
+    int mySonarMaxRange;
+	bool mySonarUseForAutonomousDriving;
+    char mySonarMTXBoardPowerOutput[256];
+  };
+  std::map<int, SonarMTXBoardData *> mySonarMTXBoards;
+
+  const SonarMTXBoardData *getSonarMTXBoardData(int sonarBoardNum) const
+    {
+		std::map<int, SonarMTXBoardData *>::const_iterator it;
+		if ((it = mySonarMTXBoards.find(sonarBoardNum)) != mySonarMTXBoards.end())
+			return (*it).second;
+		else
+			return NULL;
+    }
+
+  SonarMTXBoardData *getSonarMTXBoardData(int sonarBoardNum) 
+    {
+		std::map<int, SonarMTXBoardData *>::const_iterator it;
+		if ((it = mySonarMTXBoards.find(sonarBoardNum)) != mySonarMTXBoards.end())
+			return (*it).second;
+		else
+			return NULL;
+    }
+
   bool mySettableVelMaxes;
   int myTransVelMax;
   int myRotVelMax;
@@ -551,20 +1199,43 @@ protected:
 
 
   // Sonar
+  int mySonarBoardCount;
+  int myNumSonarUnits;
   int myNumSonar;
   std::map<int, std::map<int, int> > mySonarMap;
   enum SonarInfo 
   { 
     SONAR_X, 
     SONAR_Y, 
-    SONAR_TH
+    SONAR_TH,
+    SONAR_BOARD,
+    SONAR_BOARDUNITPOSITION,
+    SONAR_GAIN,
+		/*
+    SONAR_NOISE_DELTA,
+		*/
+    SONAR_DETECTION_THRESHOLD,
+    SONAR_MAX_RANGE,
+	SONAR_USE_FOR_AUTONOMOUS_DRIVING
   };
   AREXPORT void internalSetSonar(int num, int x, int y, int th);
   AREXPORT bool parseSonarUnit(ArArgumentBuilder *builder);
-  AREXPORT const std::list<ArArgumentBuilder *> *getSonarUnits(void);
+  AREXPORT bool parseMTXSonarUnit(ArArgumentBuilder *builder);
+	AREXPORT const std::list<ArArgumentBuilder *> *getSonarUnits(void);
+	//AREXPORT const std::list<ArArgumentBuilder *> *getMTXSonarUnits(void);
   std::list<ArArgumentBuilder *> myGetSonarUnitList;
   ArRetFunctorC<const std::list<ArArgumentBuilder *> *, ArRobotParams> mySonarUnitGetFunctor;
   ArRetFunctor1C<bool, ArRobotParams, ArArgumentBuilder *> mySonarUnitSetFunctor;
+
+
+  // Battery
+	int myBatteryMTXBoardCount;
+
+  // LCD
+	int myLCDMTXBoardCount;
+
+  // Sonar
+	int mySonarMTXBoardCount;
 
   // IRs
   int myNumIR;
@@ -591,10 +1262,35 @@ protected:
   char myGPSType[256];
   int myGPSBaud;
 
+  // Sonar
+  //char mySonarPort[256];
+  //char mySonarType[256];
+  //int mySonarBaud;
+
   // Compass
   char myCompassType[256];
   char myCompassPort[256];
 
+
+  // PTZ/PTU parameters
+  std::vector<ArPTZParams> myPTZParams;
+
+  // Video device parameters
+  std::vector<ArVideoParams> myVideoParams;  
+
+  ArConfig *myCommercialConfig;
+  bool myCommercialAddedConnectables;
+  bool myCommercialProcessedSonar;
+  int myCommercialNumSonar;
+  int myCommercialMaxNumberOfLasers;
+  int myCommercialMaxNumberOfBatteries;
+  int myCommercialMaxNumberOfLCDs;
+  int myCommercialMaxNumberOfSonarBoards;
+  /// This lets us just have a straight mapping from the child
+  /// argument number to the sonar map above
+  std::map<int, int> myCommercialSonarFieldMap;
+
+  ArRetFunctorC<bool, ArRobotParams> myCommercialProcessFileCB;
 };
 
 #endif // ARROBOTPARAMS_H

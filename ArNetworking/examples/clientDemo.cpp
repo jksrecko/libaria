@@ -278,6 +278,8 @@ public:
   void handlePhysicalInfo(ArNetPacket *packet);
   /// This callback is called when an update on the temperature information changes
   void handleTemperatureInfo(ArNetPacket *packet);
+  /// Called when the map on the server changes.
+  void handleMapUpdated(ArNetPacket *packet);
 protected:
 
   /// The results from the data update are stored in these variables
@@ -306,6 +308,7 @@ protected:
   ArFunctor1C<OutputHandler, ArNetPacket *> myHandleBatteryInfoCB;
   ArFunctor1C<OutputHandler, ArNetPacket *> myHandlePhysicalInfoCB;
   ArFunctor1C<OutputHandler, ArNetPacket *> myHandleTemperatureInfoCB;
+  ArFunctor1C<OutputHandler, ArNetPacket *> myHandleMapUpdatedCB;
   //@}
   
   /// A header for the columns in the data printout is sometimes printed
@@ -322,6 +325,7 @@ OutputHandler::OutputHandler(ArClientBase *client) :
   myHandleBatteryInfoCB(this, &OutputHandler::handleBatteryInfo),
   myHandlePhysicalInfoCB(this, &OutputHandler::handlePhysicalInfo),
   myHandleTemperatureInfoCB(this, &OutputHandler::handleTemperatureInfo),
+  myHandleMapUpdatedCB(this, &OutputHandler::handleMapUpdated),
   myNeedToPrintHeader(false),
   myGotBatteryInfo(false)
 {
@@ -362,6 +366,12 @@ OutputHandler::OutputHandler(ArClientBase *client) :
     // request it to be called every 100 ms
     myClient->addHandler("update", &myHandleOutputCB);
     myClient->request("update", 100);
+  }
+
+  if(myClient->dataExists("mapUpdated"))
+  {
+    myClient->addHandler("mapUpdated", &myHandleMapUpdatedCB);
+    myClient->request("mapUpdated", -1);
   }
 }
 
@@ -496,6 +506,13 @@ void OutputHandler::handleTemperatureInfo(ArNetPacket *packet)
   char warning = packet->bufToByte();
   char shutdown = packet->bufToByte();
   printf("High temperature warning: %4d       High temperature shutdown: %4d\n", warning, shutdown);
+  fflush(stdout);
+  myNeedToPrintHeader = true;
+}
+
+void OutputHandler::handleMapUpdated(ArNetPacket *packet)
+{
+  printf("\nMap changed.\n");
   fflush(stdout);
   myNeedToPrintHeader = true;
 }

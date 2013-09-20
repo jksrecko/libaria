@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARCAMERACOLLECTION_H
 #define ARCAMERACOLLECTION_H
@@ -74,6 +74,8 @@ class ArCameraParameterSource;
  * of parameters is merely passed to the parameter source.)
  * <p>
  * ArCameraCollection is thread-safe.  
+
+  @ingroup OptionalClasses
 **/
 class ArCameraCollection
 {
@@ -329,17 +331,17 @@ public:
   // ---------------------------------------------------------------------------
 
   /// Lock the collection
-  AREXPORT int lock() {
+   int lock() {
     return (myMutex.lock()); 
   }
 
   /// Try to lock the collection without blocking
-  AREXPORT int tryLock() {
+  int tryLock() {
     return(myMutex.tryLock());
   }
 
   /// Unlock the collection
-  AREXPORT int unlock() {
+  int unlock() {
     return(myMutex.unlock());
   }
 
@@ -459,15 +461,15 @@ class ArCameraCollectionItem
 public:
 
   /// Constructor
-  AREXPORT ArCameraCollectionItem() {};
+  ArCameraCollectionItem() {};
   /// Destructor
-  AREXPORT virtual ~ArCameraCollectionItem() {};
+  virtual ~ArCameraCollectionItem() {};
 
   /// Returns the name of the camera handled by this item.
-  AREXPORT virtual const char *getCameraName() = 0;
+  virtual const char *getCameraName() = 0;
 
   /// Adds this item to the given camera collection.
-  AREXPORT virtual void addToCameraCollection(ArCameraCollection &collection) = 0;
+  virtual void addToCameraCollection(ArCameraCollection &collection) = 0;
 
 }; // end class ArCameraCollectionItem
 
@@ -487,16 +489,16 @@ class ArCameraParameterSource : public ArCameraCollectionItem
 public:
 
   /// Constructor
-  AREXPORT ArCameraParameterSource() {};
+  ArCameraParameterSource() {};
   /// Destructor
-  AREXPORT ~ArCameraParameterSource() {};
+  ~ArCameraParameterSource() {};
 
   /// Gets the specified camera parameter.
-  AREXPORT virtual bool getParameter(const char *paramName,
+  virtual bool getParameter(const char *paramName,
                                      ArConfigArg &paramOut) = 0;
 
   /// Sets the given camera parameter.
-  AREXPORT virtual bool setParameter(const ArConfigArg &param) = 0;
+  virtual bool setParameter(const ArConfigArg &param) = 0;
 
 }; // end class ArCameraParameterSource
 

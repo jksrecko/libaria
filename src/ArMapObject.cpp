@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,15 +19,15 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "ArExport.h"
 #include "ArMapObject.h"
 
-// #define ARDEBUG_MAP_OBJECT
+//#define ARDEBUG_MAP_OBJECT
 #ifdef ARDEBUG_MAP_OBJECT
 #define IFDEBUG(code) {code;}
 #else
@@ -231,6 +231,8 @@ AREXPORT ArMapObject::ArMapObject(const char *type,
     myFromToSegments.push_back(ArLineSegment(P1, P2));
     myFromToSegments.push_back(ArLineSegment(P2, P3));
     myFromToSegments.push_back(ArLineSegment(P3, P0));
+    
+    myFromToSegment.newEndPoints(fromPose, toPose);
   }
   else { // pose
     size_t whPos = myType.rfind("WithHeading");
@@ -262,6 +264,7 @@ AREXPORT ArMapObject::ArMapObject(const ArMapObject &mapObject) :
   myFromPose(mapObject.myFromPose),
   myToPose(mapObject.myToPose),
   myFromToSegments(mapObject.myFromToSegments),
+  myFromToSegment(mapObject.myFromToSegment),
   myStringRepresentation(mapObject.myStringRepresentation)
 {
 }
@@ -281,7 +284,7 @@ AREXPORT ArMapObject &ArMapObject::operator=(const ArMapObject &mapObject)
     myFromPose = mapObject.myFromPose;
     myToPose = mapObject.myToPose;
     myFromToSegments = mapObject.myFromToSegments;
-
+    myFromToSegment = mapObject.myFromToSegment;
     myStringRepresentation = mapObject.myStringRepresentation;
   }
   return *this;
@@ -322,6 +325,29 @@ AREXPORT const char *ArMapObject::getFileName(void) const { return myDescription
 
 /// Gets the icon string of the object 
 AREXPORT const char *ArMapObject::getIconName(void) const { return myIconName.c_str(); }
+
+/// Returns the numerical identifier of the object, when auto-numbering is on.
+AREXPORT int ArMapObject::getId() const
+{
+  // TODO: If this method is going to be called frequently, then the ID should be cached.
+
+  const char *iconText = myIconName.c_str();
+
+  // The most common case is the "normal" object that has the initial "ICON" text.
+  if (strcmp(iconText, "ICON") == 0) {
+    return 0;
+  }
+  if (strstr(iconText, "ID=") == iconText) {
+    const char *idText = &iconText[3];
+    if (!ArUtil::isStrEmpty(idText)) {
+      return atoi(idText);
+    }
+  }
+  return 0;
+
+} // end method getId
+
+
 /// Gets the name of the object (if any)
 AREXPORT const char *ArMapObject::getName(void) const { return myName.c_str(); }
 /// Gets the addition args of the object
@@ -359,7 +385,7 @@ AREXPORT void ArMapObject::setDescription(const char *description)
 } 
 
 
-AREXPORT void ArMapObject::log(const char *intro) { 
+AREXPORT void ArMapObject::log(const char *intro) const { 
 
   std::string introString;
   if (!ArUtil::isStrEmpty(intro)) {
@@ -375,21 +401,14 @@ AREXPORT void ArMapObject::log(const char *intro) {
 }
 
 
-/// Gets a list of fromTo line segments that have been rotated
-/**
-  Note that this function doesn't know if it makes sense for this
-  map object to have the line segments or not (it makes sense on a
-  ForbiddenArea but not a ForbiddenLine)...  This is just here so
-  that everyone doesn't have to do the same calculation.  Note that
-  this might be a little more CPU/Memory intensive transfering
-  these around, so you may want to keep a copy of them if you're
-  using them a lot (but make sure you clear the copy if the map
-  changes).  It may not make much difference on a modern processor
-  though (its set up this way for safety).
-**/
 AREXPORT std::list<ArLineSegment> ArMapObject::getFromToSegments(void)
 {
   return myFromToSegments;
+}
+
+AREXPORT ArLineSegment ArMapObject::getFromToSegment(void)
+{
+  return myFromToSegment;
 }
 
 AREXPORT ArPose ArMapObject::findCenter(void) const
@@ -462,23 +481,108 @@ AREXPORT const char *ArMapObject::toString(void) const
 
 } // end method toString
 
+
 AREXPORT bool ArMapObject::operator<(const ArMapObject& other) const
 {
   if (!myHasFromTo) {
+    
     if (!other.myHasFromTo) {
-      return myPose < other.myPose;
+
+      if (myPose == other.myPose) {
+        // Fall through to name and type comparisons below
+      }
+      else {
+        return myPose < other.myPose;
+      }
     }
     else { // other has from/to poses
-      return myPose < other.myFromPose;
+
+      if (myPose == other.myFromPose) {
+        // If pose equals the from pose, then always put the !hasFromTo object first
+        return true;
+      }
+      else {
+        return myPose < other.myFromPose;
+      }
     }
   }
   else { // has from/to poses
     if (!other.myHasFromTo) {
-      return myFromPose < other.myPose;
+
+      if (myFromPose == other.myPose) {
+        // This is the inverse of the situation above, always put the !hasFromTo object first
+        return false;
+      }
+      else {
+        return myFromPose < other.myPose;
+      }
     }
     else { // other has from/to poses
-      return myFromPose < other.myFromPose;
+
+      if (myFromPose == other.myFromPose) {
+        // Fall through to name and type comparisons below
+      }
+      else {
+        return myFromPose < other.myFromPose;
+      }
     }
   } // end else has from/to poses
+
+
+
+  int typeCompare = myType.compare(other.myType);
+
+  if (typeCompare != 0) {
+    return (typeCompare < 0);
+  }
+  
+  // Equal types, try to compare names
+
+  if (!myName.empty() && !other.myName.empty()) {
+
+    int nameCompare = myName.compare(other.myName);
+
+    if (nameCompare != 0) {
+      return (nameCompare < 0);
+    }
+
+  } 
+  else if (myName.empty() && !other.myName.empty()) {
+    return true; 
+  }
+  else if (!myName.empty() && other.myName.empty()) {
+    return false; 
+  }
+
+  // Both names empty, must be hasFromTo
+
+  if (myToPose == other.myToPose) {
+    // Fall through to name and type comparisons below
+  }
+  else {
+    return myToPose < other.myToPose;
+  }
+
+  if (!myDescription.empty() || !other.myDescription.empty()) {
+    return (myDescription.compare(other.myDescription) < 0);
+  }
+ 
+  // KMC It might be slightly more efficient to call this at the beginning of the 
+  // method, but I'm trying to minimize the impact of any change.
+  // If they are the same physical pointers, then they are equal. Neither is 
+  // "less than" the other. 
+  if ((void *) this == (void *) &other) {
+    return false;
+  }
+
+  ArLog::log(ArLog::Normal,
+             "ArMapObject::operator<() two nearly identical objects cannot compare");
+
+  IFDEBUG(log("this"));
+  IFDEBUG(log("other")); 
+
+  // Using a pointer comparison for lack of any better ideas.
+  return ((void *) this < (void *) &other);
+
 } // end operator<
 

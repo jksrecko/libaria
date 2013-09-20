@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARRVISIONPTZ_H
 #define ARRVISIONPTZ_H
@@ -67,26 +67,39 @@ public:
   AREXPORT virtual ~ArRVisionPTZ();
   
   AREXPORT virtual bool init(void);
-  AREXPORT virtual bool pan(double degrees);
-  AREXPORT virtual bool panRel(double degrees);
-  AREXPORT virtual bool tilt(double degrees);
-  AREXPORT virtual bool tiltRel(double degrees);
-  AREXPORT virtual bool panTilt(double degreesPan, double degreesTilt);
-  AREXPORT virtual bool panTiltRel(double degreesPan, double degreesTilt);
+  AREXPORT virtual const char *getTypeName() { return "rvision"; }
+  /// Set serial port
+  /// @since 2.7.6
+  void setPort(const char *port)
+  {
+	  mySerialPort = port;
+  }
+protected:
+  AREXPORT virtual bool pan_i(double degrees);
+  AREXPORT virtual bool panRel_i(double degrees);
+  AREXPORT virtual bool tilt_i(double degrees);
+  AREXPORT virtual bool tiltRel_i(double degrees);
+  AREXPORT virtual bool panTilt_i(double degreesPan, double degreesTilt);
+  AREXPORT virtual bool panTiltRel_i(double degreesPan, double degreesTilt);
+public:
   AREXPORT virtual bool canZoom(void) const { return true; }
   AREXPORT virtual bool zoom(int zoomValue);
   AREXPORT virtual bool zoomRel(int zoomValue);
-  AREXPORT virtual double getPan(void) const { return myPan; }
-  AREXPORT virtual double getTilt(void) const { return myTilt; }
+protected:
+  AREXPORT virtual double getPan_i(void) const { return myPan; }
+  AREXPORT virtual double getTilt_i(void) const { return myTilt; }
+public:
   AREXPORT virtual int getZoom(void) const { return myZoom; }
   //AREXPORT void getRealPanTilt(void);
   //AREXPORT void getRealZoomPos(void);
+  /*
   AREXPORT virtual double getMaxPosPan(void) const { return MAX_PAN; }
   AREXPORT virtual double getMaxNegPan(void) const { return MIN_PAN; }
   AREXPORT virtual double getMaxPosTilt(void) const { return MAX_TILT; }
   AREXPORT virtual double getMaxNegTilt(void) const { return MIN_TILT; }
   AREXPORT virtual int getMaxZoom(void) const { return MAX_ZOOM; }
   AREXPORT virtual int getMinZoom(void) const { return MIN_ZOOM; }
+  */
 
   AREXPORT virtual bool canGetRealPanTilt(void) const { return false; }
   AREXPORT virtual bool canGetRealZoom(void) const { return false; }
@@ -96,7 +109,6 @@ public:
   /// Gets the field of view at minimum zoom
   AREXPORT virtual double getFOVAtMinZoom(void) { return 48.8; }
 
-  //AREXPORT bool packetHandler(ArBasePacket *packet);
   virtual ArBasePacket* readPacket(void);
   enum {
     MAX_PAN = 180, ///< maximum degrees the unit can pan (clockwise from top)
@@ -108,9 +120,15 @@ public:
     TILT_OFFSET_IN_DEGREES = 38, ///< offset value to convert internal camera coords to world
     PAN_OFFSET_IN_DEGREES = 190 ///< offset value to convert internal camera coords to world
   };
+  
+  /// called automatically by Aria::init()
+  ///@since 2.7.6
+  ///@internal
+#ifndef SWIG
+  static void registerPTZType();
+#endif
 protected:
   void initializePackets(void);
-  //ArRobot *myRobot;
   double myPan;
   double myTilt;
   int myZoom;
@@ -122,7 +140,13 @@ protected:
   ArRVisionPacket myZoomPacket; 
   ArRVisionPacket myPanTiltPacket;
   ArRVisionPacket myInquiryPacket;
-  //ArDeviceConnection *myConn;
+  const char *mySerialPort;
+
+  ///@since 2.7.6
+  static ArPTZ* create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot);
+  ///@since 2.7.6
+  static ArPTZConnector::GlobalPTZCreateFunc ourCreateFunc;
+
 };
 
 #endif // ARRVISIONPTZ_H

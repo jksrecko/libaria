@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARROBOTJOYHANDLER_H
 #define ARROBOTJOYHANDLER_H
@@ -40,6 +40,8 @@ class ArRobotPacket;
 
     Also note that x is usually rotational velocity (since it right/left),
     whereas Y is translational (since it is up/down).
+
+  @ingroup OptionalClasses
 **/
 class ArRobotJoyHandler
 {
@@ -58,6 +60,15 @@ class ArRobotJoyHandler
   AREXPORT ArTime getDataReceivedTime(void) { return myDataReceived; }
   /// If we've ever gotten a packet back
   AREXPORT bool gotData(void) { return myGotData; }
+  /// Adds to a section in a config
+  AREXPORT void addToConfig(ArConfig *config, const char *section);
+  /// Gets the X value (only use for information, or with the robot locked, getDoubles is preferred)
+  int getRawX(void) { return myRawX; }
+  /// Gets the Y value (only use for information, or with the robot locked, getDoubles is preferred)
+  int getRawY(void) { return myRawY; }
+  /// Gets the throttle value (only use for information, or with the robot locked, getDoubles is preferred)
+  int getRawThrottle(void) { return myRawThrottle; }
+
  protected:
   AREXPORT bool handleJoystickPacket(ArRobotPacket *packet);
   AREXPORT void connectCallback(void);
@@ -70,7 +81,14 @@ class ArRobotJoyHandler
   double myJoyY;
   double myThrottle;
   bool myGotData;
-  
+
+  int myJoyXCenter;
+  int myJoyYCenter;
+
+  int myRawX;
+  int myRawY;
+  int myRawThrottle;
+
   ArTime myStarted;
   ArRetFunctor1C<bool, ArRobotJoyHandler,
       ArRobotPacket *> myHandleJoystickPacketCB;

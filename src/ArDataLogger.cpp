@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,15 +19,16 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ariaOSDef.h"
 #include "ArExport.h"
 #include "ArRobot.h"
 #include "ArConfig.h"
 #include "ArDataLogger.h"
+#include "ArRobotBatteryPacketReader.h"
 #include <vector>
 
 /**
@@ -73,10 +74,12 @@ AREXPORT ArDataLogger::ArDataLogger(ArRobot *robot, const char *fileName) :
   //myStringsEnabled = NULL;
 
   myLogVoltage = false;
+  myLogStateOfCharge = false;
   myLogLeftVel = false;
   myLogRightVel = false;
   myLogTransVel = false;
   myLogRotVel = false;
+  myLogLatVel = false;
   myLogLeftStalled = false;
   myLogRightStalled = false;
   myLogStallBits = false;
@@ -87,6 +90,7 @@ AREXPORT ArDataLogger::ArDataLogger(ArRobot *robot, const char *fileName) :
   myLogCorrectedEncoderPose = false;
   myLogEncoders = false;
   myLogChargeState = false;
+  myLogBatteryInfo = false;
 
   myFile = NULL;
 }
@@ -146,9 +150,18 @@ AREXPORT void ArDataLogger::addToConfig(ArConfig *config)
   myConfig->addParam(
 	  ArConfigArg("DataLogBatteryVoltage", &myLogVoltage, "True to log battery voltage"),
 	  section.c_str(), ArPriority::DETAILED);
+  if (myRobot->haveStateOfCharge())
+    myConfig->addParam(
+	    ArConfigArg("DataLogStateOfCharge", &myLogStateOfCharge, "True to log state of charge"),
+	    section.c_str(), ArPriority::DETAILED);
+  
   myConfig->addParam(
 	  ArConfigArg("DataLogChargeState", &myLogChargeState, 
 		      "True to log charge state"),
+	  section.c_str(), ArPriority::DETAILED);
+  myConfig->addParam(
+	  ArConfigArg("DataLogBatteryInfo", &myLogBatteryInfo, 
+		      "True to log battery info (if available)"),
 	  section.c_str(), ArPriority::DETAILED);
   myConfig->addParam(
 	  ArConfigArg("DataLogPose", &myLogPose, "True to log robot's pose"),
@@ -173,6 +186,10 @@ AREXPORT void ArDataLogger::addToConfig(ArConfig *config)
 	  section.c_str(), ArPriority::DETAILED);
   myConfig->addParam(
 	  ArConfigArg("DataLogRotVel", &myLogRotVel, "True to log rotational wheel velocity"),
+	  section.c_str(), ArPriority::DETAILED);
+  if (myRobot->hasLatVel())
+    myConfig->addParam(
+	    ArConfigArg("DataLogLatVel", &myLogRotVel, "True to log lateral wheel velocity"),
 	  section.c_str(), ArPriority::DETAILED);
   myConfig->addParam(
 	  ArConfigArg("DataLogLeftStalled", &myLogLeftStalled, "True to log if the left wheel is stalled"),
@@ -388,8 +405,21 @@ AREXPORT bool ArDataLogger::processFile(char *errorBuffer,
   }
   if (myLogVoltage)
     fprintf(myFile, "\tVolt");
+  if (myLogStateOfCharge)
+    fprintf(myFile, "\tSoC");
   if (myLogChargeState)
     fprintf(myFile, "\t%015s\t%5s", "ChargeStateName", "csNum");
+  if (myLogBatteryInfo && myRobot->getBatteryPacketReader() != NULL)
+  {
+    myRobot->getBatteryPacketReader()->requestContinuousPackets();
+    int battery;
+    for (battery = 1; 
+	 battery <= myRobot->getBatteryPacketReader()->getNumBatteries();
+	 battery++)
+    {
+      fprintf(myFile, "\tbat%02dflags1 \tbat%02dflags2 \tbat%02dflags3 \tbat%02drelsoc\tbat%02dabssoc", battery, battery, battery, battery, battery);
+    }
+  }
   if (myLogPose)
     fprintf(myFile, "\t%010s\t%010s\t%010s", "X", "Y", "Th");
   if (myLogEncoderPose)
@@ -410,6 +440,8 @@ AREXPORT bool ArDataLogger::processFile(char *errorBuffer,
     fprintf(myFile, "\tTransV");
   if (myLogRotVel)
     fprintf(myFile, "\tRotV");
+  if (myLogLatVel)
+    fprintf(myFile, "\tLatV");
   if (myLogLeftStalled)
     fprintf(myFile, "\tLStall");
   if (myLogRightStalled)
@@ -440,6 +472,7 @@ AREXPORT bool ArDataLogger::processFile(char *errorBuffer,
     if (myDigOutEnabled[i])
       fprintf(myFile, "\tDigOut%d%8s", i, "");
   }
+
   fprintf(myFile, "\n");
   fflush(myFile);
   myMutex.unlock();
@@ -485,6 +518,8 @@ AREXPORT void ArDataLogger::userTask(void)
 
   if (myLogVoltage)
     fprintf(myFile, "\t%.2f", myRobot->getRealBatteryVoltageNow());
+  if (myLogStateOfCharge)
+    fprintf(myFile, "\t%.0f", myRobot->getStateOfCharge());
   if (myLogChargeState)
   {  
     ArRobot::ChargeState chargeState = myRobot->getChargeState();
@@ -499,10 +534,45 @@ AREXPORT void ArDataLogger::userTask(void)
       chargeString = "Overcharge";
     else if (chargeState == ArRobot::CHARGING_FLOAT)
       chargeString = "Float";
+    else if (chargeState == ArRobot::CHARGING_BALANCE)
+      chargeString = "Balance";
     else
       chargeString = "Unknown";
     fprintf(myFile, "\t%15s\t%5d", chargeString.c_str(), chargeState);
   }
+
+  if (myLogBatteryInfo && myRobot->getBatteryPacketReader() != NULL)
+  {
+    int battery;
+    int flags;
+    for (battery = 1; 
+	 battery <= myRobot->getBatteryPacketReader()->getNumBatteries();
+	 battery++)
+    {
+      fprintf(myFile, "\t");
+      flags = myRobot->getBatteryPacketReader()->getFlags1(battery);
+      for (i = 0, val = 1; i < 8; i++, val *= 2)
+	fprintf(myFile, "%d", (bool) (flags & val));
+      fprintf(myFile, "   ");
+
+      fprintf(myFile, "\t");
+      flags = myRobot->getBatteryPacketReader()->getFlags2(battery);
+      for (i = 0, val = 1; i < 8; i++, val *= 2)
+	fprintf(myFile, "%d", (bool) (flags & val));
+      fprintf(myFile, "   ");
+
+      fprintf(myFile, "\t");
+      flags = myRobot->getBatteryPacketReader()->getFlags3(battery);
+      for (i = 0, val = 1; i < 8; i++, val *= 2)
+	fprintf(myFile, "%d", (bool) (flags & val));
+      fprintf(myFile, "   ");
+      
+      fprintf(myFile, "\t%11d\t%11d", 
+	      myRobot->getBatteryPacketReader()->getRelSOC(battery),
+	      myRobot->getBatteryPacketReader()->getAbsSOC(battery));      
+    }
+  }
+
   if (myLogPose)
     fprintf(myFile, "\t%10.0f\t%10.0f\t%10.0f", myRobot->getX(), 
 	    myRobot->getY(), myRobot->getTh());
@@ -527,6 +597,8 @@ AREXPORT void ArDataLogger::userTask(void)
     fprintf(myFile, "\t%.0f", myRobot->getVel());
   if (myLogRotVel)
     fprintf(myFile, "\t%.0f", myRobot->getRotVel());
+  if (myLogLatVel)
+    fprintf(myFile, "\t%.0f", myRobot->getLatVel());
   if (myLogLeftStalled)
     fprintf(myFile, "\t%d", (bool)myRobot->isLeftMotorStalled());
   if (myLogRightStalled)
@@ -577,6 +649,7 @@ AREXPORT void ArDataLogger::userTask(void)
 	fprintf(myFile, "%d", (bool)(myRobot->getIODigOut(i) & val));
     }
   }
+  
   fprintf(myFile, "\n");
   fflush(myFile);
   myLastLogged.setToNow();

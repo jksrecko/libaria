@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -46,6 +46,14 @@ AREXPORT ArRobotJoyHandler::ArRobotJoyHandler(ArRobot *robot) :
   myButton2 = 0;
   myJoyX = 0;
   myJoyY = 0;
+
+  myJoyXCenter = 512.0;
+  myJoyYCenter = 512.0;
+
+  myRawX = -1;
+  myRawX = -1;
+  myRawX = -1;
+
   myThrottle = 1;
   myGotData = false;
 }
@@ -80,18 +88,53 @@ AREXPORT bool ArRobotJoyHandler::handleJoystickPacket(ArRobotPacket *packet)
   else
     myButton2  = false;
 
-  // these should vary between 1 and -1
-  myJoyX = -((double)packet->bufToUByte2() - 512.0) / 512.0;
-  myJoyY = ((double)packet->bufToUByte2() - 512.0) / 512.0;
-  // these should vary between 1 and 0
-  myThrottle = (double)packet->bufToUByte2() / 1024.0;
+  myRawX = packet->bufToUByte2();
+  myRawY = packet->bufToUByte2();
+  myRawThrottle = packet->bufToUByte2();
 
+  // these should vary between 1 and -1
+  if (myJoyXCenter > 511.9 && myJoyXCenter < 512.1)
+  {
+    myJoyX = -((double)myRawX - 512.0) / 512.0;
+  }
+  else
+  {
+    if (myRawX > myJoyXCenter) 
+    {
+      myJoyX = -(myRawX - myJoyXCenter) / (double)(1024 - myJoyXCenter);
+    }
+    else if (myRawX < myJoyXCenter)
+    {
+      myJoyX = -(myRawX - myJoyXCenter) / (double)(myJoyXCenter);
+    }
+  }
+
+  if (myJoyYCenter > 511.9 && myJoyYCenter < 512.1)
+  {
+    myJoyY = ((double)myRawY - 512.0) / 512.0;
+  }
+  else
+  {
+    if (myRawY > myJoyYCenter) 
+    {
+      myJoyY = (myRawY - myJoyYCenter) / (double)(1024 - myJoyYCenter);
+    }
+    else if (myRawY < myJoyYCenter)
+    {
+      myJoyY = (myRawY - myJoyYCenter) / (double)(myJoyYCenter);
+    }
+  }
+
+  // these should vary between 1 and 0
+  myThrottle = (double)myRawThrottle / 1024.0;
+
+  //%10d.%03d ago 
+  //myStarted.secSince(), myStarted.mSecSince() % 1000, 
   /*
   ArLog::log(ArLog::Normal, 
-	     "%10d.%03d ago %5.3f %5.3f %5.3f %d %d vel %4.0f %4.0f", 
-	     myStarted.secSince(), myStarted.mSecSince() % 1000, 
+	     "%6.3f %6.3f %5.3f %d %d raw %4d %4d %4d center %4d %4d", 
 	     myJoyX, myJoyY, myThrottle, myButton1, myButton2, 
-	     myRobot->getVel(), myRobot->getRotVel());
+	     myRawX, myRawY, myRawThrottle, myJoyXCenter, myJoyYCenter);
   */
   //  printf("%d %d %g %g %g\n", myButton1, myButton2, myJoyX, myJoyY, myThrottle);
   if (!myGotData)
@@ -110,4 +153,20 @@ AREXPORT void ArRobotJoyHandler::getDoubles(double *x, double *y, double *z)
     *y = myJoyY;
   if (z != NULL)
     *z = myThrottle;
+}
+
+AREXPORT void ArRobotJoyHandler::addToConfig(ArConfig *config, 
+					     const char *section)
+{
+  config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), section, ArPriority::NORMAL);
+  config->addParam(
+	  ArConfigArg("JoyXCenter", &myJoyXCenter,
+		      "The X center", 0.0, 1024.0),
+	  section, ArPriority::NORMAL);
+
+  config->addParam(
+	  ArConfigArg("JoyYCenter", &myJoyYCenter,
+		      "The Y center", 0.0, 1024.0),
+	  section, ArPriority::NORMAL);
+  config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), section, ArPriority::NORMAL);  
 }

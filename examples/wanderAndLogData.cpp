@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "Aria.h"
 #include <string>
@@ -35,6 +35,10 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
  *
  * If -connectLaser command line argument is given, or is set in robot parameter
  * file, it will use th elaser as well as the sonar to wander.
+ *
+ * ARIA also contains a class called ArDataLogger which is configurable through
+ * ArConfig.  You can use ArDataLogger in your applications to incorporate 
+ * a similar data logging feature.
  */
 
 
@@ -170,20 +174,23 @@ int main(int argc, char **argv)
   ArArgumentParser parser(&argc, argv);
   parser.loadDefaultArguments();
   ArRobotConnector robotConnector(&parser, &robot);
-  if(!robotConnector.connectRobot())
+
+  if (!Aria::parseArgs() || !parser.checkHelpAndWarnUnparsed())
   {
     ArLog::log(ArLog::Terse, "wanderAndLogData: Could not connect to the robot.");
     if(parser.checkHelpAndWarnUnparsed())
     {
         Aria::logOptions();
         Aria::exit(1);
+        return 1;
     }
   }
-  if (!Aria::parseArgs() || !parser.checkHelpAndWarnUnparsed())
+
+  if(!robotConnector.connectRobot())
   {
-    robotConnector.logOptions();
-    Aria::exit(1);
-    return 1;
+    ArLog::log(ArLog::Terse, "wanderAndLogData: Could not connect to the robot.");
+    Aria::exit(2);
+    return 2;
   }
 
   ArLog::log(ArLog::Normal, "wanderAndLogData: Connected.");
@@ -198,14 +205,6 @@ int main(int argc, char **argv)
   robot.addRangeDevice(&bumpers);
   robot.addRangeDevice(&ir);
   
-  // try to connect, if we fail exit
-  if (!robotConnector.connectRobot(&robot))
-  {
-    printf("Could not connect to robot... exiting\n");
-    Aria::exit(1);  // exit program
-    return 1;
-  }
-
   // turn on the motors, turn off amigobot sound effects (for old h8-model amigobots)
   robot.enableMotors();
   robot.comInt(ArCommands::SOUNDTOG, 0);

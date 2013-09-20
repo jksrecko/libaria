@@ -68,10 +68,21 @@ public:
   AREXPORT const char *getMode(void) const { return myMode.c_str(); }
   /// Gets a string representing the status of the mode we're in
   AREXPORT const char *getStatus(void) const { return myStatus.c_str(); }
+  /// Gets a string representing the extended status of the mode we're
+  /// in
+  AREXPORT const char *getExtendedStatus(void) const { return myExtendedStatus.c_str(); }
+  /// Gets the active mode string
+  AREXPORT static const char *getActiveModeModeString(void);
+  /// Gets the active status string
+  AREXPORT static const char *getActiveModeStatusString(void);
+  /// Gets the active extended status string
+  AREXPORT static const char *getActiveModeExtendedStatusString(void);
   /// Gets the name of the mode we're in
   AREXPORT const char *getName(void) const { return myName.c_str(); }
   /// Gets if this mode is active or not
   AREXPORT bool isActive(void) const { return myIsActive; }
+  /// Gets if the active mode is locked or not 
+  AREXPORT static bool isLocked(void);
   /// Gets whether we'll unlock if requested or not
   AREXPORT static bool willUnlockIfRequested(void);
   /// Gets the active mode
@@ -84,6 +95,8 @@ public:
   AREXPORT void setActivityTimeToNow(void);
   /// Gets the seconds since the activity of our active mode
   AREXPORT static int getActiveModeActivityTimeSecSince(void);
+  /// Gets if the active mode set the activity time this cycle or not 
+  AREXPORT static bool getActiveModeSetActivityThisCycle(void);
   /// Sets this mode to default (so if a mode deactivates it activates this)
   AREXPORT void addAsDefaultMode(ArListPos::Pos pos = ArListPos::LAST);
   /// Sees if this wants to become the default mode
@@ -187,12 +200,14 @@ protected:
   std::string myMode;
   std::string myStatus;
   bool myStatusSetThisCycle;
+  std::string myExtendedStatus;
 
   // variables for activity time (so we can do things if idle) this
   // isn't static so that each mode can have its own
   // 'myHasSetActivityTime' so that if a mode doesn't use this scheme
   // it doesn't get tromped on
   bool myHasSetActivityTime;
+  bool mySetActivityThisCycle;
   ArTime myActivityTime;
   ArMutex myActivityTimeMutex;
   
@@ -201,6 +216,7 @@ protected:
   AREXPORT static ArServerMode *ourActiveMode;
   AREXPORT static ArServerMode *ourNextActiveMode;
   AREXPORT static ArServerMode *ourLastActiveMode;
+  AREXPORT static bool ourActiveModeSetActivityThisCycle;
 
   AREXPORT ArServerMode *getLastActiveMode();
 

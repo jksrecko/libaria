@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 // ArThread.cc -- Thread classes
@@ -37,6 +37,9 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArLog.h"
 #include "ArSignalHandler.h"
 
+#ifndef MINGW
+#include <sys/syscall.h>
+#endif
 
 static void * run(void *arg)
 {
@@ -81,9 +84,49 @@ void ArThread::init()
   main->myJoinable=true;
   main->myRunning=true;
   main->myThread=pt;
-  ourThreads.insert(MapType::value_type(pt, main));
+  addThreadToMap(pt, main); // Recursive lock!
+  //ourThreads.insert(MapType::value_type(pt, main));
   ourThreadsMutex.unlock();
 }
+
+
+AREXPORT void ArThread::shutdown()
+{
+  /*** This is the _WIN code.  Something similar (or identical?) should
+   *** probably be implemented here.
+
+  ourThreadsMutex.lock();
+
+  // At this point, the ourThreads map should only contain the main thread 
+  // that was created in init (presuming that joinAll was called, from 
+  // the main thread).
+  // 
+  // Do not use deleteSetPairs because this causes the ourThreads map 
+  // to be updated recursively (because the destructor updates the map).
+  //
+  std::list<ArThread *> threadList;
+
+  for (MapType::iterator mapIter = ourThreads.begin(); 
+       mapIter != ourThreads.end();
+       mapIter++) {
+    if (mapIter->second != NULL) {
+      threadList.push_back(mapIter->second);
+    }
+  }
+  for (std::list<ArThread *>::iterator listIter = threadList.begin();
+      listIter != threadList.end();
+      listIter++) {
+    delete (*listIter);
+  }
+  if (!ourThreads.empty()) {
+    ArLog::log(ArLog::Normal,
+               "ArThread::shutdown() unexpected thread leftover");
+  }
+  ourThreadsMutex.unlock();
+
+  ***/
+
+} // end method shutdown
 
 /**
    If a newly created thread calls self() on itself too soon, this will return
@@ -99,6 +142,8 @@ void ArThread::init()
 */
 ArThread * ArThread::self()
 {
+   return findThreadInMap(pthread_self());
+   /*
   ThreadType pt;
   MapType::iterator iter;
 
@@ -111,6 +156,7 @@ ArThread * ArThread::self()
     return((*iter).second);
   else
     return(NULL);
+*/
 }
 
 /**
@@ -175,14 +221,22 @@ int ArThread::create(ArFunctor *func, bool joinable, bool lowerPriority)
   else
   {
     if (myName.size() == 0)
+    {
       ArLog::log(ourLogLevel, "Created anonymous thread with ID %d", 
 		 myThread);
+      //ArLog::logBacktrace(ArLog::Normal);
+    }
     else
+    {
       ArLog::log(ourLogLevel, "Created %s thread with ID %d", myName.c_str(),
 		 myThread);
+    }
+	addThreadToMap(myThread, this);
+	/*
     ourThreadsMutex.lock();
     ourThreads.insert(MapType::value_type(myThread, this));
     ourThreadsMutex.unlock();
+	*/
     pthread_attr_destroy(&attr);
     return(0);
   }
@@ -237,9 +291,12 @@ int ArThread::detach()
 
 void ArThread::cancel()
 {
+  removeThreadFromMap(myThread);
+  /*
   ourThreadsMutex.lock();
   ourThreads.erase(myThread);
   ourThreadsMutex.unlock();
+  */
   pthread_cancel(myThread);
 }
 
@@ -252,32 +309,40 @@ AREXPORT void ArThread::threadStarted(void)
 {
   myStarted = true;
   myPID = getpid();
+  // MPL 12/3/2012 gettid isn't implemented, but there's a hack with syscall
+  //myTID = gettid();
+#ifdef MINGW
+  myTID = -1;
+#else
+  myTID = (pid_t) syscall(SYS_gettid);
+#endif
   if (myName.size() == 0)
-    ArLog::log(ourLogLevel, "Anonymous thread (%d) is running with pid %d",
-	       myThread, myPID);
+    ArLog::log(ourLogLevel, "Anonymous thread (%d) is running with pid %d tid %d",
+	       myThread, myPID, myTID);
   else
-    ArLog::log(ourLogLevel, "Thread %s (%d) is running with pid %d",
-	       myName.c_str(), myThread, myPID);
+    ArLog::log(ourLogLevel, "Thread %s (%d) is running with pid %d tid %d",
+	       myName.c_str(), myThread, myPID, myTID);
 }
 
 AREXPORT void ArThread::threadFinished(void)
 {
   myFinished = true;
-  myPID = getpid();
+  /// 12/3/2012 MPL Taking this out since it should be set already
+  //myPID = getpid();
   if (myName.size() == 0)
-    ArLog::log(ourLogLevel, "Anonymous thread (%d) with pid %d has finished",
-	       myThread, myPID);
+    ArLog::log(ourLogLevel, "Anonymous thread (%d) with pid %d tid %d has finished",
+	       myThread, myPID, myTID);
   else
-    ArLog::log(ourLogLevel, "Thread %s (%d) with pid %d has finished",
-	       myName.c_str(), myThread, myPID);
+    ArLog::log(ourLogLevel, "Thread %s (%d) with pid %d tid %d has finished",
+	       myName.c_str(), myThread, myPID, myTID);
 }
 
 AREXPORT void ArThread::logThreadInfo(void)
 {
   if (myName.size() == 0)
-    ArLog::log(ourLogLevel, "Anonymous thread (%d) is running with pid %d",
-	       myThread, myPID);
+    ArLog::log(ourLogLevel, "Anonymous thread (%d) is running with pid %d tid %d",
+	       myThread, myPID, myTID);
   else
-    ArLog::log(ourLogLevel, "Thread %s (%d) is running with pid %d",
-	       myName.c_str(), myThread, myPID);
+    ArLog::log(ourLogLevel, "Thread %s (%d) is running with pid %d %d",
+	       myName.c_str(), myThread, myPID, myTID);
 }

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -35,15 +35,22 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
    @param robot The robot this camera is attached to, can be NULL
 **/
 AREXPORT ArPTZ::ArPTZ(ArRobot *robot) :
+  myRobot(robot),
+  myConn(NULL),
   myConnectCB(this, &ArPTZ::connectHandler),
   mySensorInterpCB(this, &ArPTZ::sensorInterpHandler),
-  myRobotPacketHandlerCB(this, &ArPTZ::robotPacketHandler)
+  myAuxPort(1),
+  myAuxTxCmd(ArCommands::TTY2),
+  myAuxRxCmd(ArCommands::GETAUX),
+  myRobotPacketHandlerCB(this, &ArPTZ::robotPacketHandler),
+  myInverted(false),
+  myMaxPosPan(90),
+  myMaxNegPan(-90),
+  myMaxPosTilt(90),
+  myMaxNegTilt(0),
+  myMaxZoom(100),
+  myMinZoom(0)
 {
-  myRobot = robot;
-  myConn = NULL;
-  myAuxPort = 1;
-  myAuxTxCmd = ArCommands::TTY2;
-  myAuxRxCmd = ArCommands::GETAUX;
   myRobotPacketHandlerCB.setName("ArPTZ");
   if (myRobot != NULL)
   {
@@ -168,7 +175,7 @@ AREXPORT bool ArPTZ::setAuxPort(int auxPort)
     myAuxTxCmd = ArCommands::TTY4;
     myAuxRxCmd = ArCommands::GETAUX3;
     myAuxPort = 3;
-	return true;
+    return true;
   }
   else
     return false;

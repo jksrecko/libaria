@@ -15,7 +15,7 @@ void handleGetMapName(ArNetPacket *packet)
 
 void handleGetMap(ArNetPacket *packet)
 {
-  char buffer[512];
+  char buffer[10000];
 
   if (packet->getDataReadLength() == packet->getDataLength())
   {

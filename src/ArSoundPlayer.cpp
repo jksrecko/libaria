@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,20 +19,22 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "ArExport.h"
 #include "ArSoundPlayer.h"
 #include "ArLog.h"
 #include "ariaUtil.h"
+#include <string.h>
+#include <errno.h>
 
-int ArSoundPlayer::myPlayChildPID = -1;
+int ArSoundPlayer::ourPlayChildPID = -1;
 ArGlobalRetFunctor2<bool, const char*, const char*> ArSoundPlayer::ourPlayWavFileCB(&ArSoundPlayer::playWavFile);
 ArGlobalFunctor ArSoundPlayer::ourStopPlayingCB(&ArSoundPlayer::stopPlaying);
-
+double ArSoundPlayer::ourVolume = 1.0;
 
 AREXPORT ArRetFunctor2<bool, const char*, const char*>* ArSoundPlayer::getPlayWavFileCallback() 
 {
@@ -103,7 +105,8 @@ bool ArSoundPlayer::playNativeFile(const char* filename, const char* params)
   int file_fd = ArUtil::open(filename, O_RDONLY);
   if(file_fd < 0)
   {
-    perror("ArSoundPlayer::playNativeFile");
+    ArLog::logErrorFromOS(ArLog::Normal, 
+			  "ArSoundPlayer::playNativeFile: open failed");
     return false;
   }
   int len;
@@ -112,7 +115,8 @@ bool ArSoundPlayer::playNativeFile(const char* filename, const char* params)
   while((len = read(file_fd, buf, buflen)) > 0)
   {
     if (write(snd_fd, buf, len) != len) {
-      perror("ArSoundPlayer::playNativeFile");
+      ArLog::logErrorFromOS(ArLog::Normal, 
+			  "ArSoundPlayer::playNativeFile: write failed");
     }
   }
   close(file_fd);
@@ -122,51 +126,135 @@ bool ArSoundPlayer::playNativeFile(const char* filename, const char* params)
 
 bool ArSoundPlayer::playWavFile(const char* filename, const char* params)
 {
-  char* prog = NULL;
+  ArArgumentBuilder builder;
+  //builder.addPlain("sleep .35; play");
+  builder.addPlain("play");
+  builder.add("-v %.2f", ourVolume);
+  builder.addPlain(filename);
+  builder.addPlain(params);
+  ArLog::log(ArLog::Normal, "ArSoundPlayer: Playing file \"%s\" with \"%s\"", 
+	     filename, builder.getFullString());
+  
+  int ret;
+  if ((ret = system(builder.getFullString())) != -1)
+  {
+    ArLog::log(ArLog::Normal, "ArSoundPlayer: Played file \"%s\" with \"%s\" (got %d)", 
+	       filename, builder.getFullString(), ret);
+    return true;
+  }
+  else
+  {
+    ArLog::logErrorFromOS(ArLog::Normal, 
+			  "ArSoundPlayer::playWaveFile: system call failed");
+    return false;
+  }
+
+
+  /*
+    This was an old mechanism for doing a fork then exec in order to
+    mimic a system call, so that it could have the child PID for
+    killing... however in our embedded linux killing the play command
+    doesn't also kill the sox command, so the kill doesn't work at
+    all... and the fork() would also reserve a lot of memory for the new process
+    ...
+   so it was replaced with the above system call
+
+  const char* prog = NULL;
   prog = getenv("PLAY_WAV");
   if(prog == NULL)
     prog = "play";
-  myPlayChildPID = fork();
-  if(myPlayChildPID == -1) 
+  char volstr[4];
+  if(strcmp(prog, "play") == 0)
   {
-    ArLog::log(ArLog::Terse, "ArSoundPlayer: error forking!");
-    perror("Aria: ArSoundPlayer");
+    snprintf(volstr, 4, "%f", ourVolume);
+  }  
+
+  ArLog::log(ArLog::Normal, "ArSoundPlayer: Playing file \"%s\" using playback program \"%s\" with argument: -v %s", filename, prog, volstr);
+  ourPlayChildPID = fork();
+
+  //ourPlayChildPID = vfork(); // XXX rh experimental, avoids the memory copy cost of fork()
+  // NOTE: after vfork() you can ONLY safely use an exec function or _exit() in the
+  // child process. Any other call, if it modifies memory still shared by the
+  // parent, will result in problems.
+  if(ourPlayChildPID == -1) 
+  {
+    ArLog::log(ArLog::Terse, "ArSoundPlayer: error forking! (%d: %s)", errno, 
+      (errno == EAGAIN) ? "EAGAIN reached process limit, or insufficient memory to copy page tables" : 
+        ( (errno == ENOMEM) ? "ENOMEM out of kernel memory" : "unknown error" ) );
+
+    ArLog::logErrorFromOS(ArLog::Normal, 
+			  "ArSoundPlayer::playWaveFile: fork failed");
     return false;
   }
-  if(myPlayChildPID == 0)
+  if(ourPlayChildPID == 0)
   {
     // child process: execute sox
-    ArLog::log(ArLog::Verbose, "ArSoundPlayer: executing \"%s\" with argument \"%s\" in child process...\n", prog, filename);
-    if(execlp(prog, prog, filename, (char*)0) < 0) 
+    int r = -1;
+    r = execlp(prog, prog, "-v", volstr, filename, (char*)0);
+    if(r < 0)
     {
-      perror("Aria: ArSoundPlayer: Error executing Wav file playback program");
+      int err = errno;
+      const char *errstr = strerror(err);
+      printf("ArSoundPlayer (child process): Error executing Wav file playback program \"%s %s\" (%d: %s)\n", prog, filename, err, errstr);
+      //_exit(-1);   // need to use _exit with vfork
       exit(-1);
     }
   } 
   // parent process: wait for child to finish
   ArLog::log(ArLog::Verbose, "ArSoundPlayer: created child process %d to play wav file \"%s\".", 
-      myPlayChildPID, filename);
+      ourPlayChildPID, filename);
   int status;
-  waitpid(myPlayChildPID, &status, 0);
+  waitpid(ourPlayChildPID, &status, 0);
   if(WEXITSTATUS(status) != 0) {
-    ArLog::log(ArLog::Terse, "ArSoundPlayer: Error: Wav file playback program \"%s\" exited with error code %d.", prog, WEXITSTATUS(status));
-    myPlayChildPID = -1;
+    ArLog::log(ArLog::Terse, "ArSoundPlayer: Error: Wav file playback program \"%s\" with file \"%s\" exited with error code %d.", prog, filename, WEXITSTATUS(status));
+    ourPlayChildPID = -1;
     return false;
   }
-  myPlayChildPID = -1;
+  ArLog::log(ArLog::Verbose, "ArSoundPlayer: child process %d finished.", ourPlayChildPID);
+  ourPlayChildPID = -1;
   return true;
+  */
 }
 
 
 
 void ArSoundPlayer::stopPlaying()
 {
-  // Kill a child processes (created by playWavFile) if it exists.
-  if(myPlayChildPID > 0)
+
+  ArLog::log(ArLog::Normal, 
+	     "ArSoundPlayer::stopPlaying: killing play and sox");
+
+  // so if the system call below is "killall -9 play; killall -9 sox"
+  // then on linux 2.4 kernels a sound played immediately afterwards
+  // will simply not play and return (cause that's what play does if
+  // it can't play)
+  int ret;
+
+  if ((ret = system("killall play; killall -9 sox")) != -1)
   {
-    ArLog::log(ArLog::Verbose, "ArSoundPlayer: Sending SIGTERM to child process %d.", myPlayChildPID);
-    kill(myPlayChildPID, SIGTERM);
+    ArLog::log(ArLog::Normal, 
+	       "ArSoundPlayer::stopPlaying: killed play and sox (got %d)", 
+	       ret);
+    return;
   }
+  else
+  {
+    ArLog::logErrorFromOS(ArLog::Normal, 
+			  "ArSoundPlayer::stopPlaying: system call failed");
+    return;
+  }
+
+
+  /* This was for old mechanism in playWavFile but since it doesn't
+   * work, it was replaced with the above
+
+  // Kill a child processes (created by playWavFile) if it exists.
+  if(ourPlayChildPID > 0)
+  {
+    ArLog::log(ArLog::Verbose, "ArSoundPlayer: Sending SIGTERM to child process %d.", ourPlayChildPID);
+    kill(ourPlayChildPID, SIGTERM);
+  }
+  */
 }
 
 
@@ -209,4 +297,15 @@ bool ArSoundPlayer::playSoundPCM16(char* data, int numSamples)
 
 
 #endif  // ifdef WIN32
+
+AREXPORT void ArSoundPlayer::setVolumePercent(double pct)
+{
+  setVolume(1.0 + (pct / 100.0));
+}
+
+AREXPORT void ArSoundPlayer::setVolume(double v)
+{
+  if(v < 0) ourVolume = 0;
+  else ourVolume = v;
+}
 

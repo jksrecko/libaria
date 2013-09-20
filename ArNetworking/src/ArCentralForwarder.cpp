@@ -2,15 +2,21 @@
 #include "ArExport.h"
 #include "ArCentralForwarder.h"
 
+
 AREXPORT ArCentralForwarder::ArCentralForwarder(
 	ArServerBase *mainServer, ArSocket *socket,
 	const char *robotName, int port, 
-	std::set<int> *usedPorts,
+	std::map<int, ArTime *> *usedPorts,
 	ArFunctor2<ArCentralForwarder *,
-	ArServerClient *> *forwarderServerClientRemovedCB) : 
+		   ArServerClient *> *forwarderServerClientRemovedCB,
+	const char *enforceProtocolVersion,
+	ArServerCommands::Type enforceType) : 
   myReceiveDataFunctor(this, &ArCentralForwarder::receiveData),
-  myRequestChangedFunctor(this, &ArCentralForwarder::requestChanged),
-  myRequestOnceFunctor(this, &ArCentralForwarder::requestOnce),
+  myInternalRequestChangedFunctor(this, 
+				  &ArCentralForwarder::internalRequestChanged),
+  myInternalRequestOnceFunctor(this, 
+			       &ArCentralForwarder::internalRequestOnce,
+			       NULL, NULL, true),
   myRobotServerClientRemovedCB(
 	  this, &ArCentralForwarder::robotServerClientRemoved),
   myNetCentralHeartbeatCB(this, &ArCentralForwarder::netCentralHeartbeat),
@@ -23,6 +29,11 @@ AREXPORT ArCentralForwarder::ArCentralForwarder(
   myStartingPort = port;
   myUsedPorts = usedPorts;
   myForwarderServerClientRemovedCB = forwarderServerClientRemovedCB;
+  if (enforceProtocolVersion != NULL)
+    myEnforceProtocolVersion = enforceProtocolVersion;
+  else
+    myEnforceProtocolVersion = "";
+  myEnforceType = enforceType;
 
   myPrefix = "ArCentralForwarder_";
   myPrefix += myRobotName;
@@ -31,8 +42,10 @@ AREXPORT ArCentralForwarder::ArCentralForwarder(
   myClient = NULL;
   myPort = 0;
   myState = STATE_STARTING;
+  myBeingReplaced = false;
   myRobotHasCentralServerHeartbeat = false;
 }
+
 
 AREXPORT ArCentralForwarder::~ArCentralForwarder()
 {
@@ -70,6 +83,13 @@ AREXPORT bool ArCentralForwarder::callOnce(
 	double heartbeatTimeout, double udpHeartbeatTimeout,
 	double robotBackupTimeout, double clientBackupTimeout)
 {
+  if (myBeingReplaced)
+  {
+    ArLog::log(ArLog::Normal, "ArCentralForwarder::%s: being replaced by a duplicate, disconnecting", 
+	       myRobotName.c_str());
+    return false;
+  }
+
   if (myState == STATE_CONNECTED)
   {
     return connectedCallOnce(heartbeatTimeout, udpHeartbeatTimeout,
@@ -96,7 +116,7 @@ AREXPORT bool ArCentralForwarder::callOnce(
 	       myRobotName.c_str());
     return false;
   }
-
+  
 }
 
 AREXPORT bool ArCentralForwarder::startingCallOnce(
@@ -104,6 +124,8 @@ AREXPORT bool ArCentralForwarder::startingCallOnce(
 	double robotBackupTimeout, double clientBackupTimeout)
 {
   myClient = new ArClientBase;
+  myClient->enforceProtocolVersion(myEnforceProtocolVersion.c_str(), false);
+  myClient->enforceType(myEnforceType, false);
   std::string name;
   name = "ArForwarderClient_" + myRobotName;
   myClient->setRobotName(name.c_str());
@@ -192,20 +214,34 @@ AREXPORT bool ArCentralForwarder::gatheringCallOnce(
 			      false, true,
 			      false,
 			      false, false);
+  myServer->enforceProtocolVersion(myEnforceProtocolVersion.c_str());
+  // there's no enforce of type here since this is the proxy for MP/ME
+  // and such (robots don't connect here)
+
   myServer->addClientRemovedCallback(&myClientServerClientRemovedCB);
 
   ArTime startedOpening;
   startedOpening.setToNow();
   int port;
   bool foundPort;
+  
+  std::map<int, ArTime *>::iterator usedIt;
   // walk through our ports starting at our starting port
   for (port = myStartingPort, foundPort = false; 
        !foundPort && port < 65536; 
        port++)
   {
-    // if we've already used the port then skip it
-    if (myUsedPorts->find(port) != myUsedPorts->end())
+    // if we've used the port in the last 2 minutes then skip it
+    if ((usedIt = myUsedPorts->find(port)) != myUsedPorts->end() && 
+	(*usedIt).second != NULL &&
+	((*usedIt).second->getSec() == 0 ||
+	 (*usedIt).second->secSince() < 120))
+    {
+
+      ArLog::log(ArLog::Verbose, "%sSkipping port %d", myPrefix.c_str(), port);
       continue;
+    }
+    
     // try to open it
     if (myServer->open(port, myMainServer->getOpenOnIP()))
     {
@@ -216,7 +252,7 @@ AREXPORT bool ArCentralForwarder::gatheringCallOnce(
   
   if (!foundPort)
   {
-    ArLog::log(ArLog::Normal, "myPrefix.c_str(), Could not find port", 
+    ArLog::log(ArLog::Normal, "%s Could not find port", 
 	       myPrefix.c_str());
   }
   myServer->setUserInfo(myMainServer->getUserInfo());
@@ -311,15 +347,16 @@ AREXPORT bool ArCentralForwarder::gatheringCallOnce(
       continue;
     }
 
-    myLastRequest[clientData->getCommand()] = new ArTime;
-    myLastBroadcast[clientData->getCommand()] = new ArTime;
+    setLastRequest(clientData->getCommand());
+    setLastBroadcast(clientData->getCommand());
 
     myServer->addDataAdvanced(
 	    clientData->getName(), clientData->getDescription(),
 	    NULL, clientData->getArgumentDescription(),
 	    clientData->getReturnDescription(), clientData->getCommandGroup(),
 	    clientData->getDataFlagsString(), clientData->getCommand(), 
-	    &myRequestChangedFunctor, &myRequestOnceFunctor);
+	    &myInternalRequestChangedFunctor, 
+	    &myInternalRequestOnceFunctor);
 
     myClient->addHandler(clientData->getName(), &myReceiveDataFunctor);
   }
@@ -455,13 +492,14 @@ void ArCentralForwarder::receiveData(ArNetPacket *packet)
 	     "getPictureCam1") == 0)
     printf("Got getPictureCam1...\n");
   */
-  returnType = myReturnTypes[packet->getCommand()];
+  returnType = getReturnType(packet->getCommand());
   //printf("Got a packet in for %s %d\n", myClient->getName(packet->getCommand(), true), packet->getCommand());
 
   // this part is seeing if it came from a request_once, if so we
   // don't service anything else (so we take care of those things that
   // only happen once better then the ones that are mixing... but that
   // should be okay)
+  checkRequestOnces(packet->getCommand());
   if ((returnType == RETURN_SINGLE || returnType == RETURN_UNTIL_EMPTY) &&
       (it = myRequestOnces[packet->getCommand()]->begin()) != 
       myRequestOnces[packet->getCommand()]->end())
@@ -600,8 +638,8 @@ void ArCentralForwarder::receiveData(ArNetPacket *packet)
 
 }
 
-void ArCentralForwarder::requestChanged(long interval, 
-					     unsigned int command)
+void ArCentralForwarder::internalRequestChanged(long interval, 
+						unsigned int command)
 {
   /*
   if (strcmp(myClient->getName(command, true), 
@@ -613,13 +651,13 @@ void ArCentralForwarder::requestChanged(long interval,
     ArLog::log(ArLog::Verbose, "%sStopping request for %s", 
 	       myPrefix.c_str(), myClient->getName(command, true));
     myClient->requestStopByCommand(command);
-    myLastRequest[command]->setToNow();
+    setLastRequest(command);
   }
   else 
   {
     ReturnType returnType;
     
-    returnType = myReturnTypes[command];    
+    returnType = getReturnType(command);
     if (returnType == RETURN_VIDEO && interval != -1)
     {
       ArLog::log(ArLog::Verbose, "%sIgnoring a RETURN_VIDEO attempted request of %s at %d interval since RETURN_VIDEOs cannot request at an interval", 
@@ -636,18 +674,19 @@ void ArCentralForwarder::requestChanged(long interval,
     ArLog::log(ArLog::Verbose, "%sRequesting %s at interval of %ld", 
 	       myPrefix.c_str(), myClient->getName(command, true), interval);
     myClient->requestByCommand(command, interval);
-    myLastRequest[command]->setToNow();
+    setLastRequest(command);
     // if the interval is -1 then also requestOnce it so that anyone
     // connecting after the first connection can actually get data too
     myClient->requestOnceByCommand(command);
   }
 }
 
-void ArCentralForwarder::requestOnce(ArServerClient *client, ArNetPacket *packet)
+bool ArCentralForwarder::internalRequestOnce(
+	ArServerClient *client, ArNetPacket *packet, bool tcp)
 {
-  ReturnType returnType;
+  ReturnType returnType = RETURN_NONE;
   
-  returnType = myReturnTypes[packet->getCommand()];
+  returnType = getReturnType(packet->getCommand());
 
   // chop off the footer
   packet->setAddedFooter(true);
@@ -675,13 +714,21 @@ void ArCentralForwarder::requestOnce(ArServerClient *client, ArNetPacket *packet
   {
     //if (returnType == RETURN_UNTIL_EMPTY)
     //printf("Trying to request once %s\n", myClient->getName(packet->getCommand(), true));
+    checkRequestOnces(packet->getCommand());
     myRequestOnces[packet->getCommand()]->push_back(client);
   }
   
+  bool ret;
   ArLog::log(ArLog::Verbose, "%sRequesting %s once", 
 	     myPrefix.c_str(), myClient->getName(packet->getCommand()));
-  myClient->requestOnceByCommand(packet->getCommand(), packet);
-  myLastRequest[packet->getCommand()]->setToNow();
+  if (tcp)
+    ret = myClient->requestOnceByCommand(packet->getCommand(), packet);
+  else
+    ret = myClient->requestOnceByCommandUdp(packet->getCommand(), packet);
+
+  setLastRequest(packet->getCommand());
+
+  return ret;
 }
 
 
@@ -695,4 +742,182 @@ AREXPORT void ArCentralForwarder::netCentralHeartbeat(ArNetPacket *packet)
     ArLog::log(ArLog::Normal, 
 	       "%sGot unknown packet source for heartbeat packet", 
 	       myPrefix.c_str());
+}
+
+AREXPORT bool ArCentralForwarder::addHandler(
+	const char *name, ArFunctor1 <ArNetPacket *> *functor)
+{
+  if (myClient != NULL)
+  {
+    return myClient->addHandler(name, functor);
+  }
+  else 
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArCentralForwarder::%s::addHandler: Tried to call while client was still NULL",
+	       getRobotName());
+    return false;
+  }
+}
+
+AREXPORT bool ArCentralForwarder::remHandler(const char *name, ArFunctor1<ArNetPacket *> *functor)
+{
+  if (myClient != NULL)
+  {
+    return myClient->remHandler(name, functor);
+  }
+  else 
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArCentralForwarder::%s::remHandler: Tried to call while client was still NULL",
+	       getRobotName());
+    return false;
+  }
+}
+
+AREXPORT bool ArCentralForwarder::request(const char *name, long mSec)
+{
+  if (myServer != NULL)
+  {
+    return myServer->internalSetDefaultFrequency(name, mSec);
+    
+  }
+  else 
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArCentralForwarder::%s::remHandler: Tried to call while server was still NULL",
+	       getRobotName());
+    return false;
+  }
+}
+
+AREXPORT bool ArCentralForwarder::requestOnce(const char *name,
+					      ArNetPacket *packet,
+					      bool quiet)
+{
+  if (myClient != NULL)
+  {
+    unsigned int commandNum = myClient->findCommandFromName(name);
+    if (commandNum == 0)
+    {
+      if (!quiet)
+	ArLog::log(ArLog::Normal, 
+		   "ArCentralForwarder::%s::requestOnce: Can't find commandNum for %s",
+		   getRobotName(), name);
+      return false;
+    }
+    //return myClient->requestOnce(name, packet, quiet);
+    if (packet != NULL)
+    {
+      packet->setCommand(commandNum);
+      packet->finalizePacket();
+      return internalRequestOnce(NULL, packet, true);
+    }
+    else
+    {
+      ArNetPacket tempPacket;
+      tempPacket.setCommand(commandNum);
+      tempPacket.finalizePacket();
+      return internalRequestOnce(NULL, &tempPacket, true);
+    }
+  }
+  else 
+  {
+    if (!quiet)
+      ArLog::log(ArLog::Normal, 
+		 "ArCentralForwarder::%s::requestOnce: Tried to call (for %s) while client was still NULL",
+		 getRobotName(), name);
+    return false;
+  }
+}
+
+AREXPORT bool ArCentralForwarder::requestOnceUdp(const char *name, 
+						 ArNetPacket *packet, 
+						 bool quiet)
+{
+  if (myClient != NULL)
+  {
+    unsigned int commandNum = myClient->findCommandFromName(name);
+    if (commandNum == 0)
+    {
+      if (!quiet)
+	ArLog::log(ArLog::Normal, 
+		   "ArCentralForwarder::%s::requestOnce: Can't find commandNum for %s",
+		   getRobotName(), name);
+      return false;
+    }
+    //return myClient->requestOnceUdp(name, packet, quiet);
+    if (packet != NULL)
+    {
+      packet->setCommand(commandNum);
+      packet->finalizePacket();
+      return internalRequestOnce(NULL, packet, false);
+    }
+    else
+    {
+      ArNetPacket tempPacket;
+      tempPacket.setCommand(commandNum);
+      tempPacket.finalizePacket();
+      return internalRequestOnce(NULL, &tempPacket, false);
+    }
+  }
+  else 
+  {
+    if (!quiet)
+      ArLog::log(ArLog::Normal, 
+		 "ArCentralForwarder::%s::requestOnce: Tried to call (for %s) while client was still NULL",
+		 getRobotName(), name);
+    return false;
+  }
+}
+
+AREXPORT bool ArCentralForwarder::requestOnceWithString(const char *name, const char *str)
+{
+  ArNetPacket tempPacket;
+  tempPacket.strToBuf(str);
+
+  return requestOnce(name, &tempPacket);
+}
+
+AREXPORT bool ArCentralForwarder::dataExists(const char *name)
+{
+  if (myClient != NULL)
+  {
+    return myClient->dataExists(name);
+  }
+  else 
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArCentralForwarder::%s::dataExists: Tried to call while client was still NULL",
+	       getRobotName());
+    return false;
+  }
+}
+
+ArCentralForwarder::ReturnType ArCentralForwarder::getReturnType(int command)
+{
+  if (myReturnTypes.find(command) != myReturnTypes.end())
+    return myReturnTypes[command];
+  else
+    return RETURN_NONE;
+}
+
+void ArCentralForwarder::checkRequestOnces(unsigned int command)
+{
+  if (myRequestOnces.find(command) == myRequestOnces.end())
+    myRequestOnces[command] = new std::list<ArServerClient *>;
+}
+
+void ArCentralForwarder::setLastRequest(unsigned int command)
+{
+  if (myLastRequest.find(command) == myLastRequest.end())
+    myLastRequest[command] = new ArTime;
+  myLastRequest[command]->setToNow();
+}
+
+void ArCentralForwarder::setLastBroadcast(unsigned int command)
+{
+  if (myLastBroadcast.find(command) == myLastBroadcast.end())
+    myLastBroadcast[command] = new ArTime;
+  myLastBroadcast[command]->setToNow();
 }

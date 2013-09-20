@@ -24,6 +24,8 @@ ArCentralManager::ArCentralManager(ArServerBase *robotServer,
   myAriaExitCB.setName("ArCentralManager");
   Aria::addExitCallback(&myAriaExitCB, 25);
 
+  myEnforceType = ArServerCommands::TYPE_UNSPECIFIED;
+
   myClientBackupTimeout = 2;
   Aria::getConfig()->addParam(
 	  ArConfigArg("CentralServerToClientTimeoutInMins", 
@@ -153,9 +155,10 @@ void ArCentralManager::netServerSwitch(ArServerClient *client, ArNetPacket *pack
 
   myDataMutex.lock();
   // walk through and make the name unique
-  bool nameIsUnique = false;
   std::list<ArCentralForwarder *>::iterator fIt;
   ArCentralForwarder *forwarder;
+  /* the old code that made the names unique
+  bool nameIsUnique = false;
   while (!nameIsUnique)
   {
     nameIsUnique = true;
@@ -170,6 +173,25 @@ void ArCentralManager::netServerSwitch(ArServerClient *client, ArNetPacket *pack
     if (!nameIsUnique)
       uniqueName += "_";
   }
+  */
+  // the new code that drops the duplicates and replaces it with the same name
+  for (fIt = myForwarders.begin(); fIt != myForwarders.end(); fIt++)
+  {
+    forwarder = (*fIt);
+    if (strcasecmp(forwarder->getRobotName(), uniqueName.c_str()) == 0)
+    {
+      ArLog::log(ArLog::Normal, 
+		 "ArCentralManager: Will drop old duplicate connection for %s", 
+		 uniqueName.c_str());
+      forwarder->willReplace();
+    }
+  }
+
+  // remove any pending client duplicates
+  while (removePendingDuplicateConnections(uniqueName.c_str()));
+
+  // end of new code, though it also had reordering down below in the runthread
+
   myClientSockets.push_back(clientSocket);
   myClientNames.push_back(uniqueName);
 
@@ -185,6 +207,46 @@ void ArCentralManager::netServerSwitch(ArServerClient *client, ArNetPacket *pack
 	       client->getIPString(), uniqueName.c_str(), robotName);
   //printf("Ended with '%s'\n", uniqueName.c_str());
   myDataMutex.unlock();
+}
+
+/**
+   removes pending duplicate connections... has a return since you
+   must call it until it returns false... this is because of the list
+   management
+ */
+bool ArCentralManager::removePendingDuplicateConnections(const char *robotName)
+{
+  std::list<ArSocket *>::iterator sIt;
+  std::list<std::string>::iterator nIt;
+
+  ArSocket *socket;
+  std::string checkingName;
+
+  for (sIt = myClientSockets.begin(), nIt = myClientNames.begin();
+       sIt != myClientSockets.end() && nIt != myClientNames.end();
+       sIt++, nIt++)
+  {
+    socket = (*sIt);
+    checkingName = (*nIt);
+
+    
+    if (ArUtil::strcasecmp(robotName, checkingName) == 0)
+    {
+      ArLog::log(ArLog::Normal, 
+	     "ArCentralManager: Removing duplicate pending connection for %s", 
+		 robotName);
+
+      myClientSockets.erase(sIt);
+      myClientNames.erase(nIt);
+
+      // delete the old socket so it closes
+      delete socket;
+
+      return true;
+    }
+  }
+
+  return false;
 }
 
 void ArCentralManager::netClientList(ArServerClient *client, ArNetPacket *packet)
@@ -246,30 +308,9 @@ void *ArCentralManager::runThread(void *arg)
     int numClients = 0;
     
     myDataMutex.lock();
-    while ((sIt = myClientSockets.begin()) != myClientSockets.end() && 
-	   (nIt = myClientNames.begin()) != myClientNames.end())
-    {
-      socket = (*sIt);
-      robotName = (*nIt);
+    // this is where the original code to add forwarders was before we
+    // changed the unique behavior to drop old ones...
 
-      myClientSockets.pop_front();
-      myClientNames.pop_front();
-
-      ArLog::log(ArLog::Normal, 
-		 "New forwarder for socket from %s with name %s", 
-		 socket->getIPString(), robotName.c_str());
-
-      forwarder = new ArCentralForwarder(myClientServer, socket, 
-					 robotName.c_str(), 
-					 myClientServer->getTcpPort() + 1, 
-					 &myUsedPorts, 
-					 &myForwarderServerClientRemovedCB);
-      myForwarders.push_back(forwarder);
-    }
-
-    numClients += myRobotServer->getNumClients();
-    if (myRobotServer != myClientServer)
-      numClients += myClientServer->getNumClients();
 
     std::list<ArCentralForwarder *> connectedRemoveList;
     std::list<ArCentralForwarder *> unconnectedRemoveList;
@@ -304,7 +345,9 @@ void *ArCentralManager::runThread(void *arg)
       {
 	ArLog::log(ArLog::Normal, "Adding forwarder %s", 
 		   forwarder->getRobotName());
-	myUsedPorts.insert(forwarder->getPort());
+	ArTime *newTime = new ArTime;
+	newTime->setSec(0);
+	myUsedPorts[forwarder->getPort()] = newTime;
 	
 	std::multimap<int, ArFunctor1<ArCentralForwarder *> *>::iterator it;
 	for (it = myForwarderAddedCBList.begin();
@@ -369,7 +412,10 @@ void *ArCentralManager::runThread(void *arg)
       //myClientServer->broadcastPacketTcp(&sendPacket, "clientRemoved");
       remPackets.push_back(sendPacket);
 
-      myUsedPorts.erase(forwarder->getPort());
+      if (myUsedPorts.find(forwarder->getPort()) != myUsedPorts.end() && 
+	  myUsedPorts[forwarder->getPort()] != NULL)
+	myUsedPorts[forwarder->getPort()]->setToNow();
+
       myForwarders.remove(forwarder);
       delete forwarder;
       connectedRemoveList.pop_front();
@@ -383,7 +429,11 @@ void *ArCentralManager::runThread(void *arg)
       forwarder = (*fIt);
       ArLog::log(ArLog::Normal, "Removing unconnected forwarder %s", 
 		 forwarder->getRobotName());
-      myUsedPorts.erase(forwarder->getPort());
+
+      if (myUsedPorts.find(forwarder->getPort()) != myUsedPorts.end() && 
+	  myUsedPorts[forwarder->getPort()] != NULL)
+	myUsedPorts[forwarder->getPort()]->setToNow();      
+
       myForwarders.remove(forwarder);
       delete forwarder;
       unconnectedRemoveList.pop_front();
@@ -391,10 +441,54 @@ void *ArCentralManager::runThread(void *arg)
     }
 
 
+    // this code was up above just after the lock before we changed
+    // the behavior for unique names
+    while ((sIt = myClientSockets.begin()) != myClientSockets.end() && 
+	   (nIt = myClientNames.begin()) != myClientNames.end())
+    {
+      socket = (*sIt);
+      robotName = (*nIt);
+
+      myClientSockets.pop_front();
+      myClientNames.pop_front();
+
+      ArLog::log(ArLog::Normal, 
+		 "New forwarder for socket from %s with name %s", 
+		 socket->getIPString(), robotName.c_str());
+
+      forwarder = new ArCentralForwarder(myClientServer, socket, 
+					 robotName.c_str(), 
+					 myClientServer->getTcpPort() + 1, 
+					 &myUsedPorts, 
+					 &myForwarderServerClientRemovedCB,
+					 myEnforceProtocolVersion.c_str(),
+					 myEnforceType);
+      myForwarders.push_back(forwarder);
+    }
+
+    numClients += myRobotServer->getNumClients();
+    if (myRobotServer != myClientServer)
+      numClients += myClientServer->getNumClients();
+    // end of code moved for change in unique behavior
+    if (numClients > myMostClients)
+    {
+      ArLog::log(ArLog::Normal, "CentralManager: New most clients: %d", 
+		 numClients);
+      myMostClients = numClients;
+    }
+
     if (numForwarders > myMostForwarders)
       myMostForwarders = numForwarders;
+
     if (numClients > myMostClients)
-      myMostClients = numClients;
+    {
+      ArLog::log(ArLog::Normal, "CentralManager: New most forwarders: %d", 
+		 numForwarders);
+      myMostForwarders = numForwarders;
+    }
+
+    myRobotServer->internalSetNumClients(numForwarders + 
+					 myClientSockets.size());
 
     myDataMutex.unlock();
 
@@ -414,7 +508,11 @@ void *ArCentralManager::runThread(void *arg)
       delete packet;
     }
 
-    ArUtil::sleep(1);
+    ArUtil::sleep(1); 
+
+    //make this a REALLY long sleep to test the duplicate pending
+    //connection code
+    //ArUtil::sleep(20000);
   }
 
   threadFinished();
@@ -487,10 +585,11 @@ AREXPORT void ArCentralManager::remForwarderRemovedCallback(
 
 bool ArCentralManager::processFile(void)
 {
-  // this should be okay if it isn't locked since it just sets an int,
-  //and the client server can't go away, and its client tcp sender
-  //can't either...  and if it locks here when the config changes from
-  //inside of it calling the clients, then its a deadlock
+  // this should be okay if it isn't locked since it takes care of
+  //thread safety itself and the client server can't go away, and its
+  //client tcp sender can't either...  and if it locks here when the
+  //config changes from inside of it calling the clients, then its a
+  //deadlock
   
   //myDataMutex.lock();
   if (myClientServer != NULL)
@@ -587,4 +686,27 @@ void ArCentralManager::logConnections(void)
   ArLog::log(ArLog::Normal, "");
   myDataMutex.unlock();
 
+}
+
+/// Enforces the that the server is using this protocol version
+AREXPORT void ArCentralManager::enforceProtocolVersion(const char *protocolVersion)
+{
+  myDataMutex.lock();
+  if (protocolVersion != NULL)
+    myEnforceProtocolVersion = protocolVersion;
+  else
+    myEnforceProtocolVersion = "";
+  myDataMutex.unlock();
+  ArLog::log(ArLog::Normal, "ArCentralManager: New enforceProtocolVersionSet");
+
+}
+
+AREXPORT void ArCentralManager::enforceType(ArServerCommands::Type type)
+{
+  myDataMutex.lock();
+  myEnforceType = type;
+  myDataMutex.unlock();
+  ArLog::log(ArLog::Normal, "ArCentralManager: New enforce type: %s", 
+	     ArServerCommands::toString(type));
+	     
 }

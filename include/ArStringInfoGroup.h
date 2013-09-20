@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARSTRINGINFOGROUP_H
 #define ARSTRINGINFOGROUP_H
@@ -36,6 +36,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
    This class takes callbacks from different classes that want this
    string information and then lets you just add the information here
    instead of to each individual class.
+
+  @ingroup OptionalClasses
  **/
 class ArStringInfoGroup
 {
@@ -67,6 +69,19 @@ public:
   AREXPORT bool addStringString(const char *name, ArTypes::UByte2 maxLen, 
 			      ArRetFunctor<const char *> *functor,
 			      const char *format = "%s");
+
+  /// Adds an int to the list in the helped way
+  AREXPORT bool addStringUnsignedLong(const char *name, 
+				      ArTypes::UByte2 maxLen, 
+				      ArRetFunctor<unsigned long> *functor, 
+				      const char *format = "%lu");
+
+  /// Adds an int to the list in the helped way
+  AREXPORT bool addStringLong(const char *name, 
+			      ArTypes::UByte2 maxLen, 
+			      ArRetFunctor<long> *functor, 
+			      const char *format = "%ld");
+
   /// This is the function to add a callback to be called by addString
   AREXPORT void addAddStringCallback(
 	  ArFunctor3<const char *, ArTypes::UByte2,

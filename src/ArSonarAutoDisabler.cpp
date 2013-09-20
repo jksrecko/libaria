@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ariaOSDef.h"
 #include "ArCommands.h"
@@ -30,13 +30,26 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArRobot.h"
 
 AREXPORT ArSonarAutoDisabler::ArSonarAutoDisabler(ArRobot *robot) :
-  myUserTaskCB(this, &ArSonarAutoDisabler::userTask)
+  myUserTaskCB(this, &ArSonarAutoDisabler::userTask),
+  mySupressCB(this, &ArSonarAutoDisabler::supress),
+  myUnsupressCB(this, &ArSonarAutoDisabler::unsupress),
+  mySetAutonomousDrivingCB(this, &ArSonarAutoDisabler::setAutonomousDriving),
+  myClearAutonomousDrivingCB(this, &ArSonarAutoDisabler::clearAutonomousDriving)
 {
   myRobot = robot;
-  myUserTaskCB.setName("SonarAutoDisabler");
-  myRobot->addUserTask("SonarAutoDisabler", -50, &myUserTaskCB);
   myLastMoved.setToNow();
-  mySonarEnabled = true;
+  mySupressed = false;
+  myAutonomousDriving = false;
+
+  if (!myRobot->isConnected() || myRobot->getNumSonar() > 0)
+  {
+    myUserTaskCB.setName("SonarAutoDisabler");
+    myRobot->addUserTask("SonarAutoDisabler", -50, &myUserTaskCB);
+  }
+  else
+  {
+    ArLog::log(ArLog::Normal, "ArSonarAutoDisabler not active since there are no sonar");
+  }
 }
 
 AREXPORT ArSonarAutoDisabler::~ArSonarAutoDisabler()
@@ -46,26 +59,69 @@ AREXPORT ArSonarAutoDisabler::~ArSonarAutoDisabler()
 
 AREXPORT void ArSonarAutoDisabler::userTask(void)
 {
+  if (mySupressed && myRobot->areSonarsEnabled())
+  {
+    ArLog::log(ArLog::Normal, "SonarAutoDisabler: Supression turning off sonar");
+    myRobot->disableSonar();
+  }
+  
+  if (mySupressed)
+  {
+    myLastSupressed.setToNow();
+    return;
+  }
+
+  /*
+  // if it was supressed in the last few cycles, then don't turn the
+  // sonar back on yet... this isn't perfect, but looks like it works
+  if ((myLastSupressed.mSecSince() < 175 && fabs(myRobot->getVel()) < 200 &&
+	  fabs(myRobot->getRotVel()) < 25) ||
+      (myLastSupressed.mSecSince() < 500 && fabs(myRobot->getVel()) < 50 &&
+       fabs(myRobot->getRotVel()) < 5))
+  {
+    return;
+  }
+  */
+
   // see if we moved
-  if (myRobot->isTryingToMove() || fabs(myRobot->getVel()) > 3 || 
-      fabs(myRobot->getRotVel()) > 3)
+  if (myRobot->isTryingToMove() || fabs(myRobot->getVel()) > 10 || 
+      fabs(myRobot->getRotVel()) > 5 || 
+      (myRobot->hasLatVel() && fabs(myRobot->getLatVel()) > 10))
   {
     myLastMoved.setToNow();
     // if our sonar are disabled and we moved and our motors are
     // enabled then turn 'em on
-    if (!mySonarEnabled && myRobot->areMotorsEnabled())
+    if (!myAutonomousDriving && !myRobot->areSonarsEnabled() && 
+	myRobot->areMotorsEnabled())
     {
-      mySonarEnabled = true;
+      ArLog::log(ArLog::Normal, 
+		 "SonarAutoDisabler: Turning on all sonar (%d %.0f %.0f)",
+		 myRobot->isTryingToMove(), fabs(myRobot->getVel()),
+		 fabs(myRobot->getRotVel()));
       myRobot->enableSonar();
+    }
+    // if our sonar are disabled and we moved and our motors are
+    // enabled then turn 'em on
+    if (myAutonomousDriving && 
+	!myRobot->areAutonomousDrivingSonarsEnabled() && 
+	myRobot->areMotorsEnabled())
+    {
+      ArLog::log(ArLog::Normal, 
+ "SonarAutoDisabler: Turning on sonar for autonomous driving (%d %.0f %.0f)",
+		 myRobot->isTryingToMove(), fabs(myRobot->getVel()),
+		 fabs(myRobot->getRotVel()));
+      myRobot->enableAutonomousDrivingSonar();
     }
   }
   else
   {
     // if the sonar are on and we haven't moved in a while then turn
     // 'em off
-    if (mySonarEnabled && myLastMoved.secSince() > 10)
+    if ((myRobot->areSonarsEnabled() || 
+	 myRobot->areAutonomousDrivingSonarsEnabled()) && 
+	myLastMoved.mSecSince() > 1000)
     {
-      mySonarEnabled = false;
+      ArLog::log(ArLog::Normal, "SonarAutoDisabler: Turning off sonar");
       myRobot->disableSonar();
     }
   }

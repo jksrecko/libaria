@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -43,8 +43,13 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArAction.h"
 #include "ArRangeDevice.h"
 #include "ArRobotConfigPacketReader.h"
+#include "ArRobotBatteryPacketReader.h"
 #include "ariaInternal.h"
 #include "ArLaser.h"
+#include "ArBatteryMTX.h"
+#include "ArSonarMTX.h"
+#include "ArLCDMTX.h"
+
 
 /**
  * The parameters only rarely need to be specified.
@@ -87,23 +92,37 @@ AREXPORT ArRobot::ArRobot(const char *name, bool obsolete,
   myGetNoTimeWarningThisCycleCB(this, &ArRobot::getNoTimeWarningThisCycle),
   myBatteryAverager(20),
   myRealBatteryAverager(20),
-  myAriaExitCB(this, &ArRobot::ariaExitCallback)
+  myAriaExitCB(this, &ArRobot::ariaExitCallback),
+  myPoseInterpPositionCB(this, &ArRobot::getPoseInterpPosition),
+  myEncoderPoseInterpPositionCB(this, &ArRobot::getEncoderPoseInterpPosition)
 {
   myMutex.setLogName("ArRobot::myMutex");
+  myPacketMutex.setLogName("ArRobot::myPacketMutex");
   setName(name);
   myAriaExitCB.setName("ArRobotExit");
   myNoTimeWarningThisCycle = false;
   myGlobalPose.setPose(0, 0, 0);
+  mySetEncoderTransformCBList.setName("SetEncoderTransformCBList");
 
   myParams = new ArRobotGeneric("");
+  processParamFile();
+
+  /// MPL 20130509 making this default to true, so that things that
+  /// use loopOnce and not one of the run calls can work (the run
+  /// calls set this to whatever it should be anyway)
+  myRunningNonThreaded = true;
 
   myMotorPacketCB.setName("ArRobot::motorPacket");
   myEncoderPacketCB.setName("ArRobot::encoderPacket");
   myIOPacketCB.setName("ArRobot::IOPacket");
 
+  myInterpolation.setName("ArRobot::Interpolation");
+  myEncoderInterpolation.setName("ArRobot::EncoderInterpolation");
+
   myPtz = NULL;
   myKeyHandler = NULL;
   myKeyHandlerCB = NULL;
+  myMTXTimeUSecCB = NULL;
 
   myConn = NULL;
 
@@ -111,6 +130,8 @@ AREXPORT ArRobot::ArRobot(const char *name, bool obsolete,
 
   myBlockingConnectRun = false;
   myAsyncConnectFlag = false;
+
+  myRequireConfigPacket = false;
 
   myLogMovementSent = false;
   myLogMovementReceived = false;
@@ -121,10 +142,14 @@ AREXPORT ArRobot::ArRobot(const char *name, bool obsolete,
   myLastHeading = 0;
   myLastCalculatedRotVel = 0;
 
+  myKeepControlRaw = false;
+
   myPacketsSentTracking = false;
   myPacketsReceivedTracking = false;
   myPacketsReceivedTrackingCount = false;
   myPacketsReceivedTrackingStarted.setToNow();
+
+  myLogSIPContents = false;
 
   myCycleTime = 100;
   myCycleWarningTime = 250;
@@ -145,11 +170,14 @@ AREXPORT ArRobot::ArRobot(const char *name, bool obsolete,
   myHeadingDoneDiff = 3;
 
   myOrigRobotConfig = NULL;
+  myBatteryPacketReader = NULL;
+	
   reset();
   if (normalInit)
     init();
   
   mySyncLoop.setRobot(this);
+  myPacketReader.setRobot(this);
 
   if (doSigHandle)
     Aria::addRobot(this);
@@ -165,6 +193,11 @@ AREXPORT ArRobot::ArRobot(const char *name, bool obsolete,
 
   myConnectWithNoParams = false;
   myDoNotSwitchBaud = false;
+
+  myPacketReceivedCondition.setLogName("ArRobot::myPacketReceivedCondition");
+  myConnectCond.setLogName("ArRobot::myConnectCond");
+  myConnOrFailCond.setLogName("ArRobot::myConnOrFailCond");
+  myRunExitCond.setLogName("ArRobot::myRunExitCond");
 }
 
 
@@ -212,9 +245,14 @@ AREXPORT void ArRobot::init(void)
    one-shot programs... if it is false the run won't return unless
    stop is called on the instance
 
+   @param runNonThreaded if true, the robot won't make the usual
+   thread that it makes for reading the packets...you generally
+   shouldn't use this, but it's provided in case folks are using
+   programs without threading
+
    @sa stopRunning()
 **/
-AREXPORT void ArRobot::run(bool stopRunIfNotConnected)
+AREXPORT void ArRobot::run(bool stopRunIfNotConnected, bool runNonThreaded)
 {
   if (mySyncLoop.getRunning())
   {
@@ -225,6 +263,13 @@ AREXPORT void ArRobot::run(bool stopRunIfNotConnected)
   mySyncLoop.setRunning(true);
   mySyncLoop.stopRunIfNotConnected(stopRunIfNotConnected);
   mySyncLoop.runInThisThread();
+
+  myRunningNonThreaded = runNonThreaded;
+  if (!myRunningNonThreaded)
+    // Joinable, but do NOT lower priority. The robot packet reader
+    // thread is the most important one around, since all the timing is
+    // based off that one.
+    myPacketReader.create(true, false);
 }
 
 /**
@@ -234,7 +279,8 @@ AREXPORT void ArRobot::run(bool stopRunIfNotConnected)
 
 AREXPORT bool ArRobot::isRunning(void) const
 {
-  return mySyncLoop.getRunning();
+  return (mySyncLoop.getRunning() && 
+	  (myRunningNonThreaded || myPacketReader.getRunning()));
 }
 
 /**
@@ -243,14 +289,16 @@ AREXPORT bool ArRobot::isRunning(void) const
    This function returns immediately
    @param stopRunIfNotConnected if true, the run will stop if there is no 
    connection to the robot at any given point, this is good for one-shot 
-   programs... if it is false the run won't stop unless stop is called on the
-   instance
+   programs. If  false then the thread will continue until stopRunning() is called.
+   @param runNonThreadedPacketReader selects whether the packet reader object
+(receives and parses packets from the robot) should run in its own internal
+asychronous thread.  Mostly for internal use.
    @sa stopRunning()
    @sa waitForRunExit()
    @sa lock()
    @sa unlock()
 **/
-AREXPORT void ArRobot::runAsync(bool stopRunIfNotConnected)
+AREXPORT void ArRobot::runAsync(bool stopRunIfNotConnected, bool runNonThreadedPacketReader)
 {
   if (mySyncLoop.getRunning())
   {
@@ -258,10 +306,27 @@ AREXPORT void ArRobot::runAsync(bool stopRunIfNotConnected)
 	       "The robot is already running, cannot run it again.");
     return;
   }
-  mySyncLoop.stopRunIfNotConnected(stopRunIfNotConnected);
-  // Joinable, but do NOT lower priority. The robot thread is the most
-  // important one around.
-  mySyncLoop.create(true, false);
+  if (runNonThreadedPacketReader)
+  {
+    mySyncLoop.stopRunIfNotConnected(stopRunIfNotConnected);
+    // Joinable, but do NOT lower priority. The robot thread is the most
+    // important one around. (this isn't true anymore, since the robot
+    // packet reading one is more important for timing)
+    mySyncLoop.create(true, false);
+    myRunningNonThreaded = true;
+  }
+  else
+  {
+    myRunningNonThreaded = false;
+    // Joinable, but do NOT lower priority. The robot thread is the most
+    // important one around. (this isn't true anymore, since the robot
+    // packet reading one is more important for timing)
+    mySyncLoop.create(true, true);
+    // Joinable, but do NOT lower priority. The robot packet reader
+    // thread is the most important one around, since all the timing is
+    // based off that one.
+    myPacketReader.create(true, false);
+  }
 }
 
 /**
@@ -316,22 +381,32 @@ void ArRobot::reset(void)
   myOdometerDegrees = 0;
   myOdometerStart.setToNow();
 
-  myHaveStateOfCharge = 0;
+  myIgnoreMicroControllerBatteryInfo = false;
+
+  myHaveStateOfCharge = false;
   myStateOfCharge = 0;
   myStateOfChargeLow = 0;
   myStateOfChargeShutdown = 0;
   myInterpolation.reset();
   myEncoderInterpolation.reset();
+
   if (myOrigRobotConfig != NULL)
     delete myOrigRobotConfig;
   myOrigRobotConfig = new ArRobotConfigPacketReader(this, true);
+  if (myBatteryPacketReader != NULL)
+    delete myBatteryPacketReader;
+  myBatteryPacketReader = new ArRobotBatteryPacketReader(this);
+
   myFirstEncoderPose = true;
+  myFakeFirstEncoderPose = false;
+  myIgnoreNextPacket = false;
   //myEncoderPose.setPose(0, 0, 0);
   //myEncoderPoseTaken.setToNow();
   //myRawEncoderPose.setPose(0, 0, 0);
   //myGlobalPose.setPose(0, 0, 0);
   //myEncoderTransform.setTransform(myEncoderPose, myGlobalPose);
   myTransVelMax = 0;
+  myTransNegVelMax = 0;
   myTransAccel = 0;
   myTransDecel = 0;
   myRotVelMax = 0;
@@ -341,14 +416,26 @@ void ArRobot::reset(void)
   myLatAccel = 0;
   myLatDecel = 0;
 
-  myRobotLengthFront = 0;
-  myRobotLengthRear = 0;
+  myAbsoluteMaxTransVel = 0;
+  myAbsoluteMaxTransNegVel = 0;
+  myAbsoluteMaxTransAccel = 0;
+  myAbsoluteMaxTransDecel = 0;
+  myAbsoluteMaxRotVel = 0;
+  myAbsoluteMaxRotAccel = 0;
+  myAbsoluteMaxRotDecel = 0;
+  myAbsoluteMaxLatVel = 0;
+  myAbsoluteMaxLatAccel = 0;
+  myAbsoluteMaxLatDecel = 0;
+  
 
   myLeftVel = 0;
   myRightVel = 0;
   myBatteryVoltage = 13;
+  myRealBatteryVoltage = 13;
   myBatteryAverager.clear();
   myBatteryAverager.add(myBatteryVoltage);
+
+
   myStallValue = 0;
   myControl = 0;
   myFlags = 0;
@@ -369,6 +456,8 @@ void ArRobot::reset(void)
   myLatVel = 0;
   myOverriddenChargeState = false;
   myChargeState = CHARGING_UNKNOWN;
+  myOverriddenIsChargerPowerGood = false;
+
 
   myLastX = 0;
   myLastY = 0;
@@ -402,6 +491,18 @@ void ArRobot::reset(void)
   myLastLatSent.setToNow();
   myActionLatSet = false;
 
+  myLastSentTransVelMax = 0;
+  myLastSentTransAccel = 0;
+  myLastSentTransDecel = 0;
+  myLastSentRotVelMax = 0;
+  myLastSentRotVelPosMax = 0;
+  myLastSentRotVelNegMax = 0;
+  myLastSentRotAccel = 0;
+  myLastSentRotDecel = 0;
+  myLastSentLatVelMax = 0;
+  myLastSentLatAccel = 0;
+  myLastSentLatDecel = 0;
+
   myLastPulseSent.setToNow();
 
   myDirectPrecedenceTime = 0;
@@ -424,20 +525,54 @@ void ArRobot::reset(void)
   myOdometryDelay = 0;
 
   myTemperature = -128;
+
+  myConnectionOpenedTime.setSecLL(0);
+  myConnectionOpenedTime.setMSecLL(0);
+
+  mySonarEnabled = true;
+  myAutonomousDrivingSonarEnabled = false;
 }
 
 AREXPORT void ArRobot::setTransVelMax(double vel)
 {
+  if (vel <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setTransVelMax of %g is below 0, ignoring it", vel);
+    return;
+  }
+
   if (vel > myAbsoluteMaxTransVel)
   {
-    ArLog::log(ArLog::Terse, "ArRobot: setTransVelMax of %g is over the absolute max of %g, capping it", vel, myAbsoluteMaxTransVel);
+    ArLog::log(ArLog::Terse, "ArRobot: setTransVelMax of %g is over the absolute max vel of %g, capping it", vel, myAbsoluteMaxTransVel);
     vel = myAbsoluteMaxTransVel;
   }
   myTransVelMax = vel;
 }
 
+AREXPORT void ArRobot::setTransNegVelMax(double negVel)
+{
+  if (negVel >= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setTransNegVelMax of %g is below 0, ignoring it", negVel);
+    return;
+  }
+
+  if (negVel < myAbsoluteMaxTransNegVel)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setTransNegVelMax of %g is over the absolute max vel of %g, capping it", negVel, myAbsoluteMaxTransNegVel);
+    negVel = myAbsoluteMaxTransNegVel;
+  }
+  myTransNegVelMax = negVel;
+}
+
 AREXPORT void ArRobot::setTransAccel(double acc)
 {
+  if (acc <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setTransAccel of %g is below 0, ignoring it", acc);
+    return;
+  }
+  
   if (acc > myAbsoluteMaxTransAccel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: setTransAccel of %g is over the absolute max of %g, capping it", acc, myAbsoluteMaxTransAccel);
@@ -448,6 +583,12 @@ AREXPORT void ArRobot::setTransAccel(double acc)
 
 AREXPORT void ArRobot::setTransDecel(double decel)
 {
+  if (decel <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setTransDecel of %g is below 0, ignoring it", decel);
+    return;
+  }
+
   if (fabs(decel) > myAbsoluteMaxTransDecel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: setTransDecel of %g is over the absolute max of %g, capping it", decel, myAbsoluteMaxTransDecel);
@@ -458,6 +599,12 @@ AREXPORT void ArRobot::setTransDecel(double decel)
 
 AREXPORT void ArRobot::setRotVelMax(double vel)
 {
+  if (vel <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setRotVelMax of %g is below 0, ignoring it", vel);
+    return;
+  }
+
   if (vel > myAbsoluteMaxRotVel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: rotVelMax of %g is over the absolute max of %g, capping it", vel, myAbsoluteMaxRotVel);
@@ -468,6 +615,12 @@ AREXPORT void ArRobot::setRotVelMax(double vel)
 
 AREXPORT void ArRobot::setRotAccel(double acc)
 {
+  if (acc <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setRotAccel of %g is below 0, ignoring it", acc);
+    return;
+  }
+
   if (acc > myAbsoluteMaxRotAccel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: setRotAccel of %g is over the absolute max of %g, capping it", acc, myAbsoluteMaxRotAccel);
@@ -478,6 +631,12 @@ AREXPORT void ArRobot::setRotAccel(double acc)
 
 AREXPORT void ArRobot::setRotDecel(double decel)
 {
+  if (decel <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setRotDecel of %g is below 0, ignoring it", decel);
+    return;
+  }
+
   if (fabs(decel) > myAbsoluteMaxRotDecel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: setRotDecel of %g is over the absolute max of %g, capping it", decel, myAbsoluteMaxRotDecel);
@@ -489,6 +648,12 @@ AREXPORT void ArRobot::setRotDecel(double decel)
 /** @since 2.6.0 */
 AREXPORT void ArRobot::setLatVelMax(double vel)
 {
+  if (vel <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setLatVelMax of %g is below 0, ignoring it", vel);
+    return;
+  }
+
   if (vel > myAbsoluteMaxLatVel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: setLatVelMax of %g is over the absolute max of %g, capping it", vel, myAbsoluteMaxLatVel);
@@ -500,6 +665,12 @@ AREXPORT void ArRobot::setLatVelMax(double vel)
 /** @since 2.6.0 */
 AREXPORT void ArRobot::setLatAccel(double acc)
 {
+  if (acc <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setLatAccel of %g is below 0, ignoring it", acc);
+    return;
+  }
+
   if (acc > myAbsoluteMaxLatAccel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: setLatAccel of %g is over the absolute max of %g, capping it", acc, myAbsoluteMaxLatAccel);
@@ -511,6 +682,12 @@ AREXPORT void ArRobot::setLatAccel(double acc)
 /** @since 2.6.0 */
 AREXPORT void ArRobot::setLatDecel(double decel)
 {
+  if (decel <= 0)
+  {
+    ArLog::log(ArLog::Terse, "ArRobot: setLatDecel of %g is below 0, ignoring it", decel);
+    return;
+  }
+
   if (fabs(decel) > myAbsoluteMaxLatDecel)
   {
     ArLog::log(ArLog::Terse, "ArRobot: setLatDecel of %g is over the absolute max of %g, capping it", decel, myAbsoluteMaxLatDecel);
@@ -523,6 +700,11 @@ AREXPORT void ArRobot::setLatDecel(double decel)
 AREXPORT double ArRobot::getTransVelMax(void) const
 {
   return myTransVelMax;
+}
+
+AREXPORT double ArRobot::getTransNegVelMax(void) const
+{
+  return myTransNegVelMax;
 }
 
 AREXPORT double ArRobot::getTransAccel(void) const
@@ -579,6 +761,7 @@ AREXPORT double ArRobot::getLatDecel(void) const
 AREXPORT void ArRobot::setDeviceConnection(ArDeviceConnection *connection)
 {
   myConn = connection;
+  myConn->setDeviceName("uC");
   mySender.setDeviceConnection(myConn);
   myReceiver.setDeviceConnection(myConn);
 }
@@ -608,6 +791,13 @@ AREXPORT ArDeviceConnection *ArRobot::getDeviceConnection(void) const
 **/
 AREXPORT void ArRobot::setConnectionTimeoutTime(int mSecs)
 {
+  ArLog::log(ArLog::Normal, 
+	     "ArRobot::setConnectionTimeoutTime: Setting timeout to %d mSecs", 
+	     mSecs);
+
+  myLastOdometryReceivedTime.setToNow();
+  myLastPacketReceivedTime.setToNow();
+
   if (mSecs > 0)
     myTimeoutTime = mSecs;
   else
@@ -879,12 +1069,14 @@ AREXPORT int ArRobot::asyncConnectHandler(bool tryHarderToConnect)
       {
 	gotConfig = true;
 	setAbsoluteMaxTransVel(myOrigRobotConfig->getTransVelTop());
+	setAbsoluteMaxTransNegVel(-myOrigRobotConfig->getTransVelTop());
 	setAbsoluteMaxTransAccel(myOrigRobotConfig->getTransAccelTop());
 	setAbsoluteMaxTransDecel(myOrigRobotConfig->getTransAccelTop());
 	setAbsoluteMaxRotVel(myOrigRobotConfig->getRotVelTop());
 	setAbsoluteMaxRotAccel(myOrigRobotConfig->getRotAccelTop());
 	setAbsoluteMaxRotDecel(myOrigRobotConfig->getRotAccelTop());
 	setTransVelMax(myOrigRobotConfig->getTransVelMax());
+	setTransNegVelMax(-myOrigRobotConfig->getTransVelMax());
 	setTransAccel(myOrigRobotConfig->getTransAccel());
 	setTransDecel(myOrigRobotConfig->getTransDecel());
 	setRotVelMax(myOrigRobotConfig->getRotVelMax());
@@ -901,6 +1093,17 @@ AREXPORT int ArRobot::asyncConnectHandler(bool tryHarderToConnect)
 	}
 	if (myOrigRobotConfig->getKinematicsDelay() != 0)
 	  setOdometryDelay(myOrigRobotConfig->getKinematicsDelay());
+	if (myOrigRobotConfig->getStateOfChargeLow() > 0)
+	  setStateOfChargeLow(myOrigRobotConfig->getStateOfChargeLow());
+	if (myOrigRobotConfig->getStateOfChargeShutdown() > 0)
+	  setStateOfChargeShutdown(
+		  myOrigRobotConfig->getStateOfChargeShutdown());
+      }
+      else if (myRequireConfigPacket)
+      {
+	ArLog::log(ArLog::Terse, "Could not connect, config packet required and no config packet received.");
+	failedConnect();
+	return 2;
       }
       // if our absolute maximums weren't set then set them
       else
@@ -924,6 +1127,10 @@ AREXPORT int ArRobot::asyncConnectHandler(bool tryHarderToConnect)
 	setTransVelMax(myParams->getTransVelMax());
       else if (!gotConfig)
 	setTransVelMax(myParams->getAbsoluteMaxVelocity());
+      if (ArMath::fabs(myParams->getTransVelMax()) > 1)
+	setTransNegVelMax(-myParams->getTransVelMax());
+      else if (!gotConfig)
+	setTransNegVelMax(-myParams->getAbsoluteMaxVelocity());
       if (ArMath::fabs(myParams->getRotVelMax()) > 1)
 	setRotVelMax(myParams->getRotVelMax());
       else if (!gotConfig)
@@ -955,11 +1162,15 @@ AREXPORT int ArRobot::asyncConnectHandler(bool tryHarderToConnect)
   {
     serConn = dynamic_cast<ArSerialConnection *>(myConn);
     // if we didn't get a config packet or we can't change the baud or
-    // we aren't using a serial port then don't switch the baud
+    // we shouldn't change the baud or if we'd change it to a slower
+    // baud rate or we aren't using a serial port then don't switch
+    // the baud
     if (!myOrigRobotConfig->hasPacketArrived() || 
 	!myOrigRobotConfig->getResetBaud() || 
 	serConn == NULL ||
 	myParams->getSwitchToBaudRate() == 0 || 
+	(serConn != NULL && 
+	 serConn->getBaud() >= myParams->getSwitchToBaudRate()) ||
 	myDoNotSwitchBaud)
     {
       // if we're using a serial connection store our baud rate
@@ -1024,7 +1235,7 @@ AREXPORT int ArRobot::asyncConnectHandler(bool tryHarderToConnect)
       // if we didn't get it and its been 500 ms then fail
       else if (myAsyncConnectStartedChangeBaud.mSecSince() > 900)
       {
-	ArLog::log(ArLog::Verbose, "Controller did not switch to baud, reset to %d baud.", myAsyncConnectStartBaud);
+	ArLog::log(ArLog::Normal, "Controller did not switch to baud, reset to %d baud.", myAsyncConnectStartBaud);
 	serConn->setBaud(myAsyncConnectStartBaud);
 	myAsyncConnectState = 5;
       }
@@ -1059,6 +1270,7 @@ AREXPORT int ArRobot::asyncConnectHandler(bool tryHarderToConnect)
   if (packet != NULL) 
   {
     ret = packet->getID();
+
     //printf("Got a packet %d\n", ret);
 	
     if (ret == 50)
@@ -1253,18 +1465,25 @@ AREXPORT void ArRobot::setRobotParams(ArRobotParams *params)
 
   myParams = params;
   processParamFile();
-  ArLog::log(ArLog::Normal, "Took new passed in robot params.");
+  ArLog::log(ArLog::Verbose, "Took new passed in robot params.");
 }
 
 
 AREXPORT void ArRobot::processParamFile(void)
 {
+
+
+	// PS 9/10/12 - added units to get MTX working but it
+	// broke old sonar - so now trying the old way
+  //for (int i = 0; i < myParams->getNumSonarUnits(); ++i)
   for (int i = 0; i < myParams->getNumSonar(); ++i)
   {
     //printf("sonar %d %d %d %d\n", i, myParams->getSonarX(i),
     //myParams->getSonarY(i), myParams->getSonarTh(i));
     if (mySonars.find(i) == mySonars.end())
     {
+			ArLog::log(ArLog::Verbose,"ArRobot::processParamFile creating new sonar %d %d %d %d", i, myParams->getSonarX(i),
+									myParams->getSonarY(i), myParams->getSonarTh(i));
       mySonars[i] = new ArSensorReading(myParams->getSonarX(i),
 					myParams->getSonarY(i), 
 					myParams->getSonarTh(i));
@@ -1272,6 +1491,8 @@ AREXPORT void ArRobot::processParamFile(void)
     }
     else
     {
+			ArLog::log(ArLog::Verbose,"ArRobot::processParamFile resetting sonar %d %d %d %d", i, myParams->getSonarX(i),
+									myParams->getSonarY(i), myParams->getSonarTh(i));
       mySonars[i]->resetSensorPosition(myParams->getSonarX(i),
 				      myParams->getSonarY(i), 
 				      myParams->getSonarTh(i));
@@ -1280,11 +1501,21 @@ AREXPORT void ArRobot::processParamFile(void)
     if ((i + 1) > myNumSonar)
       myNumSonar = i + 1;
   }
+
   //myRobotType = myParams->getClassName();
   //myRobotSubType = myParams->getSubClassName();
-  myAbsoluteMaxTransVel = myParams->getAbsoluteMaxVelocity();
-  myAbsoluteMaxRotVel = myParams->getAbsoluteMaxRotVelocity();
-  myAbsoluteMaxLatVel = myParams->getAbsoluteMaxLatVelocity();
+
+  // MPL 20130407 made this so that it'd only happen if we are using
+  // the .p file, since otherwise it just sets things back to 0 and
+  // causes problems... and made it use the set function to make it
+  // easier to track down any problems it causes
+  if (!ArRobotParams::internalGetUseDefaultBehavior())
+  {
+    setAbsoluteMaxTransVel(myParams->getAbsoluteMaxVelocity());
+    setAbsoluteMaxTransNegVel(myParams->getAbsoluteMaxVelocity());
+    setAbsoluteMaxRotVel(myParams->getAbsoluteMaxRotVelocity());
+    setAbsoluteMaxLatVel(myParams->getAbsoluteMaxLatVelocity());
+  }
 
   if (myParams->getRobotLengthFront() == 0)
     myRobotLengthFront = myParams->getRobotLength() / 2.0;
@@ -1298,8 +1529,20 @@ AREXPORT void ArRobot::processParamFile(void)
 }
 
 
-AREXPORT bool ArRobot::madeConnection(void)
+AREXPORT bool ArRobot::madeConnection(bool resetConnectionTime)
 {
+  if (resetConnectionTime)
+    myConnectionOpenedTime.setToNow();
+
+  if (!ArRobotParams::internalGetUseDefaultBehavior())
+  {
+    ArLog::log(ArLog::Normal, "Explicitly not loading ARIA Pioneer robot parameter files");
+    myRobotType = myParams->getClassName();
+    myRobotSubType = myParams->getSubClassName();
+    processParamFile();
+    return true;
+  }
+  
   std::string subTypeParamName;
   std::string paramFileName;
   bool loadedSubTypeParam;
@@ -1308,7 +1551,7 @@ AREXPORT bool ArRobot::madeConnection(void)
   
   if (myParams != NULL)
     delete myParams;
-  
+
   // Find the robot parameters to load and get them into the structure we have
   if (ArUtil::strcasecmp(myRobotSubType, "p2dx") == 0)
     myParams = new ArRobotP2DX;
@@ -1402,6 +1645,12 @@ AREXPORT bool ArRobot::madeConnection(void)
     myParams = new ArRobotPowerBotSH_lms500;
   else if(ArUtil::strcasecmp(myRobotSubType, "researchPB-lms500") == 0)
     myParams = new ArRobotResearchPB_lms500;
+  else if(ArUtil::strcasecmp(myRobotSubType, "pioneer-lx") == 0 || 
+    ArUtil::strcasecmp(myRobotSubType, "lx") == 0 ||   // subtype used in MobileSim 0.7.2
+    ArUtil::strcasecmp(myRobotSubType, "marc_devel") == 0 || // subtype used in early versions of MARCOS firmware
+    ArUtil::strcasecmp(myRobotSubType, "lynx") == 0
+   )
+    myParams = new ArRobotPioneerLX;
   else
   {
     hadDefault = false;
@@ -1411,7 +1660,19 @@ AREXPORT bool ArRobot::madeConnection(void)
   // load up the param file for the subtype
   paramFileName = Aria::getDirectory();
   paramFileName += "params/";
-  paramFileName += myRobotSubType;
+
+  // "marc_devel" is subtype given by early MTX core firmware,
+  // but it ought to be pioneer-lx for research pioneer lx.
+  if(ArUtil::strcasecmp(myRobotSubType, "marc_devel") == 0)
+  {
+    ArLog::log(ArLog::Verbose, "Note, Using pioneer-lx.p as parameter file for marc_devel robot subtype.");
+    paramFileName += "pioneer-lx";
+  }
+  else
+  {
+    paramFileName += myRobotSubType;
+  }
+
   paramFileName += ".p";
   if ((loadedSubTypeParam = myParams->parseFile(paramFileName.c_str(), true, true)))
       ArLog::log(ArLog::Normal, 
@@ -1458,10 +1719,16 @@ AREXPORT bool ArRobot::madeConnection(void)
   processParamFile();
 
   if (myParams->getRequestIOPackets() || myRequestedIOPackets)
+  {
+    myRequestedIOPackets = true;
     comInt(ArCommands::IOREQUEST, 2);
+  }
 
   if(myParams->getRequestEncoderPackets() || myRequestedEncoderPackets)
+  {
+    myRequestedEncoderPackets = true;
     comInt(ArCommands::ENCODER, 2);
+  }
 
   return true;
 }
@@ -1507,6 +1774,17 @@ AREXPORT void ArRobot::stopIOPackets(void)
   myRequestedIOPackets = false;
 }
 
+
+AREXPORT bool ArRobot::haveRequestedEncoderPackets(void)
+{
+  return myRequestedEncoderPackets;
+}
+
+AREXPORT bool ArRobot::haveRequestedIOPackets(void)
+{
+  return myRequestedIOPackets;
+}
+
 AREXPORT void ArRobot::startStabilization(void)
 {
   std::list<ArFunctor *>::iterator it;
@@ -1514,8 +1792,8 @@ AREXPORT void ArRobot::startStabilization(void)
   myStartedStabilizing.setToNow();
 
   for (it = myStabilizingCBList.begin(); 
-       it != myStabilizingCBList.end(); 
-       it++)
+      it != myStabilizingCBList.end(); 
+      it++)
     (*it)->invoke();
 
 }
@@ -1529,10 +1807,11 @@ AREXPORT void ArRobot::finishedConnection(void)
   myAsyncConnectFlag = false;
   myBlockingConnectRun = false;
   resetTripOdometer();
-  
+
   for (it = myConnectCBList.begin(); it != myConnectCBList.end(); it++)
     (*it)->invoke();
   myLastPacketReceivedTime.setToNow();
+  myLastOdometryReceivedTime.setToNow();
 
   wakeAllConnWaitingThreads();
 }
@@ -1540,14 +1819,14 @@ AREXPORT void ArRobot::finishedConnection(void)
 AREXPORT void ArRobot::failedConnect(void)
 {
   std::list<ArFunctor *>::iterator it;  
-  
+
   myAsyncConnectFlag = false;
   myBlockingConnectRun = false;
   ArLog::log(ArLog::Terse, "Failed to connect to robot.");
   myIsConnected = false;
   for (it = myFailedConnectCBList.begin(); 
-       it != myFailedConnectCBList.end(); 
-       it++)
+      it != myFailedConnectCBList.end(); 
+      it++)
     (*it)->invoke();
 
   if (myConn != NULL)
@@ -1558,7 +1837,11 @@ AREXPORT void ArRobot::failedConnect(void)
 /** 
   Disconnects from a robot.  This also calls of the DisconnectNormally 
   Callback Functors if the robot was actually connected to a robot when 
-  this member was called.
+  this member was called. Then it disables the robot motors, sends CLOSE
+  command to robot, waits one seconds, and closes the communications connection.
+  This disconnection normally happens automatically when the program exits
+  by calling Aria::exit(), or if communication to the robot fails during 
+  the run cycle, and this method does not need to be explicitly called.
   @return true if not connected to a robot (so no disconnect can happen, but 
   it didn't failed either), also true if the command could be sent to the 
   robot (ie connection hasn't failed)
@@ -1572,7 +1855,7 @@ AREXPORT bool ArRobot::disconnect(void)
 
   if (!myIsConnected && !myIsStabilizing)
     return true;
-  
+
   ArLog::log(ArLog::Terse, "Disconnecting from robot.");
   myNoTimeWarningThisCycle = true;
   myIsConnected = false;
@@ -1580,10 +1863,12 @@ AREXPORT bool ArRobot::disconnect(void)
   if (myIsConnected)
   {
     for (it = myDisconnectNormallyCBList.begin(); 
-	 it != myDisconnectNormallyCBList.end(); 
-	 it++)
+        it != myDisconnectNormallyCBList.end(); 
+        it++)
       (*it)->invoke();
   }
+  mySender.comInt(ArCommands::ENABLE, 0);
+  ArUtil::sleep(100);
   ret = mySender.comInt(ArCommands::CLOSE, 1);
   ArUtil::sleep(1000);
   if (ret == true)
@@ -1592,29 +1877,34 @@ AREXPORT bool ArRobot::disconnect(void)
     {
       ret = myConn->close();
       if ((serConn = dynamic_cast<ArSerialConnection *>(myConn)) != NULL)
-      	serConn->setBaud(myAsyncConnectStartBaud);
+        serConn->setBaud(myAsyncConnectStartBaud);
     } 
     else
       ret = false;
   } 
   else if (myConn != NULL)
     myConn->close();
-    
+
   return ret;
 }
 
-AREXPORT void ArRobot::dropConnection(void)
+AREXPORT void ArRobot::dropConnection(const char *reason)
 {
   std::list<ArFunctor *>::iterator it;  
 
   if (!myIsConnected)
     return;
 
-  ArLog::log(ArLog::Terse, "Lost connection to the robot because of error.");
+  if (reason != NULL)
+    myDropConnectionReason = reason;
+  else
+    myDropConnectionReason = "Lost connection to the robot because of unknown error.";
+
+  ArLog::log(ArLog::Terse, myDropConnectionReason.c_str());
   myIsConnected = false;
   for (it = myDisconnectOnErrorCBList.begin(); 
-       it != myDisconnectOnErrorCBList.end(); 
-       it++)
+      it != myDisconnectOnErrorCBList.end(); 
+      it++)
     (*it)->invoke();
 
   if (myConn != NULL)
@@ -1658,11 +1948,11 @@ AREXPORT void ArRobot::stop(void)
 }
 
 /**
-   Sets the desired translational velocity of the robot. 
-   ArRobot caches this value, and sends it with a VEL command during the next cycle.
+  Sets the desired translational velocity of the robot. 
+  ArRobot caches this value, and sends it with a VEL command during the next cycle.
 
-   @param velocity the desired translational velocity of the robot (mm/sec)
-**/
+  @param velocity the desired translational velocity of the robot (mm/sec)
+ **/
 AREXPORT void ArRobot::setVel(double velocity)
 {
   myTransType = TRANS_VEL;
@@ -1672,13 +1962,13 @@ AREXPORT void ArRobot::setVel(double velocity)
 }
 
 /**
-   Sets the desired lateral (sideways on local Y axis) translational velocity of the robot. 
-   ArRobot caches this value, and sends it with a LATVEL command during the next cycle.
-   (Only has effect on robots that are capable of translating laterally, i.e.
-   Seekur. Other robots will ignore the command.)
+  Sets the desired lateral (sideways on local Y axis) translational velocity of the robot. 
+  ArRobot caches this value, and sends it with a LATVEL command during the next cycle.
+  (Only has effect on robots that are capable of translating laterally, i.e.
+  Seekur. Other robots will ignore the command.)
 
-   @param latVelocity the desired translational velocity of the robot (mm/sec)
-**/
+  @param latVelocity the desired translational velocity of the robot (mm/sec)
+ **/
 AREXPORT void ArRobot::setLatVel(double latVelocity)
 {
   myLatType = LAT_VEL;
@@ -1687,19 +1977,19 @@ AREXPORT void ArRobot::setLatVel(double latVelocity)
 }
 
 /** 
-    Sets the velocity of each of the wheels on the robot
-    independently.  ArRobot caches these values, and sends them with 
-    a VEL2 command during the next
-    cycle.  Note that this cancels both translational velocity AND
-    rotational velocity, and is canceled by any of the other direct
-    motion commands.  
-    @sa setVel
-    @sa setRotVel
-    @sa clearDirectMotion
+  Sets the velocity of each of the wheels on the robot
+  independently.  ArRobot caches these values, and sends them with 
+  a VEL2 command during the next
+  cycle.  Note that this cancels both translational velocity AND
+  rotational velocity, and is canceled by any of the other direct
+  motion commands.  
+  @sa setVel
+  @sa setRotVel
+  @sa clearDirectMotion
 
-    @param leftVelocity the desired velocity of the left wheel 
-    @param rightVelocity the desired velocity of the right wheel
-**/
+  @param leftVelocity the desired velocity of the left wheel 
+  @param rightVelocity the desired velocity of the right wheel
+ **/
 AREXPORT void ArRobot::setVel2(double leftVelocity, double rightVelocity)
 {
   myTransType = TRANS_VEL2;
@@ -1711,15 +2001,15 @@ AREXPORT void ArRobot::setVel2(double leftVelocity, double rightVelocity)
 }
 
 /**
-   Tells the robot to begin moving the specified distance forward/backwards.
-   ArRobot caches this value, and sends it during the next cycle (with a MOVE
-   or VEL command, depending on the robot).
+  Tells the robot to begin moving the specified distance forward/backwards.
+  ArRobot caches this value, and sends it during the next cycle (with a MOVE
+  or VEL command, depending on the robot).
 
-   @param distance the distance for the robot to move (millimeters). Note, 
-    due to the implementation of the MOVE command on some robots, it is best to
-    restrict the distance to the range (5000mm, 5000mm] if possible. Not all
-    robots have this restriction, however.
-**/
+  @param distance the distance for the robot to move (millimeters). Note, 
+  due to the implementation of the MOVE command on some robots, it is best to
+  restrict the distance to the range (5000mm, 5000mm] if possible. Not all
+  robots have this restriction, however.
+ **/
 AREXPORT void ArRobot::move(double distance)
 {
   myTransType = TRANS_DIST_NEW;
@@ -1730,19 +2020,19 @@ AREXPORT void ArRobot::move(double distance)
 }
 
 /**
-   Determines if a move command is finished, to within a small
-   distance threshold, "delta".  If delta = 0 (default), the delta distance 
-   set with setMoveDoneDist() will be used.
+  Determines if a move command is finished, to within a small
+  distance threshold, "delta".  If delta = 0 (default), the delta distance 
+  set with setMoveDoneDist() will be used.
 
-   @param delta how close to the goal distance the robot must be, or 0 for previously set default
+  @param delta how close to the goal distance the robot must be, or 0 for previously set default
 
-   @return true if the robot has finished the distance given in a move
-   command or if the robot is no longer in a move mode (because its
-   now running off of actions, or setVel() or setVel2() was called).
+  @return true if the robot has finished the distance given in a move
+  command or if the robot is no longer in a move mode (because its
+  now running off of actions, or setVel() or setVel2() was called).
 
-   @sa setMoveDoneDist
-   @sa getMoveDoneDist
-**/
+  @sa setMoveDoneDist
+  @sa getMoveDoneDist
+ **/
 AREXPORT bool ArRobot::isMoveDone(double delta)
 {
   if (fabs(delta) < 0.001)
@@ -1757,17 +2047,17 @@ AREXPORT bool ArRobot::isMoveDone(double delta)
 
 
 /**
-   Determines if a setHeading() command is finished, to within a small
-   distance.  If delta = 0 (default), the delta distance used is that which was
-   set with setHeadingDoneDiff() (you can get that distnace value with
-   getHeadingDoneDiff(), the default is 3).
+  Determines if a setHeading() command is finished, to within a small
+  distance.  If delta = 0 (default), the delta distance used is that which was
+  set with setHeadingDoneDiff() (you can get that distnace value with
+  getHeadingDoneDiff(), the default is 3).
 
-   @param delta how close to the goal distance the robot must be
+  @param delta how close to the goal distance the robot must be
 
-   @return true if the robot has achieved the heading given in a move
-   command or if the robot is no longer in heading mode mode (because
-   its now running off of actions, setDHeading(), or setRotVel() was called).
-**/
+  @return true if the robot has achieved the heading given in a move
+  command or if the robot is no longer in heading mode mode (because
+  its now running off of actions, setDHeading(), or setRotVel() was called).
+ **/
 AREXPORT bool ArRobot::isHeadingDone(double delta) const
 {
   if (fabs(delta) < 0.001)
@@ -1782,11 +2072,11 @@ AREXPORT bool ArRobot::isHeadingDone(double delta) const
 
 
 /**
-   Sets the heading of the robot, it caches this value, and sends it
-   during the next cycle. 
-   
-   @param heading the desired heading of the robot (degrees)
-**/
+  Sets the heading of the robot, it caches this value, and sends it
+  during the next cycle. 
+
+  @param heading the desired heading of the robot (degrees)
+ **/
 AREXPORT void ArRobot::setHeading(double heading)
 {
   myRotVal = heading;
@@ -1801,11 +2091,11 @@ AREXPORT void ArRobot::setHeading(double heading)
 }
 
 /**
-   Sets the rotational velocity of the robot, it caches this value,
-   and sends it during the next cycle.  
+  Sets the rotational velocity of the robot, it caches this value,
+  and sends it during the next cycle.  
 
-   @param velocity the desired rotational velocity of the robot (deg/sec)
-**/
+  @param velocity the desired rotational velocity of the robot (deg/sec)
+ **/
 AREXPORT void ArRobot::setRotVel(double velocity)
 {
   myRotVal = velocity;
@@ -1820,11 +2110,11 @@ AREXPORT void ArRobot::setRotVel(double velocity)
 }
 
 /**
-   Sets a delta heading to the robot, it caches this value, and sends
-   it during the next cycle.  
+  Sets a delta heading to the robot, it caches this value, and sends
+  it during the next cycle.  
 
-   @param deltaHeading the desired amount to change the heading of the robot by
-**/
+  @param deltaHeading the desired amount to change the heading of the robot by
+ **/
 AREXPORT void ArRobot::setDeltaHeading(double deltaHeading)
 {
   myRotVal = ArMath::addAngle(getTh(), deltaHeading);
@@ -1839,22 +2129,37 @@ AREXPORT void ArRobot::setDeltaHeading(double deltaHeading)
 }
 
 /**
-   This sets the absolute maximum velocity the robot will go... the
-   maximum velocity can also be set by the actions and by
-   setTransVelMax, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setTransVelMax.
+  This sets the absolute maximum velocity the robot will go... the
+  maximum velocity can also be set by the actions and by
+  setTransVelMax, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setTransVelMax.
 
-   @param maxVel the maximum velocity to be set, it must be a non-zero
-   number 
+  @param maxVel the maximum velocity to be set, it must be a non-zero
+  number and is in mm/sec
 
-   @return true if the value is good, false othrewise
-**/
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxTransVel(double maxVel)
 {
-  if (maxVel < 0)
+  if (maxVel <= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransVel: given a value <= 0 (%g) and will not set it", maxVel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxVel > myOrigRobotConfig->getTransVelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransVel: given a value (%g) over TransVelTop (%g) and will cap it", maxVel, myOrigRobotConfig->getTransVelTop());
+    maxVel = myOrigRobotConfig->getTransVelTop();
+  }
+
+  if (fabs(maxVel - myAbsoluteMaxTransVel) > ArMath::epsilon())
+    ArLog::log(ArLog::Verbose, "ArRobot::setAbsoluteMaxTransVel: Setting to %g",
+	       maxVel);
+
   myAbsoluteMaxTransVel = maxVel;
   if (getTransVelMax() > myAbsoluteMaxTransVel)
     setTransVelMax(myAbsoluteMaxTransVel);
@@ -1862,22 +2167,77 @@ AREXPORT bool ArRobot::setAbsoluteMaxTransVel(double maxVel)
 }
 
 /**
-   This sets the absolute maximum translational acceleration the robot
-   will do... the acceleration can also be set by the actions and by
-   setTransAccel, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setTransAccel.
+  This sets the absolute maximum velocity the robot will go... the
+  maximum velocity can also be set by the actions and by
+  setTransVelMax, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setTransVelMax.
 
-   @param maxAccel the maximum acceleration to be set, it must be a non-zero
-   number 
+  @param maxVel the maximum velocity to be set, it must be a non-zero
+  number and is in -mm/sec (use negative values)
 
-   @return true if the value is good, false othrewise
-**/
+  @return true if the value is good, false othrewise
+ **/
+
+AREXPORT bool ArRobot::setAbsoluteMaxTransNegVel(double maxNegVel)
+{
+  if (maxNegVel >= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransNegVel: given a value >= 0 (%g) and will not set it", maxNegVel);
+    return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxNegVel < -myOrigRobotConfig->getTransVelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransNegVel: given a value (%g) below TransVelTop (-%g) and will cap it", maxNegVel, myOrigRobotConfig->getTransVelTop());
+    maxNegVel = -myOrigRobotConfig->getTransVelTop();
+  }
+
+  if (fabs(maxNegVel - myAbsoluteMaxTransNegVel) > ArMath::epsilon())
+    ArLog::log(ArLog::Verbose, 
+	       "ArRobot::setAbsoluteMaxTransNegVel: Setting to %g",
+	       maxNegVel);
+
+  myAbsoluteMaxTransNegVel = maxNegVel;
+  if (getTransNegVelMax() < myAbsoluteMaxTransNegVel)
+    setTransNegVelMax(myAbsoluteMaxTransNegVel);
+  return true;
+}
+
+/**
+  This sets the absolute maximum translational acceleration the robot
+  will do... the acceleration can also be set by the actions and by
+  setTransAccel, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setTransAccel.
+
+  @param maxAccel the maximum acceleration to be set, it must be a non-zero
+  number 
+
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxTransAccel(double maxAccel)
 {
-  if (maxAccel < 0)
+  if (maxAccel <= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransAccel: given a value <= 0 (%g) and will not set it", maxAccel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxAccel > myOrigRobotConfig->getTransAccelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransAccel: given a value (%g) over TransAccelTop (%g) and will cap it", maxAccel, myOrigRobotConfig->getTransAccelTop());
+    maxAccel = myOrigRobotConfig->getTransAccelTop();
+  }
+
+  if (fabs(maxAccel - myAbsoluteMaxTransAccel) > ArMath::epsilon())
+    ArLog::log(ArLog::Verbose, 
+	       "ArRobot::setAbsoluteMaxTransAccel: Setting to %g",
+	       maxAccel);
+
   myAbsoluteMaxTransAccel = maxAccel;
   if (getTransAccel() > myAbsoluteMaxTransAccel)
     setTransAccel(myAbsoluteMaxTransAccel);
@@ -1885,22 +2245,38 @@ AREXPORT bool ArRobot::setAbsoluteMaxTransAccel(double maxAccel)
 }
 
 /**
-   This sets the absolute maximum translational deceleration the robot
-   will do... the deceleration can also be set by the actions and by
-   setTransDecel, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setTransDecel.
+  This sets the absolute maximum translational deceleration the robot
+  will do... the deceleration can also be set by the actions and by
+  setTransDecel, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setTransDecel.
 
-   @param maxDecel the maximum deceleration to be set, it must be a non-zero
-   number 
+  @param maxDecel the maximum deceleration to be set, it must be a non-zero
+  number 
 
-   @return true if the value is good, false othrewise
-**/
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxTransDecel(double maxDecel)
 {
-  if (maxDecel < 0)
+  if (maxDecel <= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransDecel: given a value <= 0 (%g) and will not set it", maxDecel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxDecel > myOrigRobotConfig->getTransAccelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxTransDecel: given a value (%g) over TransAccelTop (%g) and will cap it", maxDecel, myOrigRobotConfig->getTransAccelTop());
+    maxDecel = myOrigRobotConfig->getTransAccelTop();
+  }
+
+  if (fabs(maxDecel - myAbsoluteMaxTransDecel) > ArMath::epsilon())
+    ArLog::log(ArLog::Verbose, 
+	       "ArRobot::setAbsoluteMaxTransDecel: Setting to %g",
+	       maxDecel);
+
   myAbsoluteMaxTransDecel = maxDecel;
   if (getTransDecel() > myAbsoluteMaxTransDecel)
     setTransDecel(myAbsoluteMaxTransDecel);
@@ -1908,20 +2284,36 @@ AREXPORT bool ArRobot::setAbsoluteMaxTransDecel(double maxDecel)
 }
 
 /**
-   This sets the absolute maximum velocity the robot will go... the
-   maximum velocity can also be set by the actions and by
-   setRotVelMax, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setRotVelMax.
+  This sets the absolute maximum velocity the robot will go... the
+  maximum velocity can also be set by the actions and by
+  setRotVelMax, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setRotVelMax.
 
-   @param maxVel the maximum velocity to be set, it must be a non-zero number
-   @return true if the value is good, false othrewise
-**/
+  @param maxVel the maximum velocity to be set, it must be a non-zero number
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxRotVel(double maxVel)
 {
-  if (maxVel < 0)
+  if (maxVel <= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxRotVel: given a value <= 0 (%g) and will not use it", maxVel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxVel > myOrigRobotConfig->getRotVelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxRotVel: given a value (%g) over RotVelTop (%g) and will cap it", maxVel, myOrigRobotConfig->getRotVelTop());
+    maxVel = myOrigRobotConfig->getRotVelTop();
+  }
+
+  if (fabs(maxVel - myAbsoluteMaxRotVel) > ArMath::epsilon())
+    ArLog::log(ArLog::Verbose, 
+	       "ArRobot::setAbsoluteMaxRotVel: Setting to %g",
+	       maxVel);
+
   myAbsoluteMaxRotVel = maxVel;
   if (getRotVelMax() > myAbsoluteMaxRotVel)
     setRotVelMax(myAbsoluteMaxRotVel);
@@ -1929,22 +2321,38 @@ AREXPORT bool ArRobot::setAbsoluteMaxRotVel(double maxVel)
 }
 
 /**
-   This sets the absolute maximum rotational acceleration the robot
-   will do... the acceleration can also be set by the actions and by
-   setRotAccel, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setRotAccel.
+  This sets the absolute maximum rotational acceleration the robot
+  will do... the acceleration can also be set by the actions and by
+  setRotAccel, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setRotAccel.
 
-   @param maxAccel the maximum acceleration to be set, it must be a non-zero
-   number 
+  @param maxAccel the maximum acceleration to be set, it must be a non-zero
+  number 
 
-   @return true if the value is good, false othrewise
-**/
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxRotAccel(double maxAccel)
 {
-  if (maxAccel < 0)
+  if (maxAccel <= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxRotAccel: given a value <= 0 (%g) and will not use it", maxAccel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxAccel > myOrigRobotConfig->getRotAccelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxRotAccel: given a value (%g) over RotAccelTop (%g) and will cap it", maxAccel, myOrigRobotConfig->getRotAccelTop());
+    maxAccel = myOrigRobotConfig->getRotAccelTop();
+  }
+
+  if (fabs(maxAccel - myAbsoluteMaxRotAccel) > ArMath::epsilon())
+    ArLog::log(ArLog::Verbose, 
+	       "ArRobot::setAbsoluteMaxRotAccel: Setting to %g",
+	       maxAccel);
+
   myAbsoluteMaxRotAccel = maxAccel;
   if (getRotAccel() > myAbsoluteMaxRotAccel)
     setRotAccel(myAbsoluteMaxRotAccel);
@@ -1952,22 +2360,38 @@ AREXPORT bool ArRobot::setAbsoluteMaxRotAccel(double maxAccel)
 }
 
 /**
-   This sets the absolute maximum rotational deceleration the robot
-   will do... the deceleration can also be set by the actions and by
-   setRotDecel, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setRotDecel.
+  This sets the absolute maximum rotational deceleration the robot
+  will do... the deceleration can also be set by the actions and by
+  setRotDecel, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setRotDecel.
 
-   @param maxDecel the maximum deceleration to be set, it must be a non-zero
-   number 
+  @param maxDecel the maximum deceleration to be set, it must be a non-zero
+  number 
 
-   @return true if the value is good, false othrewise
-**/
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxRotDecel(double maxDecel)
 {
-  if (maxDecel < 0)
+  if (maxDecel <= 0)
+  {    
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxRotDecel: given a value <= 0 (%g) and will not use it", maxDecel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxDecel > myOrigRobotConfig->getRotAccelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxRotDecel: given a value (%g) over RotAccelTop (%g) and will cap it", maxDecel, myOrigRobotConfig->getRotAccelTop());
+    maxDecel = myOrigRobotConfig->getRotAccelTop();
+  }
+
+  if (fabs(maxDecel - myAbsoluteMaxRotDecel) > ArMath::epsilon())
+    ArLog::log(ArLog::Verbose, 
+	       "ArRobot::setAbsoluteMaxRotDecel: Setting to %g",
+	       maxDecel);
+
   myAbsoluteMaxRotDecel = maxDecel;
   if (getRotDecel() > myAbsoluteMaxRotDecel)
     setRotDecel(myAbsoluteMaxRotDecel);
@@ -1975,22 +2399,40 @@ AREXPORT bool ArRobot::setAbsoluteMaxRotDecel(double maxDecel)
 }
 
 /**
-   This sets the absolute maximum lateral velocity the robot will
-   go... the maximum velocity can also be set by the actions and by
-   setLatVelMax, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setLatVelMax.
+  This sets the absolute maximum lateral velocity the robot will
+  go... the maximum velocity can also be set by the actions and by
+  setLatVelMax, but it will not be allowed to go higher than this
 
-   @param maxLatVel the maximum velocity to be set, it must be a non-zero
-   number 
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setLatVelMax.
 
-   @return true if the value is good, false othrewise
-**/
+  @param maxLatVel the maximum velocity to be set, it must be a non-zero
+  number 
+
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxLatVel(double maxLatVel)
 {
-  if (maxLatVel < 0)
+  if (maxLatVel <= 0)
+  {    
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxLatVel: given a value <= 0 (%g) and will not use it", maxLatVel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxLatVel > myOrigRobotConfig->getLatVelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxLatVel: given a value (%g) over LatVelTop (%g) and will cap it", 
+	       maxLatVel, myOrigRobotConfig->getLatVelTop());
+    maxLatVel = myOrigRobotConfig->getLatVelTop();
+  }
+
+  if (fabs(maxLatVel - myAbsoluteMaxLatVel) > ArMath::epsilon())
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::setAbsoluteMaxLatVel: Setting to %g",
+	       maxLatVel);
+
   myAbsoluteMaxLatVel = maxLatVel;
   if (getLatVelMax() > myAbsoluteMaxLatVel)
     setLatVelMax(myAbsoluteMaxLatVel);
@@ -1998,22 +2440,39 @@ AREXPORT bool ArRobot::setAbsoluteMaxLatVel(double maxLatVel)
 }
 
 /**
-   This sets the absolute maximum lateral acceleration the robot
-   will do... the acceleration can also be set by the actions and by
-   setLatAccel, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setLatAccel.
+  This sets the absolute maximum lateral acceleration the robot
+  will do... the acceleration can also be set by the actions and by
+  setLatAccel, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setLatAccel.
 
-   @param maxAccel the maximum acceleration to be set, it must be a non-zero
-   number 
+  @param maxAccel the maximum acceleration to be set, it must be a non-zero
+  number 
 
-   @return true if the value is good, false othrewise
-**/
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxLatAccel(double maxAccel)
 {
-  if (maxAccel < 0)
+  if (maxAccel <= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxLatAccel: given a value <= 0 (%g) and will not use it", maxAccel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxAccel > myOrigRobotConfig->getLatAccelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxLatAccel: given a value (%g) over LatAccelTop (%g) and will cap it", 
+	       maxAccel, myOrigRobotConfig->getLatAccelTop());
+    maxAccel = myOrigRobotConfig->getLatAccelTop();
+  }
+
+  if (fabs(maxAccel - myAbsoluteMaxLatAccel) > ArMath::epsilon())
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::setAbsoluteMaxLatAccel: Setting to %g",
+	       maxAccel);
+
   myAbsoluteMaxLatAccel = maxAccel;
   if (getLatAccel() > myAbsoluteMaxLatAccel)
     setLatAccel(myAbsoluteMaxLatAccel);
@@ -2021,22 +2480,39 @@ AREXPORT bool ArRobot::setAbsoluteMaxLatAccel(double maxAccel)
 }
 
 /**
-   This sets the absolute maximum lateral deceleration the robot
-   will do... the deceleration can also be set by the actions and by
-   setLatDecel, but it will not be allowed to go higher than this
-   value.  You should not set this very often, if you want to
-   manipulate this value you should use the actions or setLatDecel.
+  This sets the absolute maximum lateral deceleration the robot
+  will do... the deceleration can also be set by the actions and by
+  setLatDecel, but it will not be allowed to go higher than this
+  value.  You should not set this very often, if you want to
+  manipulate this value you should use the actions or setLatDecel.
 
-   @param maxDecel the maximum deceleration to be set, it must be a non-zero
-   number 
+  @param maxDecel the maximum deceleration to be set, it must be a non-zero
+  number 
 
-   @return true if the value is good, false othrewise
-**/
+  @return true if the value is good, false othrewise
+ **/
 
 AREXPORT bool ArRobot::setAbsoluteMaxLatDecel(double maxDecel)
 {
-  if (maxDecel < 0)
+  if (maxDecel <= 0)
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxLatDecel: given a value <= 0 (%g) and will not use it", maxDecel);
     return false;
+  }
+
+  if (myOrigRobotConfig->hasPacketArrived() && 
+      maxDecel > myOrigRobotConfig->getLatAccelTop())
+  {
+    ArLog::log(ArLog::Normal, "ArRobot::setAbsoluteMaxLatDecel: given a value (%g) over LatAccelTop (%g) and will cap it", 
+	       maxDecel, myOrigRobotConfig->getLatAccelTop());
+    maxDecel = myOrigRobotConfig->getLatAccelTop();
+  }
+
+  if (fabs(maxDecel - myAbsoluteMaxLatDecel) > ArMath::epsilon())
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::setAbsoluteMaxLatDecel: Setting to %g",
+	       maxDecel);
+
   myAbsoluteMaxLatDecel = maxDecel;
   if (getLatDecel() > myAbsoluteMaxLatDecel)
     setLatDecel(myAbsoluteMaxLatDecel);
@@ -2094,9 +2570,17 @@ AREXPORT unsigned char  ArRobot::getIODigOut(int num) const
 }
 
 /** 
-    @return the ArRobotParams instance the robot is using for its parameters
-**/
+  @return the ArRobotParams instance the robot is using for its parameters
+ **/
 AREXPORT const ArRobotParams *ArRobot::getRobotParams(void) const
+{
+  return myParams;
+}
+
+/** 
+  @return the ArRobotParams instance the robot is using for its parameters
+ **/
+AREXPORT ArRobotParams *ArRobot::getRobotParamsInternal(void) 
 {
   return myParams;
 }
@@ -2946,7 +3430,8 @@ AREXPORT void ArRobot::logActions(bool logDeactivated) const
       first = false;
       lastPriority = (*it).first;
     }
-    action->log(false);
+    if (logDeactivated || action->isActive())
+      action->log(false);
   }
 }
 
@@ -2988,7 +3473,9 @@ AREXPORT void ArRobot::stateReflector(void)
   double transAccel;
   double transDecel;
 
-  double maxRotVel;
+  double maxRotVel = -1;
+  double maxRotVelPos = -1;
+  double maxRotVelNeg = -1;
   short rotVal = 0;
   double rotAccel;
   double rotDecel;
@@ -3054,10 +3541,11 @@ AREXPORT void ArRobot::stateReflector(void)
     if (myTransType == TRANS_VEL)
     {
       maxVel = ArMath::roundShort(myTransVelMax);
+      maxNegVel = ArMath::roundShort(myTransNegVelMax);
       if (transVal > maxVel)
 	transVal = maxVel;
-      if (transVal < -maxVel)
-	transVal = -maxVel;
+      if (transVal < maxNegVel)
+	transVal = maxNegVel;
       if (myLastTransVal != transVal || myLastTransType != myTransType ||
 	  (myLastTransSent.mSecSince() >= myStateReflectionRefreshTime))
       {
@@ -3243,11 +3731,11 @@ AREXPORT void ArRobot::stateReflector(void)
 	ArActionDesired::MIN_STRENGTH)
     {
       maxNegTransVel = -ArMath::fabs(myActionDesired.getMaxNegVel());
-      if (maxNegTransVel < -myTransVelMax)
-	maxNegTransVel = -myTransVelMax;
+      if (maxNegTransVel < myTransNegVelMax)
+	maxNegTransVel = myTransNegVelMax;
     }
     else
-      maxNegTransVel = -myTransVelMax;
+      maxNegTransVel = myTransNegVelMax;
     
     if (myActionDesired.getVelStrength() >= ArActionDesired::MIN_STRENGTH)
     {
@@ -3294,9 +3782,17 @@ AREXPORT void ArRobot::stateReflector(void)
     if (hasSettableVelMaxes() && 
 	ArMath::fabs(myLastSentRotVelMax - myRotVelMax) >= 1)
     {
+      //comInt(ArCommands::SETRVDIR, 0);
       comInt(ArCommands::SETRV,
 	     ArMath::roundShort(myRotVelMax));
+
       myLastSentRotVelMax = myRotVelMax;
+      myLastSentRotVelPosMax = -1;
+      myLastSentRotVelNegMax = -1;
+      if (myLogMovementSent)
+	ArLog::log(ArLog::Normal, "%25sNon-action rot vel max of %d", "",
+		   ArMath::roundShort(myRotVelMax));      
+
     }
     if (hasSettableAccsDecs() && ArMath::fabs(myRotAccel) > 1 &&
 	ArMath::fabs(myLastSentRotAccel - myRotAccel) >= 1)
@@ -3379,7 +3875,12 @@ AREXPORT void ArRobot::stateReflector(void)
   else // if the action can fire
   {
     // first we'll handle all of the accel decel things
+    // if ONLY rot vel is sent handle it the way we always have
     if (myActionDesired.getMaxRotVelStrength() >=
+	ArActionDesired::MIN_STRENGTH &&
+	myActionDesired.getMaxRotVelPosStrength() <
+	ArActionDesired::MIN_STRENGTH &&
+	myActionDesired.getMaxRotVelNegStrength() < 
 	ArActionDesired::MIN_STRENGTH)
     {
       maxRotVel = myActionDesired.getMaxRotVel();
@@ -3389,6 +3890,9 @@ AREXPORT void ArRobot::stateReflector(void)
       if (ArMath::fabs(myLastSentRotVelMax - maxRotVel) >= 1)
       {
 	myLastSentRotVelMax = maxRotVel;
+	myLastSentRotVelPosMax = -1;
+	myLastSentRotVelNegMax = -1;
+	//comInt(ArCommands::SETRVDIR, 0);
 	comInt(ArCommands::SETRV, 
 	       ArMath::roundShort(maxRotVel));
 	if (myLogMovementSent)
@@ -3396,9 +3900,70 @@ AREXPORT void ArRobot::stateReflector(void)
 		     ArMath::roundShort(maxRotVel));
       }
     }
+    // if a max pos or neg rot vel is set then use that
+    else if (myActionDesired.getMaxRotVelPosStrength() >= 
+	  ArActionDesired::MIN_STRENGTH ||
+	  myActionDesired.getMaxRotVelNegStrength() >=
+	  ArActionDesired::MIN_STRENGTH)
+    {
+      if (myActionDesired.getMaxRotVelStrength() >=
+	  ArActionDesired::MIN_STRENGTH)
+	maxRotVel = myActionDesired.getMaxRotVel();
+      else
+	maxRotVel = myRotVelMax;
+      
+      if (maxRotVel > myAbsoluteMaxRotVel)
+	maxRotVel = myAbsoluteMaxRotVel;
+
+      if (myActionDesired.getMaxRotVelPosStrength() >= 
+	  ArActionDesired::MIN_STRENGTH)
+	maxRotVelPos = ArUtil::findMin(maxRotVel,
+				       myActionDesired.getMaxRotVelPos());
+      else
+	maxRotVelPos = maxRotVel;
+
+      // 1 here actually means 0 (since there's no -0 and its not
+      // worth two commands)
+      if (maxRotVelPos < .5)
+	maxRotVelPos = 1;
+
+      if (myActionDesired.getMaxRotVelNegStrength() >= 
+	  ArActionDesired::MIN_STRENGTH)
+	maxRotVelNeg = ArUtil::findMin(maxRotVel,
+				       myActionDesired.getMaxRotVelNeg());
+      else
+	maxRotVelNeg = maxRotVel;
+
+      // 1 here actually means 0 (since there's no -0 and its not
+      // worth two commands)
+      if (maxRotVelNeg < .5)
+	maxRotVelNeg = 1;
+
+      if (ArMath::fabs(myLastSentRotVelPosMax - maxRotVelPos) >= 1 ||
+	  ArMath::fabs(myLastSentRotVelNegMax - maxRotVelNeg) >= 1)
+      {
+	myLastSentRotVelMax = -1;
+	myLastSentRotVelPosMax = maxRotVelPos;
+	myLastSentRotVelNegMax = maxRotVelNeg;
+	
+	// this command doesn't exist just yet...
+	comInt(ArCommands::SETRVDIR, 
+	       ArMath::roundShort(maxRotVelPos));
+	comInt(ArCommands::SETRVDIR, 
+	       ArMath::roundShort(-maxRotVelNeg));
+	if (myLogMovementSent)
+	{
+	  ArLog::log(ArLog::Normal, "%25sAction rot vel pos max of %d", "",
+		     ArMath::roundShort(maxRotVelPos));
+	  ArLog::log(ArLog::Normal, "%25sAction rot vel neg max of %d", "",
+		     ArMath::roundShort(-maxRotVelNeg));
+	}
+      }
+    }
     else if (hasSettableVelMaxes() && 
 	     ArMath::fabs(myLastSentRotVelMax - myRotVelMax) >= 1)
     {
+      //comInt(ArCommands::SETRVDIR, 0);
       comInt(ArCommands::SETRV,
 	     ArMath::roundShort(myRotVelMax));
       myLastSentRotVelMax = myRotVelMax;
@@ -3459,7 +4024,7 @@ AREXPORT void ArRobot::stateReflector(void)
 
 
     if (myActionDesired.getDeltaHeadingStrength() >=
-	                                     ArActionDesired::MIN_STRENGTH)
+	ArActionDesired::MIN_STRENGTH)
     {
       if (ArMath::roundShort(myActionDesired.getDeltaHeading()) == 0)
       {
@@ -3497,9 +4062,47 @@ AREXPORT void ArRobot::stateReflector(void)
       }
       else
       {
-	rotStopped = false;
-	rotVal = ArMath::roundShort(myActionDesired.getRotVel());
-	rotHeading = false;
+	double rotVelocity = ArMath::roundShort(myActionDesired.getRotVel());
+	if (maxRotVelPos > -.5 && rotVelocity > 0)
+	{
+	  if (maxRotVelPos < 1.1)
+	  {
+	    rotVelocity = 0;
+	    rotStopped = false;
+	    rotVal = 0;
+	    rotHeading = false;
+	  }
+	  else
+	  {
+	    rotVelocity = ArUtil::findMin(rotVelocity, maxRotVelPos);
+	    rotStopped = false;
+	    rotVal = ArMath::roundShort(rotVelocity);
+	    rotHeading = false;
+	  }
+	}
+	else if (maxRotVelNeg > -.5 && rotVelocity < 0)
+	{
+	  if (maxRotVelNeg < 1.1)
+	  {
+	    rotVelocity = 0;
+	    rotStopped = false;
+	    rotVal = 0;
+	    rotHeading = false;
+	  }
+	  else
+	  {
+	    rotVelocity = ArUtil::findMax(rotVelocity, -maxRotVelNeg);
+	    rotStopped = false;
+	    rotVal = ArMath::roundShort(rotVelocity);
+	    rotHeading = false;
+	  }
+	}
+	else
+	{
+	  rotStopped = false;
+	  rotVal = ArMath::roundShort(myActionDesired.getRotVel());
+	  rotHeading = false;
+	}
 	myTryingToMove = true;
       }
       myActionRotSet = true;
@@ -3833,12 +4436,42 @@ AREXPORT bool ArRobot::handlePacket(ArRobotPacket *packet)
   bool handled;
 
   lock();
+
+  if (myIgnoreNextPacket)
+  {
+    if ((packet->getID() == 0x32 || packet->getID() == 0x33))    
+    {
+      ArLog::log(ArLog::Normal, "ArRobot: Ignoring motor packet of type 0x%x",
+		 packet->getID());
+      myIgnoreNextPacket = false;
+    }
+    else
+    {
+      ArLog::log(ArLog::Normal, "ArRobot: Ignoring packet of type 0x%x",		 packet->getID());
+    }
+    unlock();
+    return false;
+  }
+
   //printf("ms since last packet %ld this type 0x%x\n", myLastPacketReceivedTime.mSecSince(packet->getTimeReceived()), packet->getID());
   myLastPacketReceivedTime = packet->getTimeReceived();
+
   if (packet->getID() == 0xff) 
   {
-    ArLog::log(ArLog::Terse, "Losing connection because robot was reset.");
-    dropConnection();
+    dropConnection("Losing connection because microcontroller reset.");
+    unlock();
+    return false;
+  }
+
+  if (packet->getID() == 0xfe) 
+  {
+    char buf[100000];
+    sprintf(buf, "Losing connection because microcontroller reset with reset data");
+
+    while (packet->getDataLength() - packet->getDataReadLength() > 0)
+      sprintf(buf, "%s 0x%x", buf, packet->bufToUByte());
+
+    dropConnection(buf);
     unlock();
     return false;
   }
@@ -3848,9 +4481,16 @@ AREXPORT bool ArRobot::handlePacket(ArRobotPacket *packet)
        it++)
   {
     if ((*it) != NULL && (*it)->invokeR(packet)) 
+    {
+      if (myPacketsReceivedTracking)
+	ArLog::log(ArLog::Normal, "Handled by %s",
+		   (*it)->getName());
       handled = true;
+    }
     else
+    {
       packet->resetRead();
+    }
   }
   if (!handled)
     ArLog::log(ArLog::Normal, 
@@ -3896,13 +4536,27 @@ AREXPORT void ArRobot::robotUnlocker(void)
   unlock();
 }
 
+
+
+AREXPORT void ArRobot::packetHandler(void)
+{
+  if (myRunningNonThreaded) 
+    packetHandlerNonThreaded();
+  else
+    packetHandlerThreadedProcessor();
+}
+
+
 /**
+   This is here for use if the robot is running without threading
+   (some customers may use it that way, though we generally don't)
+
    Reads in all of the packets that are available to read in, then runs through
    the list of packet handlers and tries to get each packet handled.
    @see addPacketHandler
    @see remPacketHandler
 **/
-AREXPORT void ArRobot::packetHandler(void)
+AREXPORT void ArRobot::packetHandlerNonThreaded(void)
 {
   ArRobotPacket *packet;
   int timeToWait;
@@ -3987,18 +4641,218 @@ AREXPORT void ArRobot::packetHandler(void)
   }
 
   if (myTimeoutTime > 0 && 
+      ((-myLastOdometryReceivedTime.mSecTo()) > myTimeoutTime))
+  {
+    char buf[10000];
+    sprintf(buf, 
+	    "Losing connection because no odometry received from robot in %d milliseconds (greater than the timeout of %d).", 
+	    (-myLastOdometryReceivedTime.mSecTo()),
+	    myTimeoutTime);
+    dropConnection(buf);
+  }
+
+  if (myTimeoutTime > 0 && 
       ((-myLastPacketReceivedTime.mSecTo()) > myTimeoutTime))
   {
-    ArLog::log(ArLog::Terse, 
-	       "Losing connection because nothing received from robot in %d milliseconds (greater than the timeout of %d).", 
+    char buf[10000];
+    sprintf(buf, "Losing connection because nothing received from robot in %d milliseconds (greater than the timeout of %d).", 
 	       (-myLastPacketReceivedTime.mSecTo()),
 	       myTimeoutTime);
-    dropConnection();
+    dropConnection(buf);
   }
 
   if (myPacketsReceivedTracking)
-    ArLog::log(ArLog::Normal, "Rcvd: time taken %ld", start.mSecSince());
+    ArLog::log(ArLog::Normal, "Rcvd(nt): time taken %ld", start.mSecSince());
 
+}
+
+AREXPORT void ArRobot::packetHandlerThreadedProcessor(void)
+{
+  ArRobotPacket *packet;
+  int timeToWait;
+  ArTime start;
+  bool sipHandled = false;
+  bool anotherSip = false;
+  std::list<ArRobotPacket *>::iterator it;
+
+  if (myAsyncConnectFlag)
+  {
+    lock();
+    asyncConnectHandler(false);
+    unlock();
+    return;
+  }
+
+  if (!isConnected())
+    return;
+
+  //ArLog::log(ArLog::Normal, "Rcvd: start %ld", myPacketsReceivedTrackingStarted.mSecSince());
+
+  start.setToNow();
+  
+  // read all the packets that are available in our time window (twice
+  // packet cycle), if we get the sip we stop...
+  while (!sipHandled && isRunning())
+  {
+    packet = NULL;
+    anotherSip = false;
+    myPacketMutex.lock();
+    if (!myPacketList.empty())
+    {
+      packet = myPacketList.front();
+      myPacketList.pop_front();
+      // see if there are more sips, since if so we'll keep chugging
+      // through the list
+      for (it = myPacketList.begin(); 
+	   !anotherSip && it != myPacketList.end(); 
+	   it++)
+      {
+	if (((*it)->getID() & 0xf0) == 0x30)
+	  anotherSip = true;
+      }
+      myPacketMutex.unlock();
+    }
+    else
+    {
+      myPacketMutex.unlock();
+    }
+
+    if (packet == NULL)
+    {
+      if (isCycleChained())
+	timeToWait = getCycleTime() * 2 - start.mSecSince();
+      else
+	timeToWait = getCycleTime() - start.mSecSince();
+
+      int ret = 0;
+
+      if (timeToWait <= 0 ||
+	  (ret = myPacketReceivedCondition.timedWait(timeToWait)) != 0)
+      {
+	if (myCycleWarningTime != 0)
+	  ArLog::log(ArLog::Normal, "ArRobot::myPacketReader: Timed out (%d) at %d (%d into cycle after sleeping %d)", 	     
+		     ret, myPacketsReceivedTrackingStarted.mSecSince(), 
+		     start.mSecSince(), timeToWait);
+	break;
+      }
+      else
+      {
+	continue;
+      }
+    }
+    
+    handlePacket(packet);
+    if ((packet->getID() & 0xf0) == 0x30)
+    {
+      // only mark the sip handled if it was the only one in the buffer
+      if (!anotherSip)
+	sipHandled = true;
+      
+      if (myPacketsReceivedTracking)
+      {
+	ArLog::log(ArLog::Normal, "Rcvd: Packet (%ld) 0x%x at %ld (%ld)", 
+		   myPacketsReceivedTrackingCount, 
+		   packet->getID(), start.mSecSince(), 
+		   myPacketsReceivedTrackingStarted.mSecSince());
+	myPacketsReceivedTrackingCount++;
+      }
+    }
+    else
+    {
+      if (myPacketsReceivedTracking)
+      {
+	ArLog::log(ArLog::Normal, 
+		   "Rcvd: prePacket (%ld) 0x%x at %ld (%ld)", 
+		   myPacketsReceivedTrackingCount, 
+		   packet->getID(), start.mSecSince(), 
+		   myPacketsReceivedTrackingStarted.mSecSince());
+	myPacketsReceivedTrackingCount++;
+      }
+    }
+
+    delete packet;
+    packet = NULL;
+  }
+
+  if (myTimeoutTime > 0 && 
+      ((-myLastOdometryReceivedTime.mSecTo()) > myTimeoutTime))
+  {
+    char buf[10000];
+    sprintf(buf, 
+	    "Losing connection because no odometry received from robot in %d milliseconds (greater than the timeout of %d).", 
+	    (-myLastOdometryReceivedTime.mSecTo()),
+	    myTimeoutTime);
+    dropConnection(buf);
+  }
+
+  if (myTimeoutTime > 0 && 
+      ((-myLastPacketReceivedTime.mSecTo()) > myTimeoutTime))
+  {
+    char buf[10000];
+    sprintf(buf, "Losing connection because nothing received from robot in %d milliseconds (greater than the timeout of %d).", 
+	       (-myLastPacketReceivedTime.mSecTo()),
+	       myTimeoutTime);
+    dropConnection(buf);
+  }
+
+  if (myPacketsReceivedTracking)
+    ArLog::log(ArLog::Normal, "Rcvd(t): time taken %ld %d", start.mSecSince(),
+	       myPacketsReceivedTrackingStarted.mSecSince());
+
+}
+
+
+/// This function gets called from the ArRobotPacketReaderThread, and
+/// does the actual reading of packets... so that it their timing
+/// isn't affected by the rest of the sync loop
+AREXPORT void ArRobot::packetHandlerThreadedReader(void)
+{
+  bool isAllocatingPackets = myReceiver.isAllocatingPackets();
+  myReceiver.setAllocatingPackets(true);
+
+  ArTime lastPacketReceived;
+
+  ArRobotPacket *packet = NULL;
+
+  while (isRunning())
+  {
+    if (myConn == NULL || 
+	myConn->getStatus() != ArDeviceConnection::STATUS_OPEN)
+    {
+      ArUtil::sleep(1);
+      continue;
+    }
+    if ((packet = myReceiver.receivePacket(1000)) != NULL)
+    {
+
+      lastPacketReceived.setToNow();
+      myPacketMutex.lock();
+      myPacketList.push_back(packet);
+      /*
+      ArLog::log(ArLog::Normal, "HTR: %x at %d (%x)",
+		 packet->getID(),
+		 myPacketsReceivedTrackingStarted.mSecSince(),
+		 packet->getID() & 0xf0);
+      */
+      packet = NULL;
+      myPacketMutex.unlock();
+      myPacketReceivedCondition.broadcast();
+    }
+    /* this is taken out for now since it'd spam in cases when the receiver returns instantly and fill the log file
+    else
+    {
+      if (lastPacketReceived.mSecSince() > 1000)
+      {
+	ArLog::log(ArLog::Normal, 
+		   "ArRobot::packetReader: Took longer than 1000 mSec for packet (last packet %d mSec ago)",
+		   lastPacketReceived.mSecSince());
+	lastPacketReceived.setToNow();
+      }
+    }
+    */
+  }
+  
+  myReceiver.setAllocatingPackets(isAllocatingPackets);
 }
 
 /**
@@ -4262,6 +5116,14 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
   y = (packet->bufToUByte2() & 0x7fff);
   th = packet->bufToByte2();
 
+  if (myFakeFirstEncoderPose)
+  {
+    myLastX = x;
+    myLastY = y;
+    myLastTh = th;
+    myFakeFirstEncoderPose = false;
+  }
+
   if (myFirstEncoderPose)
   {
     qx = 0;
@@ -4312,15 +5174,25 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
   myRightVel = myParams->getVelConvFactor() * packet->bufToByte2();
   myVel = (myLeftVel + myRightVel)/2.0;
 
-  myBatteryVoltage = packet->bufToUByte() * .1;
-  myBatteryAverager.add(myBatteryVoltage);
+  double batteryVoltage;
+  batteryVoltage = packet->bufToUByte() * .1;
+  if (!myIgnoreMicroControllerBatteryInfo)
+  {
+    myBatteryVoltage = batteryVoltage;
+    myBatteryAverager.add(myBatteryVoltage);
+  }
+
   myStallValue = packet->bufToByte2();
   
   //ArLog::log("x %.1f y %.1f th %.1f vel %.1f voltage %.1f", myX, myY, myTh, 
   //myVel, myBatteryVoltage);
+  if (!myKeepControlRaw) 
+    myControl = ArMath::fixAngle(ArMath::radToDeg(
+					 myParams->getAngleConvFactor() *
+					 (packet->bufToByte2() - th)));
+  else
+    myControl = packet->bufToByte2();
 
-  myControl = ArMath::fixAngle(ArMath::radToDeg(myParams->getAngleConvFactor() *
-				  (packet->bufToByte2() - th)));
   myFlags = packet->bufToUByte2();
   myCompass = 2*packet->bufToUByte();
   
@@ -4340,12 +5212,17 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
     myDigOut = packet->bufToByte();
   }
 
+  double realBatteryVoltage;
   if (packet->getDataLength() - packet->getDataReadLength() > 0)
-    myRealBatteryVoltage = packet->bufToUByte2() * .1;
+    realBatteryVoltage = packet->bufToUByte2() * .1;
   else
-    myRealBatteryVoltage = myBatteryVoltage;
+    realBatteryVoltage = myBatteryVoltage;
+  if (!myIgnoreMicroControllerBatteryInfo)
+  {
+    myRealBatteryVoltage = realBatteryVoltage;
+    myRealBatteryAverager.add(myRealBatteryVoltage);
+  }
 
-  myRealBatteryAverager.add(myRealBatteryVoltage);
 
   if (packet->getDataLength() - packet->getDataReadLength() > 0)
   {
@@ -4371,7 +5248,7 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
   else
   {
     myHasFaultFlags = false;
-    myFaultFlags = packet->bufToUByte2();  
+    myFaultFlags = 0; //packet->bufToUByte2();  
   }
 
   if (packet->getDataLength() - packet->getDataReadLength() > 0)
@@ -4384,14 +5261,62 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
     myTemperature = packet->bufToByte();
   }
 
+  double stateOfCharge;
   if (packet->getDataLength() - packet->getDataReadLength() > 0)
   {
-    myStateOfCharge = packet->bufToByte();
-    if (!myHaveStateOfCharge && myStateOfCharge > 0)
-      myHaveStateOfCharge = true;
-    myStateOfChargeSetTime.setToNow();
+    stateOfCharge = packet->bufToByte();
+    if (!myIgnoreMicroControllerBatteryInfo)
+    {
+      myStateOfCharge = stateOfCharge;
+      if (!myHaveStateOfCharge && myStateOfCharge > 0)
+	myHaveStateOfCharge = true;
+      myStateOfChargeSetTime.setToNow();
+    }
   }
 
+
+  if (packet->getDataLength() - packet->getDataReadLength() > 0)
+  {
+    ArTypes::UByte4 uCUSec = 0;
+    ArTypes::UByte4 lpcUSec = 0;
+    
+    uCUSec = packet->bufToUByte4();
+    // make sure we get a good value
+    if (myPacketsReceivedTracking && 
+	myMTXTimeUSecCB != NULL && myMTXTimeUSecCB->invokeR(&lpcUSec))
+    {
+      ArTime now;
+      long long mSecSince = packet->getTimeReceived().mSecSinceLL(now);
+      ArLog::log(ArLog::Normal, "MotorPacketTiming: commDiff %lld fpgaDiff %2d.%03d bytes %d\nFPGA:uC  %6u.%03u.%.03u\nFPGA:lpc %6u.%03u.%.03u\nArTime:1stByte %6lld.%.03lld\nArTime:now     %6lld.%.03lld", 
+		 mSecSince, 
+		 ((lpcUSec - uCUSec) % 1000000) / 1000, (lpcUSec - uCUSec) % 1000,
+		 packet->getLength(),
+
+		 uCUSec / 1000000, (uCUSec % 1000000) / 1000, uCUSec % 1000,
+		 lpcUSec / 1000000, (lpcUSec % 1000000) / 1000, lpcUSec % 1000,
+		 packet->getTimeReceived().getSecLL(), 
+		 packet->getTimeReceived().getMSecLL(),
+		 now.getSecLL(), now.getMSecLL());
+      
+    }
+  }
+
+  if(myLogSIPContents)
+  {
+    ArLog::log(ArLog::Normal, "SIP Contents:\n\tx=%d, y=%d, th=%d, lvel=%.2f, rvel=%.2f, battery=%.1f, stallval=0x%x, control=%d, compass=%d",
+      x, y, th, myLeftVel, myRightVel, myBatteryVoltage, myStallValue, myControl, myCompass);
+    ArLog::log(ArLog::Normal, "\tnumSonar=%d, gripstate=%d, anport=%d, analog=%d, digin=0x%x, digout=0x%x, batteryX10=%d, chargestage=%d rotvel=%.2f", 
+      numReadings, (char)myAnalogPortSelected, (char)(myAnalogPortSelected>>8), myAnalog, myDigIn, myDigOut, myRealBatteryVoltage, (int)myChargeState, myRotVel);
+    if(myHasFaultFlags)
+      ArLog::log(ArLog::Normal, "\tfaultflags=0x%x", myFaultFlags);
+    else
+      ArLog::log(ArLog::Normal, "\tno faultflags");
+    ArLog::log(ArLog::Normal, "\tlatvel=%.2f temperature=%d", myLatVel, myTemperature);
+    if(myHaveStateOfCharge)
+      ArLog::log(ArLog::Normal, "\tsoc=0x%x", myStateOfCharge);
+    else
+      ArLog::log(ArLog::Normal, "\tno soc");
+  }
 
   /*
     Okay how this works is like so.  
@@ -4477,7 +5402,8 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
   myTripOdometerDegrees += degreesTravelled;
   myTripOdometerDistance += distTravelled;
 
-  if (myLogMovementReceived)
+  /*
+    if (myLogMovementReceived)
     ArLog::log(ArLog::Normal, 
 	       "Global (%5.0f %5.0f %5.0f) Encoder (%5.0f %5.0f %5.0f) Raw (%5.0f %5.0f %5.0f) Rawest (%5d %5d %5d) Delta (%5.0f %5.0f %5.0f) Conv %5.2f",
 	       myGlobalPose.getX(), myGlobalPose.getY(),
@@ -4487,6 +5413,24 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
 	       myRawEncoderPose.getX(), myRawEncoderPose.getY(), 
 	       myRawEncoderPose.getTh(), x, y, th, deltaX, deltaY, deltaTh,
 	       myParams->getDistConvFactor());	      
+  */
+  if (myLogMovementReceived && 
+      (fabs(deltaX) > .0001 || fabs(deltaY) > .0001 || fabs(deltaTh) > .0001))
+    ArLog::log(ArLog::Normal, 
+	       "Global (%5.0f %5.0f %7.1f) Encoder (%5.0f %5.0f %7.1f) EncDelta (%5.0f %5.0f %7.1f) Rawest (%5d %5d %5d) Conv %5.2f",
+	       myGlobalPose.getX(), myGlobalPose.getY(),
+	       myGlobalPose.getTh(),
+	       myEncoderPose.getX(), myEncoderPose.getY(),
+	       myEncoderPose.getTh(),
+	       deltaX, deltaY, deltaTh, x, y, th, 
+	       myParams->getDistConvFactor());	      
+
+  if (myLogMovementReceived && sqrt(deltaX*deltaX + deltaY*deltaY) > 1000)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot: Travelled over 1000 in a cycle, which is unlikely");
+    ArLog::logBacktrace(ArLog::Normal);
+  }
 
   if (myLogVelocitiesReceived)
   {
@@ -4516,6 +5460,10 @@ AREXPORT bool ArRobot::processMotorPacket(ArRobotPacket *packet)
   /// MPL adding this so that each place the pose interpolation is
   /// used it doesn't have to account for the odometry delay
   packetTime.addMSec(-myOdometryDelay);
+
+  // MPL this had come in handy while debugging the intermittent lost
+  // issue that looked like timing
+  //ArLog::log(ArLog::Normal, "Robot packet %lld mSec old", packetTime.mSecSince());
   
   myLastOdometryReceivedTime = packetTime;
 
@@ -4546,6 +5494,7 @@ AREXPORT void ArRobot::processNewSonar(char number, int range,
     sonar = (*it).second;
     sonar->newData(range, getPose(), getEncoderPose(), getToGlobalTransform(), 
 		   getCounter(), timeReceived); 
+		 
     if (myTimeLastSonarPacket != time(NULL)) 
     {
       myTimeLastSonarPacket = time(NULL);
@@ -4925,6 +5874,7 @@ AREXPORT bool ArRobot::hasRangeDevice(ArRangeDevice *device) const
  *  @copydoc ArRangeDevice::currentReadingPolar()
  *  @param rangeDevice If not null, then a pointer to the ArRangeDevice 
  *    that provided the returned reading is placed in this variable.
+   @param useLocationDependentDevices If false, ignore sensor devices that are "location dependent". If true, include them in this check.
  *
 **/
 
@@ -4991,6 +5941,7 @@ AREXPORT double ArRobot::checkRangeDevicesCurrentPolar(
  *  @copydoc ArRangeDevice::cumulativeReadingPolar()
  *  @param rangeDevice If not null, then a pointer to the ArRangeDevice 
  *    that provided the returned reading is placed in this variable.
+   @param useLocationDependentDevices If false, ignore sensor devices that are "location dependent". If true, include them in this check.
 **/
 AREXPORT double ArRobot::checkRangeDevicesCumulativePolar(
 	double startAngle, double endAngle, double *angle, 
@@ -5057,6 +6008,7 @@ AREXPORT double ArRobot::checkRangeDevicesCumulativePolar(
    @param rangeDevice If not null, then a pointer to the ArRangeDevice 
      that provided the returned reading is placed in this variable.
    the closest position
+   @param useLocationDependentDevices If false, ignore sensor devices that are "location dependent". If true, include them in this check.
    @return If >= 0 then this is the distance to the closest
    reading. If < 0 then there were no readings in the given region
 **/
@@ -5126,6 +6078,7 @@ AREXPORT double ArRobot::checkRangeDevicesCurrentBox(
    the closest position
    @param rangeDevice If not NULL, a pointer in which to store a pointer to the range device
    that provided the closest reading in the box.
+   @param useLocationDependentDevices If false, ignore sensor devices that are "location dependent". If true, include them in this check.
    @return If  >= 0 then this is the distance to the closest
    reading. If < 0 then there were no readings in the given region
 **/
@@ -5205,6 +6158,7 @@ AREXPORT void ArRobot::moveTo(ArPose pose, bool doCumulative)
 
   myEncoderTransform.setTransform(myEncoderPose, pose);
   myGlobalPose = myEncoderTransform.doTransform(myEncoderPose);
+  mySetEncoderTransformCBList.invoke();
 
   for (it = myRangeDeviceList.begin(); it != myRangeDeviceList.end(); it++)
   {
@@ -5258,6 +6212,7 @@ AREXPORT void ArRobot::moveTo(ArPose poseTo, ArPose poseFrom,
 
   myEncoderTransform.setTransform(result, poseTo);
   myGlobalPose = myEncoderTransform.doTransform(myEncoderPose);
+  mySetEncoderTransformCBList.invoke();
 
   for (it = myRangeDeviceList.begin(); it != myRangeDeviceList.end(); it++)
   {
@@ -5293,6 +6248,7 @@ AREXPORT void ArRobot::setEncoderTransform(ArPose deadReconPos,
 {
   myEncoderTransform.setTransform(deadReconPos, globalPos);
   myGlobalPose = myEncoderTransform.doTransform(myEncoderPose);
+  mySetEncoderTransformCBList.invoke();
 }
 
 /**
@@ -5306,6 +6262,21 @@ AREXPORT void ArRobot::setEncoderTransform(ArPose transformPos)
 {
   myEncoderTransform.setTransform(transformPos);
   myGlobalPose = myEncoderTransform.doTransform(myEncoderPose);
+  mySetEncoderTransformCBList.invoke();
+}
+
+/*
+ * This transform is applied to all odometric/encoder poses received. 
+ * If you simply want to transform the robot's final reported pose (as returned
+ * by getPose()) to match an external coordinate system, use moveTo() instead.
+ * @sa moveTo()
+   @param transformPos the position to transform to
+*/
+AREXPORT void ArRobot::setEncoderTransform(ArTransform transform)
+{
+  myEncoderTransform = transform;
+  myGlobalPose = myEncoderTransform.doTransform(myEncoderPose);
+  mySetEncoderTransformCBList.invoke();
 }
 
 /**
@@ -5324,6 +6295,7 @@ AREXPORT void ArRobot::setDeadReconPose(ArPose pose)
   myEncoderPose.setPose(pose);
   myEncoderTransform.setTransform(myEncoderPose, myGlobalPose);
   myGlobalPose = myEncoderTransform.doTransform(myEncoderPose);
+  mySetEncoderTransformCBList.invoke();
 }
 
 
@@ -5419,7 +6391,7 @@ AREXPORT void ArRobot::setName(const char * name)
 	    return;
       }
     }
-    sprintf(buf, "robot%d", robotList->size());
+    sprintf(buf, "robot%lu", robotList->size());
     myName = buf;
    }
 }
@@ -5564,7 +6536,41 @@ AREXPORT void ArRobot::disableMotors()
 **/
 AREXPORT void ArRobot::enableSonar()
 {
+  mySonarEnabled = true;
+  myAutonomousDrivingSonarEnabled = false;
   comInt(ArCommands::SONAR, 1);
+  
+  int ii;
+  for (ii = 1; ii <= Aria::getMaxNumSonarBoards(); ii++)
+  {
+    ArSonarMTX *sonarMTX = findSonar(ii);
+    
+    if (sonarMTX == NULL) 
+      continue;
+
+    sonarMTX->turnOnTransducers();
+  }
+}
+
+/**
+   This command enables the sonars on the robot, if it is connected.
+**/
+AREXPORT void ArRobot::enableAutonomousDrivingSonar()
+{
+  mySonarEnabled = false;
+  myAutonomousDrivingSonarEnabled = true;
+  comInt(ArCommands::SONAR, 1);
+  
+  int ii;
+  for (ii = 1; ii <= Aria::getMaxNumSonarBoards(); ii++)
+  {
+    ArSonarMTX *sonarMTX = findSonar(ii);
+    
+    if (sonarMTX == NULL) 
+      continue;
+
+    sonarMTX->disableForAutonomousDriving();
+  }
 }
 
 /**
@@ -5572,7 +6578,20 @@ AREXPORT void ArRobot::enableSonar()
 **/
 AREXPORT void ArRobot::disableSonar()
 {
+  mySonarEnabled = false;
+  myAutonomousDrivingSonarEnabled = false;
   comInt(ArCommands::SONAR, 0);
+  
+  int ii;
+  for (ii = 1; ii <= Aria::getMaxNumSonarBoards(); ii++)
+  {
+    ArSonarMTX *sonarMTX = findSonar(ii);
+    
+    if (sonarMTX == NULL) 
+      continue;
+
+    sonarMTX->turnOffTransducers();
+  }
 }
 
 
@@ -5654,7 +6673,14 @@ AREXPORT void ArRobot::keyHandlerExit(void)
 
 AREXPORT void ArRobot::setPacketsReceivedTracking(bool packetsReceivedTracking)
 {
+	if (packetsReceivedTracking)
+      ArLog::log(ArLog::Normal, "ArRobot: tracking packets received");
+	else
+      ArLog::log(ArLog::Normal, "ArRobot: not tracking packets received");
+
   myPacketsReceivedTracking = packetsReceivedTracking;
+	myReceiver.setTracking(myPacketsReceivedTracking);
+	myReceiver.setTrackingLogName("MicroController");
   myPacketsReceivedTrackingCount = 0; 
   myPacketsReceivedTrackingStarted.setToNow(); 
 }
@@ -5693,6 +6719,20 @@ AREXPORT void ArRobot::setChargeState(ArRobot::ChargeState chargeState)
   myChargeState = chargeState;
 }
 
+AREXPORT bool ArRobot::isChargerPowerGood(void) const
+{
+  if (myOverriddenIsChargerPowerGood)
+    return myIsChargerPowerGood;
+  else
+    return (getFlags() & ArUtil::BIT10);
+}
+
+AREXPORT void ArRobot::setIsChargerPowerGood(bool isChargerPowerGood) 
+{
+  myOverriddenIsChargerPowerGood = true;
+  myIsChargerPowerGood = isChargerPowerGood;
+}
+
 AREXPORT void ArRobot::resetTripOdometer(void)
 {
   myTripOdometerDistance = 0;
@@ -5706,6 +6746,40 @@ AREXPORT void ArRobot::setStateOfCharge(double stateOfCharge)
   myStateOfCharge = stateOfCharge;
   myStateOfChargeSetTime.setToNow();
 }
+
+AREXPORT void ArRobot::setIgnoreMicroControllerBatteryInfo(
+	bool ignoreMicroControllerBatteryInfo)
+{
+  if (myIgnoreMicroControllerBatteryInfo != ignoreMicroControllerBatteryInfo)
+  {
+    if (ignoreMicroControllerBatteryInfo)
+      ArLog::log(ArLog::Normal, "Ignoring battery info from the microcontroller");
+    else
+      ArLog::log(ArLog::Normal, "Not ignoring battery info from the microcontroller");
+  }
+  myIgnoreMicroControllerBatteryInfo = ignoreMicroControllerBatteryInfo;
+}
+
+AREXPORT void ArRobot::setBatteryInfo(double realBatteryVoltage, 
+				      double normalizedBatteryVoltage,
+				      bool haveStateOfCharge,
+				      double stateOfCharge)
+{
+  myRealBatteryVoltage = realBatteryVoltage;
+  myRealBatteryAverager.add(myRealBatteryVoltage);
+
+  myBatteryVoltage = normalizedBatteryVoltage;
+  myBatteryAverager.add(myBatteryVoltage);
+
+  if (!myHaveStateOfCharge && haveStateOfCharge)
+    myHaveStateOfCharge = true;
+  if (haveStateOfCharge)
+  {
+    myStateOfCharge = stateOfCharge;
+    myStateOfChargeSetTime.setToNow();
+  }  
+}
+
 
 /** @since 2.7.0 
   @note Do not call this method directly 
@@ -5754,6 +6828,8 @@ AREXPORT bool ArRobot::addLaser(ArLaser *laser, int laserNumber,
   }
   return true;
 }
+
+
 
 /** @since 2.7.0 
     @internal
@@ -5878,4 +6954,505 @@ AREXPORT bool ArRobot::hasLaser(ArLaser *device) const
      if( (*i).second == device ) return true;
   }
   return false;
+}
+
+
+/** @since 2.7.0 
+  @note Do not call this method directly 
+  if using ArBatteryConnector, it will automatically add battery(s).
+  @internal
+*/
+AREXPORT bool ArRobot::addBattery(ArBatteryMTX *battery, int batteryNumber)
+{
+  std::map<int, ArBatteryMTX *>::iterator it;
+  if (battery == NULL)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::addBattery: Tried to add NULL battery as battery number %d",
+	       batteryNumber);
+    return false;
+  }
+  if ((it = myBatteryMap.find(batteryNumber)) != myBatteryMap.end())
+  {
+    if ((*it).second == battery)
+    {
+      ArLog::log(ArLog::Verbose, 
+		 "Tried to add battery %s as number %d but already have that battery, doing nothing",
+		 battery->getName(), batteryNumber);    
+      return true;
+    }
+    ArLog::log(ArLog::Normal, "ArRobot::addBattery: Tried to add battery %s as battery number %d but there is already a battery of that number (called %s)",
+	       battery->getName(), batteryNumber,
+	       (*it).second->getName());
+    return false;
+  }
+  myBatteryMap[batteryNumber] = battery;
+  ArLog::log(ArLog::Verbose, 
+	       "Added battery %s as number %d",
+	       battery->getName(), batteryNumber);    
+  return true;
+}
+
+
+/** @since 2.7.0 
+    @internal
+*/
+AREXPORT bool ArRobot::remBattery(ArBatteryMTX *battery)
+{
+  if (battery == NULL)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remBattery: Passed NULL battery to remove");
+      return false;
+  }
+  std::map<int, ArBatteryMTX *>::iterator it;
+  for (it = myBatteryMap.begin(); it != myBatteryMap.end(); ++it)
+  {
+    if ((*it).second == battery)
+    {
+	ArLog::log(ArLog::Normal, 
+		   "ArRobot::remBattery: Removing battery %s (num %d)", 
+		   battery->getName(), (*it).first);  
+      myBatteryMap.erase(it);
+      return true;
+    }
+  }
+  ArLog::log(ArLog::Normal, 
+	     "ArRobot::remBattery: Could not find battery %s to remove", 
+	     battery->getName());
+  return false;
+}
+
+/** @since 2.7.0 
+    @internal
+*/
+AREXPORT bool ArRobot::remBattery(int batteryNumber)
+{
+  std::map<int, ArBatteryMTX *>::iterator it;
+  if ((it = myBatteryMap.find(batteryNumber)) == myBatteryMap.end())
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remBattery: Could not find battery %d to remove", 
+	       batteryNumber);
+    return false;
+  
+  }
+
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remBattery: Removing battery %s (num %d) ", 
+	       (*it).second->getName(), (*it).first);  
+    
+  myBatteryMap.erase(it);
+  return true;
+}
+
+/** @since 2.7.0 
+  @see ArBatteryConnector
+*/
+AREXPORT const ArBatteryMTX *ArRobot::findBattery(int batteryNumber) const
+{
+  std::map<int, ArBatteryMTX *>::const_iterator it;
+  if ((it = myBatteryMap.find(batteryNumber)) == myBatteryMap.end())
+    return NULL;
+  else
+    return (*it).second;
+}
+
+/** @since 2.7.0 
+    @see ArBatteryConnector
+*/
+AREXPORT ArBatteryMTX *ArRobot::findBattery(int batteryNumber)
+{
+  if (myBatteryMap.find(batteryNumber) == myBatteryMap.end())
+    return NULL;
+  else
+    return myBatteryMap[batteryNumber];
+}
+
+/** @since 2.7.0 
+    @see ArBatteryConnector
+*/
+AREXPORT const std::map<int, ArBatteryMTX *> *ArRobot::getBatteryMap(void) const
+{
+  return &myBatteryMap;
+}
+
+
+/** @since 2.7.0 
+    @see ArBatteryConnector
+*/
+AREXPORT std::map<int, ArBatteryMTX *> *ArRobot::getBatteryMap(void) 
+{
+  return &myBatteryMap;
+}
+
+/** @since 2.7.0 
+    @see ArBatteryConnector
+*/
+AREXPORT bool ArRobot::hasBattery(ArBatteryMTX *device) const
+{
+  for(std::map<int, ArBatteryMTX *>::const_iterator i = myBatteryMap.begin();
+        i != myBatteryMap.end(); ++i)
+  {
+     if( (*i).second == device ) return true;
+  }
+  return false;
+}
+
+
+/** @since 2.7.0 
+  @note Do not call this method directly 
+  if using ArLCDConnector, it will automatically add lcd(s).
+  @internal
+*/
+AREXPORT bool ArRobot::addLCD(ArLCDMTX *lcd, int lcdNumber)
+{
+  std::map<int, ArLCDMTX *>::iterator it;
+  if (lcd == NULL)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::addLCD: Tried to add NULL lcd as lcd number %d",
+	       lcdNumber);
+    return false;
+  }
+  if ((it = myLCDMap.find(lcdNumber)) != myLCDMap.end())
+  {
+    if ((*it).second == lcd)
+    {
+      ArLog::log(ArLog::Verbose, 
+		 "Tried to add lcd %s as number %d but already have that lcd, doing nothing",
+		 lcd->getName(), lcdNumber);    
+      return true;
+    }
+    ArLog::log(ArLog::Normal, "ArRobot::addLCD: Tried to add lcd %s as lcd number %d but there is already a lcd of that number (called %s)",
+	       lcd->getName(), lcdNumber,
+	       (*it).second->getName());
+    return false;
+  }
+  myLCDMap[lcdNumber] = lcd;
+  ArLog::log(ArLog::Verbose, 
+	       "Added lcd %s as number %d",
+	       lcd->getName(), lcdNumber);    
+  return true;
+}
+
+
+/** @since 2.7.0 
+    @internal
+*/
+AREXPORT bool ArRobot::remLCD(ArLCDMTX *lcd)
+{
+  if (lcd == NULL)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remLCD: Passed NULL lcd to remove");
+      return false;
+  }
+  std::map<int, ArLCDMTX *>::iterator it;
+  for (it = myLCDMap.begin(); it != myLCDMap.end(); ++it)
+  {
+    if ((*it).second == lcd)
+    {
+	ArLog::log(ArLog::Normal, 
+		   "ArRobot::remLCD: Removing lcd %s (num %d)", 
+		   lcd->getName(), (*it).first);  
+      myLCDMap.erase(it);
+      return true;
+    }
+  }
+  ArLog::log(ArLog::Normal, 
+	     "ArRobot::remLCD: Could not find lcd %s to remove", 
+	     lcd->getName());
+  return false;
+}
+
+/** @since 2.7.0 
+    @internal
+*/
+AREXPORT bool ArRobot::remLCD(int lcdNumber)
+{
+  std::map<int, ArLCDMTX *>::iterator it;
+  if ((it = myLCDMap.find(lcdNumber)) == myLCDMap.end())
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remLCD: Could not find lcd %d to remove", 
+	       lcdNumber);
+    return false;
+  
+  }
+
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remLCD: Removing lcd %s (num %d) ", 
+	       (*it).second->getName(), (*it).first);  
+    
+  myLCDMap.erase(it);
+  return true;
+}
+
+/** @since 2.7.0 
+  @see ArLCDConnector
+*/
+AREXPORT const ArLCDMTX *ArRobot::findLCD(int lcdNumber) const
+{
+  std::map<int, ArLCDMTX *>::const_iterator it;
+  if ((it = myLCDMap.find(lcdNumber)) == myLCDMap.end())
+    return NULL;
+  else
+    return (*it).second;
+}
+
+/** @since 2.7.0 
+    @see ArLCDConnector
+*/
+AREXPORT ArLCDMTX *ArRobot::findLCD(int lcdNumber)
+{
+  if (myLCDMap.find(lcdNumber) == myLCDMap.end())
+    return NULL;
+  else
+    return myLCDMap[lcdNumber];
+}
+
+/** @since 2.7.0 
+    @see ArLCDConnector
+*/
+AREXPORT const std::map<int, ArLCDMTX *> *ArRobot::getLCDMap(void) const
+{
+  return &myLCDMap;
+}
+
+
+/** @since 2.7.0 
+    @see ArLCDConnector
+*/
+AREXPORT std::map<int, ArLCDMTX *> *ArRobot::getLCDMap(void) 
+{
+  return &myLCDMap;
+}
+
+/** @since 2.7.0 
+    @see ArLCDConnector
+*/
+AREXPORT bool ArRobot::hasLCD(ArLCDMTX *device) const
+{
+  for(std::map<int, ArLCDMTX *>::const_iterator i = myLCDMap.begin();
+        i != myLCDMap.end(); ++i)
+  {
+     if( (*i).second == device ) return true;
+  }
+  return false;
+}
+
+/** @since 2.7.0 
+  @note Do not call this method directly 
+  if using ArBatteryConnector, it will automatically add battery(s).
+  @internal
+*/
+AREXPORT bool ArRobot::addSonar(ArSonarMTX *sonar, int sonarNumber)
+{
+  std::map<int, ArSonarMTX *>::iterator it;
+  if (sonar == NULL)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::addSonar: Tried to add NULL sonar board as sonar number %d",
+	       sonarNumber);
+    return false;
+  }
+  if ((it = mySonarMap.find(sonarNumber)) != mySonarMap.end())
+  {
+    if ((*it).second == sonar)
+    {
+      ArLog::log(ArLog::Verbose, 
+		 "Tried to add sonar board %s as number %d but already have that sonar, doing nothing",
+		 sonar->getName(), sonarNumber);    
+      return true;
+    }
+    ArLog::log(ArLog::Normal, "ArRobot::addSonar: Tried to add sonar board %s as sonar number %d but there is already a sonar of that number (called %s)",
+	       sonar->getName(), sonarNumber,
+	       (*it).second->getName());
+    return false;
+  }
+  mySonarMap[sonarNumber] = sonar;
+  ArLog::log(ArLog::Verbose, 
+	       "Added sonar board %s as number %d",
+	       sonar->getName(), sonarNumber);    
+  return true;
+}
+
+
+/** @since 2.7.0 
+    @internal
+*/
+AREXPORT bool ArRobot::remSonar(ArSonarMTX *sonar)
+{
+  if (sonar == NULL)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remSonar: Passed NULL sonar board to remove");
+      return false;
+  }
+  std::map<int, ArSonarMTX *>::iterator it;
+  for (it = mySonarMap.begin(); it != mySonarMap.end(); ++it)
+  {
+    if ((*it).second == sonar)
+    {
+	ArLog::log(ArLog::Normal, 
+		   "ArRobot::remSonar: Removing sonar board %s (num %d)", 
+		   sonar->getName(), (*it).first);  
+      mySonarMap.erase(it);
+      return true;
+    }
+  }
+  ArLog::log(ArLog::Normal, 
+	     "ArRobot::remSonar: Could not find sonar board %s to remove", 
+	     sonar->getName());
+  return false;
+}
+
+/** @since 2.7.0 
+    @internal
+*/
+AREXPORT bool ArRobot::remSonar(int sonarNumber)
+{
+  std::map<int, ArSonarMTX *>::iterator it;
+  if ((it = mySonarMap.find(sonarNumber)) == mySonarMap.end())
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remSonar: Could not find sonar board %d to remove", 
+	       sonarNumber);
+    return false;
+  
+  }
+
+    ArLog::log(ArLog::Normal, 
+	       "ArRobot::remSonar: Removing sonar board %s (num %d) ", 
+	       (*it).second->getName(), (*it).first);  
+    
+  mySonarMap.erase(it);
+  return true;
+}
+
+/** @since 2.7.0 
+  @see ArSonarConnector
+*/
+AREXPORT const ArSonarMTX *ArRobot::findSonar(int sonarNumber) const
+{
+  std::map<int, ArSonarMTX *>::const_iterator it;
+  if ((it = mySonarMap.find(sonarNumber)) == mySonarMap.end())
+    return NULL;
+  else
+    return (*it).second;
+}
+
+/** @since 2.7.0 
+    @see ArSonarConnector
+*/
+AREXPORT ArSonarMTX *ArRobot::findSonar(int sonarNumber)
+{
+  if (mySonarMap.find(sonarNumber) == mySonarMap.end())
+    return NULL;
+  else
+    return mySonarMap[sonarNumber];
+}
+
+/** @since 2.7.0 
+    @see ArSonarConnector
+*/
+AREXPORT const std::map<int, ArSonarMTX *> *ArRobot::getSonarMap(void) const
+{
+  return &mySonarMap;
+}
+
+
+/** @since 2.7.0 
+    @see ArSonarConnector
+*/
+AREXPORT std::map<int, ArSonarMTX *> *ArRobot::getSonarMap(void) 
+{
+  return &mySonarMap;
+}
+
+/** @since 2.7.0 
+    @see ArSonarConnector
+*/
+AREXPORT bool ArRobot::hasSonar(ArSonarMTX *device) const
+{
+  for(std::map<int, ArSonarMTX *>::const_iterator i = mySonarMap.begin();
+        i != mySonarMap.end(); ++i)
+  {
+     if( (*i).second == device ) return true;
+  }
+  return false;
+}
+
+
+
+/**
+   @param from the pose with time to apply the offset from... it applies the encoder mostion from the time on this to the to param
+   
+   @param to the time to find the offset to
+
+   @param result the pose to put the result in
+
+   @return This returns the same way that ArInterpolation::getPose does...
+@see ArInterpolation::getPose
+*/
+AREXPORT int ArRobot::applyEncoderOffset(ArPoseWithTime from, ArTime to, 
+					 ArPose *result)
+{
+
+  ArPose encoderPoseFrom;
+  ArPose globalPoseFrom;
+  
+  ArPose encoderPoseTo;
+  ArPose globalPoseTo;
+
+  int retFrom;
+  int retTo;
+  if ((retFrom = getEncoderPoseInterpPosition(from.getTime(), 
+					     &encoderPoseFrom)) >= 0)
+  {
+    if ((retTo = getEncoderPoseInterpPosition(to, &encoderPoseTo)) >= 0)
+    {
+      globalPoseFrom = myEncoderTransform.doTransform(encoderPoseFrom);
+      globalPoseTo = myEncoderTransform.doTransform(encoderPoseTo);
+      ArPose offset = globalPoseTo - globalPoseFrom;
+      ArPose retPose;
+      retPose = from + offset;
+      /*
+      ArLog::log(ArLog::Normal, 
+		 "%.0f %.0f %.1f + %.0f %.0f %.1f = %.0f %.0f %.1f (from %d to %d)", 
+		 from.getX(), from.getY(), from.getTh(), 
+		 offset.getX(), offset.getY(), offset.getTh(),
+		 retPose.getX(), retPose.getY(), retPose.getTh(),
+		 retFrom, retTo);
+      */
+      if (result != NULL)
+	*result = retPose;
+      return retTo;
+    }
+    else
+    {
+      ArLog::log(ArLog::Verbose, 
+		 "ArRobot::applyEncoderOffset: Can't find to offset, ret %d",
+		 retTo);
+      return retTo;
+    }
+  }
+  else
+  {
+    ArLog::log(ArLog::Verbose, 
+	       "ArRobot::applyEncoderOffset: Can't find from (%d ms ago) offset, ret %d",
+	       retFrom, from.getTime().mSecSince());
+    return retFrom;
+  }
+
+  return -3;
+}
+
+AREXPORT void ArRobot::internalIgnoreNextPacket(void)
+{
+  myIgnoreNextPacket = true;
+  myPacketMutex.lock();
+  myPacketList.clear();
+  myPacketMutex.unlock();
 }

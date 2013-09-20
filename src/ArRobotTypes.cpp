@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -140,6 +140,21 @@ AREXPORT ArRobotP2AT::ArRobotP2AT(const char *dir)
     getLaserData(1)->myLaserX = 160;
     getLaserData(1)->myLaserY = 7;
   }
+
+
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 // P2AT8 robot class
@@ -186,6 +201,19 @@ AREXPORT ArRobotP2AT8::ArRobotP2AT8(const char *dir)
     getLaserData(1)->myLaserX = 160;
     getLaserData(1)->myLaserY = 7;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif  
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -233,6 +261,19 @@ AREXPORT ArRobotP2IT::ArRobotP2IT(const char *dir)
     getLaserData(1)->myLaserX = 160;
     getLaserData(1)->myLaserY = 7;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -280,6 +321,19 @@ AREXPORT ArRobotP2DX::ArRobotP2DX(const char *dir)
     getLaserData(1)->myLaserX = 17;
     getLaserData(1)->myLaserY = 8;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 // P2DXe robot class
@@ -326,6 +380,19 @@ AREXPORT ArRobotP2DXe::ArRobotP2DXe(const char *dir)
     getLaserData(1)->myLaserX = 17;
     getLaserData(1)->myLaserY = 8;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 // P2DF robot class
@@ -372,6 +439,19 @@ AREXPORT ArRobotP2DF::ArRobotP2DF(const char *dir)
     getLaserData(1)->myLaserX = 17;
     getLaserData(1)->myLaserY = 8;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif
+  myVideoParams[0].setConnect(true);
 }
 
 // P2D8 robot class
@@ -418,6 +498,19 @@ AREXPORT ArRobotP2D8::ArRobotP2D8(const char *dir)
     getLaserData(1)->myLaserX = 18;
     getLaserData(1)->myLaserY = 0;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -457,6 +550,19 @@ AREXPORT ArRobotP2CE::ArRobotP2CE(const char *dir)
   internalSetSonar(13, -237, 78, 150);
   internalSetSonar(14, -203, 119, 130);
   internalSetSonar(15, -157, 136, 90);
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -516,6 +622,19 @@ AREXPORT ArRobotP2PP::ArRobotP2PP(const char *dir)
     getLaserData(1)->myLaserX = 16;
     getLaserData(1)->myLaserY = 1;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif
+  myVideoParams[0].setConnect(true);
 }
 
 // P2PB robot class
@@ -571,6 +690,19 @@ AREXPORT ArRobotP2PB::ArRobotP2PB(const char *dir)
     getLaserData(1)->myLaserX = 17;
     getLaserData(1)->myLaserY = 8;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif
+  myVideoParams[0].setConnect(true);
 }
 
 // PerfPB robot class
@@ -646,6 +778,19 @@ AREXPORT ArRobotPerfPB::ArRobotPerfPB(const char *dir)
     getLaserData(1)->myLaserX = 21;
     getLaserData(1)->myLaserY = 0;
   }
+
+
+
+
+  myPTZParams[0].setType("sony");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("pxc");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -965,6 +1110,19 @@ AREXPORT ArRobotPowerBot::ArRobotPowerBot(const char *dir)
   }
 
   sprintf(myGPSPort, "COM3"); // swap laser and hypothetical gps
+
+
+
+
+  myPTZParams[0].setType("vcc4");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("vfw");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 AREXPORT ArRobotP2D8Plus::ArRobotP2D8Plus(const char *dir)
@@ -1009,6 +1167,19 @@ AREXPORT ArRobotP2D8Plus::ArRobotP2D8Plus(const char *dir)
     getLaserData(1)->myLaserX = 18;
     getLaserData(1)->myLaserY = 0;
   }
+
+
+
+
+  myPTZParams[0].setType("vcc4");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1054,6 +1225,19 @@ AREXPORT ArRobotP2AT8Plus::ArRobotP2AT8Plus(const char *dir)
     getLaserData(1)->myLaserX = 160;
     getLaserData(1)->myLaserY = 7;
   }
+
+
+
+
+  myPTZParams[0].setType("vcc4");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 AREXPORT ArRobotP3AT::ArRobotP3AT(const char *dir)
@@ -1102,6 +1286,19 @@ AREXPORT ArRobotP3AT::ArRobotP3AT(const char *dir)
   myGPSX = -160;
   myGPSY = 120;
   sprintf(myGPSType, "novatel");
+
+
+
+
+  myPTZParams[0].setType("vcc4");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1148,7 +1345,20 @@ AREXPORT ArRobotP3DX::ArRobotP3DX(const char *dir)
     getLaserData(1)->myLaserX = 18;
     getLaserData(1)->myLaserY = 0;
   }
+
+
+  myPTZParams[0].setType("vcc4");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif
+  myVideoParams[0].setConnect(true);
+
 }
+
 
 
 AREXPORT ArRobotPerfPBPlus::ArRobotPerfPBPlus(const char *dir)
@@ -1224,6 +1434,19 @@ AREXPORT ArRobotPerfPBPlus::ArRobotPerfPBPlus(const char *dir)
     getLaserData(1)->myLaserX = 21;
     getLaserData(1)->myLaserY = 0;
   }
+
+
+
+
+  myPTZParams[0].setType("vcc4");
+  myPTZParams[0].setRobotAuxPort(1);
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1273,6 +1496,13 @@ AREXPORT ArRobotP3DXSH::ArRobotP3DXSH(const char *dir)
   myGPSX = -160;
   myGPSY = 120;
   sprintf(myGPSType, "novatel");
+
+
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setConnect(true);
+  myVideoParams[0].setType("vapix");   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1321,6 +1551,14 @@ AREXPORT ArRobotP3ATSH::ArRobotP3ATSH(const char *dir)
   myGPSX = -160;
   myGPSY = 120;
   sprintf(myGPSType, "novatel");
+
+
+
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setConnect(true);
+  myVideoParams[0].setType("vapix");   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1370,6 +1608,14 @@ AREXPORT ArRobotP3ATIWSH::ArRobotP3ATIWSH(const char *dir)
   myGPSX = -160;
   myGPSY = 120;
   sprintf(myGPSType, "novatel");
+
+
+
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setConnect(true);
+  myVideoParams[0].setType("vapix");   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1440,6 +1686,18 @@ AREXPORT ArRobotPatrolBotSH::ArRobotPatrolBotSH(const char *dir)
 
 
   myRequestIOPackets = true;
+
+
+
+
+  myPTZParams[0].setType("vcc4");
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1514,6 +1772,15 @@ AREXPORT ArRobotPeopleBotSH::ArRobotPeopleBotSH(const char *dir)
     getLaserData(1)->myLaserX = 21;
     getLaserData(1)->myLaserY = 0;
   }
+
+
+
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setInverted(true);
+  myVideoParams[0].setType("vapix");  
+  myVideoParams[0].setConnect(true);
+  myVideoParams[0].setInverted(true);
 }
 
 
@@ -1585,6 +1852,14 @@ AREXPORT ArRobotPowerBotSH::ArRobotPowerBotSH(const char *dir)
   }
 
   sprintf(myGPSPort, "COM3"); // swap laser and hypothetical GPS
+
+
+
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setConnect(true);
+  myVideoParams[0].setType("vapix");   
+  myVideoParams[0].setConnect(true);
 }
 
 
@@ -1706,15 +1981,14 @@ AREXPORT ArRobotSeekur::ArRobotSeekur(const char *dir)
 
   if (getLaserData(1) != NULL)
   {
-    sprintf(getLaserData(1)->myLaserType, "lms1xx");
-    sprintf(getLaserData(1)->myLaserPortType, "tcp");
-    sprintf(getLaserData(1)->myLaserPort, "192.168.0.1");
+    sprintf(getLaserData(1)->myLaserType, "lms2xx");
+    sprintf(getLaserData(1)->myLaserPortType, "serial");
+    sprintf(getLaserData(1)->myLaserPort, "COM3");
     getLaserData(1)->myLaserX = 690;
     getLaserData(1)->myLaserY = 0;
     getLaserData(1)->myLaserFlipped = false;
     getLaserData(1)->myLaserPowerControlled = true;
-    sprintf(getLaserData(1)->myLaserStartDegrees, "-90");
-    sprintf(getLaserData(1)->myLaserEndDegrees, "90");
+
   }
 
   mySettableAccsDecs = true;
@@ -1732,6 +2006,18 @@ AREXPORT ArRobotSeekur::ArRobotSeekur(const char *dir)
   sprintf(myGPSPort, "COM2"); 
   sprintf(myGPSType, "trimble");
   myGPSBaud = 38400;
+
+
+
+
+  myPTZParams[0].setType("rvision");
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif  
+  myVideoParams[0].setConnect(true); 
 }
 
 AREXPORT ArRobotMT400::ArRobotMT400(const char *dir)
@@ -1801,6 +2087,14 @@ AREXPORT ArRobotMT400::ArRobotMT400(const char *dir)
 
 
   myRequestIOPackets = true;
+
+
+
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setConnect(true);
+  myVideoParams[0].setType("vapix");   
+  myVideoParams[0].setConnect(true); 
 }
 
 AREXPORT ArRobotResearchPB::ArRobotResearchPB(const char *dir)
@@ -1870,8 +2164,15 @@ AREXPORT ArRobotResearchPB::ArRobotResearchPB(const char *dir)
 
 
   myRequestIOPackets = true;
-}
 
+
+
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setConnect(true);
+  myVideoParams[0].setType("vapix");   
+  myVideoParams[0].setConnect(true); 
+}
 
 AREXPORT ArRobotSeekurJr::ArRobotSeekurJr(const char *dir)
 {
@@ -1913,7 +2214,6 @@ AREXPORT ArRobotSeekurJr::ArRobotSeekurJr(const char *dir)
     sprintf(getLaserData(2)->myLaserPort, "192.168.0.2");
     getLaserData(2)->myLaserX = -527;
     getLaserData(2)->myLaserY = 0;
-    getLaserData(2)->myLaserTh = 180;
     getLaserData(2)->myLaserFlipped = false;
     getLaserData(2)->myLaserPowerControlled = false;
     sprintf(getLaserData(2)->myLaserStartDegrees, "-117");
@@ -1933,6 +2233,15 @@ AREXPORT ArRobotSeekurJr::ArRobotSeekurJr(const char *dir)
   sprintf(myGPSPort, "COM2"); 
   sprintf(myGPSType, "trimble");
   myGPSBaud = 38400;
+
+  myPTZParams[0].setType("rvision");
+  myPTZParams[0].setConnect(true);
+#ifdef WIN32
+  myVideoParams[0].setType("sx11");
+#else
+  myVideoParams[0].setType("v4l");
+#endif   
+  myVideoParams[0].setConnect(true); 
 }
 
 AREXPORT ArRobotP3DXSH_lms1xx::ArRobotP3DXSH_lms1xx(const char *dir) :
@@ -2037,6 +2346,104 @@ AREXPORT ArRobotResearchPB_lms500::ArRobotResearchPB_lms500(const char *dir) :
     sprintf(ld->myLaserPort, "192.168.0.1");
     ld->myLaserX = 37;
   }
+}
+
+AREXPORT ArRobotPioneerLX::ArRobotPioneerLX(const char *dir)
+{
+  sprintf(myClass, "MTX");
+  sprintf(mySubClass, "pioneer-lx");
+  myRobotRadius = 348;
+  myRobotDiagonal = 120;
+  myAbsoluteMaxRVelocity = 180;
+  myAbsoluteMaxVelocity = 2500;
+  myDistConvFactor = 1.0;
+  myRangeConvFactor = 1.0;
+  myDiffConvFactor = 0.0056;
+  myVelConvFactor = 1.0;
+  myRobotWidth = 500;
+  myRobotLength = 696;
+  myRobotLengthFront = 348;
+  myRobotLengthRear = 348;
+
+  myFrontBumpers = true;
+  myNumFrontBumpers = 4;
+  myRearBumpers = false;
+  myNumRearBumpers = 0;
+
+  LaserData *laser = NULL;
+  if ( (laser = getLaserData(1)) != NULL)
+  {
+    sprintf(laser->myLaserType, "s3series");
+    sprintf(laser->myLaserPortType, "serial422");
+    sprintf(laser->myLaserPort, "/dev/ttyUSB4");
+    sprintf(laser->myLaserStartingBaudChoice, "230400");
+    laser->myLaserX = 267;
+    laser->myLaserY = 0;
+    laser->myLaserZ = 190;
+    laser->myLaserFlipped = true;
+    laser->myLaserPowerControlled = false;
+    strcpy(laser->myLaserIgnore, 
+	   "-135--120 120-135");
+    laser->myLaserAutoConnect = true;
+  }
+ 
+  if(LCDMTXBoardData *lcd = getLCDMTXBoardData(1))
+  {
+    sprintf(lcd->myLCDMTXBoardType, "mtx");
+    sprintf(lcd->myLCDMTXBoardPortType, "serial422");
+    sprintf(lcd->myLCDMTXBoardPort, "/dev/ttyUSB8");
+    lcd->myLCDMTXBoardBaud = 115200;
+    lcd->myLCDMTXBoardAutoConn = true;
+  }
+ 
+  if(SonarMTXBoardData *sonar = getSonarMTXBoardData(1))
+  {
+    sprintf(sonar->mySonarMTXBoardType, "mtx");
+    sprintf(sonar->mySonarMTXBoardPortType, "serial422");
+    sprintf(sonar->mySonarMTXBoardPort, "/dev/ttyUSB2");
+    sonar->mySonarMTXBoardBaud = 115200;
+    sonar->mySonarMTXBoardAutoConn = true;
+    sonar->myNumSonarTransducers = 8;
+  }
+ 
+  /*
+  if(SonarMTXBoardData *sonar = getSonarMTXBoardData(2))
+  {
+    sprintf(sonar->mySonarMTXBoardType, "mtx");
+    sprintf(sonar->mySonarMTXBoardPortType, "serial422");
+    //sprintf(sonar->mySonarMTXBoardPort, "/dev/ttyUSB2"); // <- what is the usb port?
+    sonar->mySonarMTXBoardBaud = 115200;
+    sonar->mySonarMTXBoardAutoConn = false; 
+    sonar->myNumSonarTransducers = 8;
+  }
+  */
+
+  myNumSonar = 8;
+  //               #   x    y  th
+  internalSetSonar(0, 324, 90, 16);
+  internalSetSonar(1, 331, 607, 10);
+  internalSetSonar(2, 331, -607, -10);
+  internalSetSonar(3, 324, -90, -16);
+  internalSetSonar(4, -316, -90, -164);
+  internalSetSonar(5, -325, -30, -175);
+  internalSetSonar(6, -325, 30, 175);
+  internalSetSonar(7, -316, 90, 164);
+
+  if(BatteryMTXBoardData *bat = getBatteryMTXBoardData(1))
+  {
+    sprintf(bat->myBatteryMTXBoardType, "mtx");
+    sprintf(bat->myBatteryMTXBoardPortType, "serial");
+    sprintf(bat->myBatteryMTXBoardPort, "/dev/ttyUSB1");
+    bat->myBatteryMTXBoardBaud = 115200;
+    bat->myBatteryMTXBoardAutoConn = true;
+  }
+
+  myRequestIOPackets = true;
+
+  myPTZParams[0].setType("vapix");
+  myPTZParams[0].setConnect(true);
+  myVideoParams[0].setType("vapix");   
+  myVideoParams[0].setConnect(true);
 }
 
 /** @endcond INCLUDE_INTERNAL_ROBOT_PARAM_CLASSES */

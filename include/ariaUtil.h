@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #ifndef ARIAUTIL_H
@@ -31,6 +31,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include <string>
 // #define _XOPEN_SOURCE 500
 #include <list>
+#include <map>
 #include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -58,13 +59,19 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaOSDef.h"
 
 class ArLaser;
+class ArBatteryMTX;
+class ArLCDMTX;
+class ArSonarMTX;
 class ArDeviceConnection;
 
 #ifndef M_PI
 #define M_PI 3.1415927
 #endif // of M_PI, windows has a function call instead of a define
 
-/// This class has utility functions
+/// Contains various utility functions, including cross-platform wrappers around common system functions.
+/** @ingroup UtilityClasses
+    @ingroup ImportantClasses
+*/
 class ArUtil
 {
 public:
@@ -210,6 +217,12 @@ public:
   /// Finds out if two strings are equal (ignoring case)
   AREXPORT static int strcasecmp(const char *str, const char *str2);
 
+  /// Finds out if a string has a suffix 
+  AREXPORT static bool strSuffixCmp(const char *str, const char *suffix);
+
+  /// Finds out if a string has a suffix 
+  AREXPORT static bool strSuffixCaseCmp(const char *str, const char *suffix);
+  
 
   /// Compares two strings (ignoring case and surrounding quotes)
   /**
@@ -229,6 +242,9 @@ public:
 
   /// Strips out the quotes in the src buffer into the dest buffer
   AREXPORT static bool stripQuotes(char *dest, const char *src,size_t destLen);
+  
+  /// Strips the quotes from the given string.
+  AREXPORT static bool stripQuotes(std::string *strToStrip);
 
   /// Lowers a string from src into dest, make sure there's enough space
   AREXPORT static void lower(char *dest, const char *src, 
@@ -456,7 +472,9 @@ private:
 #endif
 };
 
-///  This class has static members to do common math operations.
+/** Common math operations
+    @ingroup UtilityClasses
+*/
 class ArMath
 {
 private:
@@ -691,14 +709,51 @@ public:
 #endif
   }
 
+  static bool isNan(float f) {
+#ifdef WIN32
+	  return _isnan(f);
+#else
+	  return isnan(f);
+#endif
+  }
+
+  static bool isFinite(float f) {
+#ifdef WIN32
+	  return _finite(f);
+#else
+	  return isfinite(f);
+#endif
+  }
+
+  static bool isFinite(double d) {
+#ifdef WIN32
+	  return _finite(d);
+#else
+	  return isfinite(d);
+#endif
+  }
+
+  static bool compareFloats(double f1, double f2, double epsilon)
+  {
+    return (fabs(f2-f1) <= epsilon);
+  }
+
+  static bool compareFloats(double f1, double f2)
+  {
+    return compareFloats(f1, f2, epsilon());
+  }
+
+
 }; // end class ArMath
 
-/// The class which represents an x/y position along with a heading.
+/// Represents an x, y position with an orientation
 /** 
     This class represents a robot position with heading.  The heading is 
     automatically adjusted to be in the range -180 to 180.  It also defaults
     to 0, and so does not need to be used. (This avoids having 2 types of 
     positions.)  Everything in the class is inline so it should be fast.
+
+  @ingroup UtilityClasses
 */
 class ArPose
 {
@@ -890,8 +945,20 @@ public:
     }
     // Otherwise... x, y, and th are equal
     return false;
+    
+  } // end operator <
 
- } // end operator <
+  /// Finds the distance between two poses (static function, uses no
+  /// data from any instance and shouldn't be able to be called on an
+  /// instance)
+  /**
+     @param pose1 the first coords
+     @param pose2 the second coords
+     @return the distance between the poses
+  **/
+  static double distanceBetween(ArPose pose1, ArPose pose2)
+    { return ArMath::distanceBetween(pose1.getX(), pose1.getY(), 
+				     pose2.getX(), pose2.getY()); }
 
 
 protected:
@@ -927,6 +994,8 @@ protected:
     good value... Aria::init does this however, so that should not be
     an issue.  It looks like the monotonic clocks won't work on linux
     kernels before 2.6.
+
+  @ingroup UtilityClasses
 */
 
 class ArTime
@@ -1178,9 +1247,9 @@ protected:
 
 
 
-/// A subclass of pose that also has the time the pose was taken
+/// A subclass of ArPose that also stores a timestamp (ArTime) 
 /**
-
+  @ingroup UtilityClasses
  */
 class ArPoseWithTime : public ArPose
 {
@@ -1205,6 +1274,7 @@ protected:
    the revolution.  Then at each point doing an updateQuadrant with the current
    heading of the robot.  When didAllQuadrants returns true, then all the 
    quadrants have been done.
+  @ingroup UtilityClasses
 */
 class ArSectors
 {
@@ -1256,6 +1326,7 @@ protected:
    Note this the theoretical line, i.e. it goes infinitely. 
    For a line segment with endpoints, use ArLineSegment.
    @sa ArLineSegment
+  @ingroup UtilityClasses
 **/
 class ArLine
 {
@@ -1317,7 +1388,7 @@ public:
      if the pose intersects the segment it will return the distance to
      the intersection
   **/
-  virtual double getPerpDist(const ArPose pose) const
+  virtual double getPerpDist(const ArPose &pose) const
     {
       ArPose perpPose;
       ArLine perpLine;
@@ -1334,7 +1405,7 @@ public:
      if the pose intersects the segment it will return the distance to
      the intersection
   **/
-  virtual double getPerpSquaredDist(const ArPose pose) const
+  virtual double getPerpSquaredDist(const ArPose &pose) const
     {
       ArPose perpPose;
       ArLine perpLine;
@@ -1351,19 +1422,38 @@ public:
      @return true if an intersection was found and perpPoint was modified, false otherwise.
      @swigomit
   **/
-  bool getPerpPoint(ArPose pose, ArPose *perpPoint) const
+  bool getPerpPoint(const ArPose &pose, ArPose *perpPoint) const
     {
       ArLine perpLine;
       makeLinePerp(&pose, &perpLine);
       return intersects(&perpLine, perpPoint);
     }
 
+  /// Equality operator
+  virtual bool operator==(const ArLine &other) const
+  {
+
+    return ((fabs(myA - other.myA) <= ArMath::epsilon()) &&
+            (fabs(myB - other.myB) <= ArMath::epsilon()) &&
+            (fabs(myC - other.myC) <= ArMath::epsilon()));
+  }
+  /// Inequality operator
+  virtual bool operator!=(const ArLine &other) const
+  {
+    return ((fabs(myA - other.myA) > ArMath::epsilon()) ||
+            (fabs(myB - other.myB) > ArMath::epsilon()) ||
+            (fabs(myC - other.myC) > ArMath::epsilon()));
+
+  }
+
 protected:
   double myA, myB, myC;
 };
 
 /// Represents a line segment in two-dimensional space.
-/** The segment is defined by the coordinates of each endpoint. */
+/** The segment is defined by the coordinates of each endpoint. 
+  @ingroup UtilityClasses
+*/
 class ArLineSegment
 {
 public:
@@ -1416,7 +1506,7 @@ public:
     }
 
   /** @copydoc intersects(const ArLine *line, ArPose *pose) const */
-  bool intersects(ArLineSegment *line, ArPose *pose) 
+  bool intersects(ArLineSegment *line, ArPose *pose) const
     {
       ArPose intersection;
       // see if it intersects, then make sure its in the coords of this line
@@ -1439,19 +1529,19 @@ public:
      @return true if an intersection was found and perpPoint was modified, false otherwise.
      @swigomit
   **/
-  bool getPerpPoint(ArPose pose, ArPose *perpPoint) 
+  bool getPerpPoint(const ArPose &pose, ArPose *perpPoint) const
     {
       ArLine perpLine;
       myLine.makeLinePerp(&pose, &perpLine);
       return intersects(&perpLine, perpPoint);
     }
 #endif
-  /** @copydoc getPerpPoint(ArPose, ArPose*)  
+  /** @copydoc getPerpPoint(const ArPose&, ArPose*)  
    *  (This version simply allows you to pass the first pose as a pointer, in
    *  time-critical situations where a full copy of the object would impact
    *  performance.)
   */
-  bool getPerpPoint(const ArPose *pose, ArPose *perpPoint) 
+  bool getPerpPoint(const ArPose *pose, ArPose *perpPoint) const
     {
       ArLine perpLine;
       myLine.makeLinePerp(pose, &perpLine);
@@ -1465,7 +1555,7 @@ public:
      if the pose intersects the segment it will return the distance to
      the intersection
   **/
-  virtual double getPerpDist(const ArPose pose)
+  virtual double getPerpDist(const ArPose &pose) const
     {
       ArPose perpPose;
       ArLine perpLine;
@@ -1482,7 +1572,7 @@ public:
      if the pose intersects the segment it will return the distance to
      the intersection
   **/
-  virtual double getPerpSquaredDist(const ArPose pose)
+  virtual double getPerpSquaredDist(const ArPose &pose) const
     {
       ArPose perpPose;
       ArLine perpLine;
@@ -1500,7 +1590,7 @@ public:
    * endpoint.
      @param pose the pointer of the pose to find the distance to
   **/
-  double getDistToLine(const ArPose pose)
+  double getDistToLine(const ArPose &pose) const
     {
       ArPose perpPose;
       ArLine perpLine;
@@ -1612,17 +1702,20 @@ protected:
   ArLine myLine;
 };
 
-/// This is a class for computing a running average of a number of elements
+/**
+   @brief Use for computing a running average of a number of elements
+   @ingroup UtilityClasses
+*/
 class ArRunningAverage
 {
 public:
-  /// Constructor, give it the number of elements you want to average
+  /// Constructor, give it the number of elements to store to compute the average
   AREXPORT ArRunningAverage(size_t numToAverage);
   /// Destructor
   AREXPORT ~ArRunningAverage();
   /// Gets the average
   AREXPORT double getAverage(void) const;
-  /// Adds a number
+  /// Adds a value to the average. An old value is discarded if the number of elements to average has been reached.
   AREXPORT void add(double val);
   /// Clears the average
   AREXPORT void clear(void);
@@ -1634,7 +1727,7 @@ public:
   AREXPORT void setUseRootMeanSquare(bool useRootMeanSquare);
   /// Gets if this is using a the root mean square average or just the normal average
   AREXPORT bool getUseRootMeanSquare(void);
-  /// Gets the num averaged
+  /// Gets the number of values currently averaged so far
   AREXPORT size_t getCurrentNumAveraged(void);
 protected:
   size_t myNumToAverage;
@@ -1644,7 +1737,8 @@ protected:
   std::list<double> myVals;
 };
 
-/// This is a class for computing a running average of a number of elements
+/// This is a class for computing a root mean square average of a number of elements
+/// @ingroup UtilityClasses
 class ArRootMeanSquareCalculator
 {
 public:
@@ -1673,6 +1767,7 @@ protected:
 
 //class ArStrCaseCmpOp :  public std::binary_function <const std::string&, const std::string&, bool> 
 /// strcasecmp for sets
+/// @ingroup UtilityClasses
 struct ArStrCaseCmpOp 
 {
 public:
@@ -1683,6 +1778,7 @@ public:
 };
 
 /// ArPose less than comparison for sets
+/// @ingroup UtilityClasses
 struct ArPoseCmpOp
 {
 public:
@@ -1695,7 +1791,8 @@ public:
   }
 };
 
-// ArLineSegment less than comparison for sets
+/// ArLineSegment less than comparison for sets
+/// @ingroup UtilityClasses
 struct ArLineSegmentCmpOp
 {
 public:
@@ -1711,9 +1808,11 @@ public:
 
 
 #if !defined(WIN32) && !defined(SWIG)
-/** Run the program as a background daemon (i.e. fork it) (Only available in Linux).
- *  @swigomit
- *  @notwindows
+/** @brief Switch to running the program as a background daemon (i.e. fork) (Only available in Linux)
+  @swigomit
+  @notwindows
+  @ingroup UtilityClasses
+  @ingroup OptionalClasses
  */
 class ArDaemonizer
 {
@@ -1748,6 +1847,7 @@ public:
   {
     IMPORTANT, ///< Basic things that should be modified to suit 
     BASIC = IMPORTANT,  ///< Basic things that should be modified to suit 
+    FIRST_PRIORITY = IMPORTANT,
 
     NORMAL,    ///< Intermediate things that users may want to modify
     INTERMEDIATE = NORMAL, ///< Intermediate things that users may want to modify
@@ -1757,9 +1857,11 @@ public:
     ADVANCED = DETAILED, ///< Advanced items that probably shouldn't be modified
 
     EXPERT,  ///< Items that should be modified only by expert users or developers
-    FACTORY, ///< Items that are "factory settings" and should not be modified
+    FACTORY, ///< Items that should be modified at the factory, often apply to a robot model
 
-    LAST_PRIORITY = FACTORY ///< Last value in the enumeration
+    CALIBRATION, ///< Items that apply to a particular hardware instance
+
+    LAST_PRIORITY = CALIBRATION ///< Last value in the enumeration
   };
 
   enum {
@@ -1768,12 +1870,19 @@ public:
 
   /// Returns the displayable text string for the given priority
   AREXPORT static const char * getPriorityName(Priority priority);
+   
+  /// Returns the priority value that corresponds to the given displayable text string
+  AREXPORT static Priority getPriorityFromName(const char *text);
+
 protected:
 
   /// Whether the map of priorities to display text has been initialized
   static bool ourStringsInited;
   /// Map of priorities to displayable text
   static std::map<Priority, std::string> ourPriorityNames;
+  /// Map of displayable text to priorities
+  static std::map<std::string, ArPriority::Priority> ourNameToPriorityMap;
+
   /// Display text used when a priority's displayable text has not been defined
   static std::string ourUnknownPriorityName;
 };
@@ -1835,43 +1944,270 @@ public:
     buffer[bufferLen-1] = '\0'; }
 };
 
-/// A class to hold a list of callbacks to call
-class ArCallbackList
+/** A class to hold a list of callbacks to call
+    GenericFunctor must be a pointer to an ArFunctor or subclass.
+    e.g. declare like this:
+    @code
+      ArGenericCallbackList< ArFunctorC<MyClass> * > callbackList;
+    @endcode
+    then invoke it like this:
+    @code
+      callbackList.invoke();
+    @endcode
+    To pass an argument to the callbacks, use ArCallbackList1 instead.
+    @ingroup UtilityClasses
+**/
+
+template<class GenericFunctor> 
+class ArGenericCallbackList
 {
 public:
   /// Constructor
-  AREXPORT ArCallbackList(const char *name = "", 
-			  ArLog::LogLevel logLevel = ArLog::Verbose,
-			  bool singleShot = false);
+  ArGenericCallbackList(const char *name = "", 
+				 ArLog::LogLevel logLevel = ArLog::Verbose,
+				 bool singleShot = false)
+    {
+      myName = name;
+      mySingleShot = singleShot;
+      setLogLevel(logLevel);
+      std::string mutexName;
+      mutexName = "ArGenericCallbackList::";
+      mutexName += name;
+      mutexName += "::myDataMutex";
+      myDataMutex.setLogName(mutexName.c_str());
+      myLogging = true;
+    }
   /// Destructor
-  AREXPORT virtual ~ArCallbackList();
+  virtual ~ArGenericCallbackList()
+    {
+    }
   /// Adds a callback
-  AREXPORT void addCallback(ArFunctor *functor, int position = 50);
+  void addCallback(GenericFunctor functor, int position = 50)
+    {
+      myDataMutex.lock();
+      myList.insert(
+	      std::pair<int, GenericFunctor>(-position, 
+					     functor));
+      myDataMutex.unlock();
+    }
   /// Removes a callback
-  AREXPORT void remCallback(ArFunctor *functor);
+  void remCallback(GenericFunctor functor)
+    {
+      myDataMutex.lock();
+      typename std::multimap<int, GenericFunctor>::iterator it;
+      
+      for (it = myList.begin(); it != myList.end(); it++)
+      {
+	if ((*it).second == functor)
+	{
+	  myList.erase(it);
+	  myDataMutex.unlock();
+	  remCallback(functor);
+	  return;
+	}
+      }
+      myDataMutex.unlock();
+    }
   /// Sets the name
-  AREXPORT void setName(const char *name);
+  void setName(const char *name)
+    {
+      myDataMutex.lock();
+      myName = name;
+      myDataMutex.unlock();
+    }
 #ifndef SWIG
   /// Sets the name with formatting
   /** @swigomit use setName() */
-  AREXPORT void setNameVar(const char *name, ...);
+  void setNameVar(const char *name, ...)
+    {
+      char arg[2048];
+      va_list ptr;
+      va_start(ptr, name);
+      vsnprintf(arg, sizeof(arg), name, ptr);
+      arg[sizeof(arg) - 1] = '\0';
+      va_end(ptr);
+      return setName(arg);
+    }
 #endif
   /// Sets the log level
-  AREXPORT void setLogLevel(ArLog::LogLevel logLevel);
+  void setLogLevel(ArLog::LogLevel logLevel)
+    {
+      myDataMutex.lock();
+      myLogLevel = logLevel;
+      myDataMutex.unlock();
+    }
   /// Sets if its single shot
-  AREXPORT void setSingleShot(bool singleShot);
-  /// Calls the callback list
-  AREXPORT void invoke(void);
+  void setSingleShot(bool singleShot)
+    {
+      myDataMutex.lock();
+      mySingleShot = singleShot;
+      myDataMutex.unlock();
+    }
+  /// Enable or disable logging when invoking the list. Logging is enabled by default at the log level given in the constructor.
+  void setLogging(bool on) {
+    myLogging = on;
+  }
 protected:
   ArMutex myDataMutex;
   ArLog::LogLevel myLogLevel;
   std::string myName;
-  std::multimap<int, ArFunctor *> myList;
+  std::multimap<int, GenericFunctor> myList;
   bool mySingleShot;
+  bool myLogging;
+};
+
+/** A class to hold a list of callbacks to call sequentially. 
+  @ingroup UtilityClasses
+*/
+class ArCallbackList : public ArGenericCallbackList<ArFunctor *>
+{
+public:
+  /// Constructor
+  ArCallbackList(const char *name = "", 
+			  ArLog::LogLevel logLevel = ArLog::Verbose,
+			  bool singleShot = false) : 
+    ArGenericCallbackList<ArFunctor *>(name, logLevel, singleShot)
+    {
+    }
+  /// Destructor
+  virtual ~ArCallbackList()
+    {
+    }
+  /// Calls the callback list
+  void invoke(void)
+    {
+      myDataMutex.lock();
+      
+      std::multimap<int, ArFunctor *>::iterator it;
+      ArFunctor *functor;
+      
+      if(myLogging)
+	ArLog::log(myLogLevel, "%s: Starting calls", myName.c_str());
+      
+      for (it = myList.begin(); 
+	   it != myList.end(); 
+	   it++)
+      {
+	functor = (*it).second;
+	if (functor == NULL) 
+	  continue;
+	
+	if(myLogging)
+	{
+	  if (functor->getName() != NULL && functor->getName()[0] != '\0')
+	    ArLog::log(myLogLevel, "%s: Calling functor '%s' at %d",
+		       myName.c_str(), functor->getName(), -(*it).first);
+	  else
+	    ArLog::log(myLogLevel, "%s: Calling unnamed functor at %d", 
+		       myName.c_str(), -(*it).first);
+	}
+	functor->invoke();
+      }
+      
+      if(myLogging)
+	ArLog::log(myLogLevel, "%s: Ended calls", myName.c_str());
+      
+      if (mySingleShot)
+      {
+	if(myLogging)
+	  ArLog::log(myLogLevel, "%s: Clearing callbacks", myName.c_str());
+	myList.clear();
+      }
+      myDataMutex.unlock();
+    }
+protected:
+};
+
+/** A class to hold a list of callbacks to call with an argument of type P1
+    The functors added to the list must be pointers to a subclass of ArFunctor1<P1>.
+    Declare like this:
+    @code
+      ArCallbackList1<int> callbackList;
+    @endcode
+    then add a functor like this:
+    @code
+      ArFunctor1C<MyClass, int> func;
+      ...
+      callbackList.addCallback(&func);
+    @endcode
+    then invoke it like this:
+    @code
+      callbackList.invoke(23);
+    @endcode
+    @ingroup UtilityClasses
+**/
+template<class P1>
+class ArCallbackList1 : public ArGenericCallbackList<ArFunctor1<P1> *>
+{
+public:
+  /// Constructor
+  ArCallbackList1(const char *name = "", 
+			  ArLog::LogLevel logLevel = ArLog::Verbose,
+			  bool singleShot = false) : 
+    ArGenericCallbackList<ArFunctor1<P1> *>(name, logLevel, singleShot)
+    {
+    }
+  /// Destructor
+  virtual ~ArCallbackList1()
+    {
+    }
+  /// Calls the callback list
+  void invoke(P1 p1)
+    {
+      ArGenericCallbackList<ArFunctor1<P1> *>::myDataMutex.lock();
+      
+      typename std::multimap<int, ArFunctor1<P1> *>::iterator it;
+      ArFunctor1<P1> *functor;
+      
+      if(ArGenericCallbackList<ArFunctor1<P1> *>::myLogging)
+	ArLog::log(
+		ArGenericCallbackList<ArFunctor1<P1> *>::myLogLevel, 
+		"%s: Starting calls1", 
+		ArGenericCallbackList<ArFunctor1<P1> *>::myName.c_str());
+      
+      for (it = ArGenericCallbackList<ArFunctor1<P1> *>::myList.begin(); 
+	   it != ArGenericCallbackList<ArFunctor1<P1> *>::myList.end(); 
+	   it++)
+      {
+	functor = (*it).second;
+	if (functor == NULL) 
+	  continue;
+	
+	if(ArGenericCallbackList<ArFunctor1<P1> *>::myLogging)
+	{
+	  if (functor->getName() != NULL && functor->getName()[0] != '\0')
+	    ArLog::log(ArGenericCallbackList<ArFunctor1<P1> *>::myLogLevel,
+		       "%s: Calling functor '%s' at %d",
+		       ArGenericCallbackList<ArFunctor1<P1> *>::myName.c_str(), 
+		       functor->getName(), -(*it).first);
+	  else
+	    ArLog::log(ArGenericCallbackList<ArFunctor1<P1> *>::myLogLevel, 
+		       "%s: Calling unnamed functor at %d", 
+		       ArGenericCallbackList<ArFunctor1<P1> *>::myName.c_str(), 
+		       -(*it).first);
+	}
+	functor->invoke(p1);
+      }
+      
+      if(ArGenericCallbackList<ArFunctor1<P1> *>::myLogging)
+	ArLog::log(ArGenericCallbackList<ArFunctor1<P1> *>::myLogLevel, "%s: Ended calls", ArGenericCallbackList<ArFunctor1<P1> *>::myName.c_str());
+      
+      if (ArGenericCallbackList<ArFunctor1<P1> *>::mySingleShot)
+      {
+	if(ArGenericCallbackList<ArFunctor1<P1> *>::myLogging)
+	  ArLog::log(ArGenericCallbackList<ArFunctor1<P1> *>::myLogLevel, 
+		     "%s: Clearing callbacks", 
+		     ArGenericCallbackList<ArFunctor1<P1> *>::myName.c_str());
+	ArGenericCallbackList<ArFunctor1<P1> *>::myList.clear();
+      }
+      ArGenericCallbackList<ArFunctor1<P1> *>::myDataMutex.unlock();
+    }
+protected:
 };
 
 #ifndef ARINTERFACE
 #ifndef SWIG
+/// @internal
 class ArLaserCreatorHelper
 {
 public:
@@ -1899,6 +2235,10 @@ public:
   static ArLaser *createLMS5XX(int laserNumber, const char *logPrefix);
   /// Gets functor for creating an ArLMS5XX
   static ArRetFunctor2<ArLaser *, int, const char *> *getCreateLMS5XXCB(void);
+  /// Creates an ArTiM3XX
+  static ArLaser *createTiM3XX(int laserNumber, const char *logPrefix);
+  /// Gets functor for creating an ArTiM3XX
+  static ArRetFunctor2<ArLaser *, int, const char *> *getCreateTiM3XXCB(void);
   /// Creates an ArSZSeries
   static ArLaser *createSZSeries(int laserNumber, const char *logPrefix);
   /// Gets functor for creating an ArSZSeries
@@ -1911,12 +2251,54 @@ protected:
   static ArGlobalRetFunctor2<ArLaser *, int, const char *> ourUrg_2_0CB;
   static ArGlobalRetFunctor2<ArLaser *, int, const char *> ourS3SeriesCB;
   static ArGlobalRetFunctor2<ArLaser *, int, const char *> ourLMS5XXCB;
+  static ArGlobalRetFunctor2<ArLaser *, int, const char *> ourTiM3XXCB;
   static ArGlobalRetFunctor2<ArLaser *, int, const char *> ourSZSeriesCB;
 };
+
+/// @internal
+class ArBatteryMTXCreatorHelper
+{
+public:
+  /// Creates an ArBatteryMTX
+  static ArBatteryMTX *createBatteryMTX(int batteryNumber, const char *logPrefix);
+  /// Gets functor for creating an ArBatteryMTX
+  static ArRetFunctor2<ArBatteryMTX *, int, const char *> *getCreateBatteryMTXCB(void);
+
+protected:
+  static ArGlobalRetFunctor2<ArBatteryMTX *, int, const char *> ourBatteryMTXCB;
+};
+
+/// @internal
+class ArLCDMTXCreatorHelper
+{
+public:
+  /// Creates an ArLCDMTX
+  static ArLCDMTX *createLCDMTX(int lcdNumber, const char *logPrefix);
+  /// Gets functor for creating an ArLCDMTX
+  static ArRetFunctor2<ArLCDMTX *, int, const char *> *getCreateLCDMTXCB(void);
+
+protected:
+  static ArGlobalRetFunctor2<ArLCDMTX *, int, const char *> ourLCDMTXCB;
+};
+
+/// @internal
+class ArSonarMTXCreatorHelper
+{
+public:
+  /// Creates an ArSonarMTX
+  static ArSonarMTX *createSonarMTX(int sonarNumber, const char *logPrefix);
+  /// Gets functor for creating an ArSonarMTX
+  static ArRetFunctor2<ArSonarMTX *, int, const char *> *getCreateSonarMTXCB(void);
+
+protected:
+  static ArGlobalRetFunctor2<ArSonarMTX *, int, const char *> ourSonarMTXCB;
+};
+
 #endif // SWIG
 #endif // ARINTERFACE
 
 #ifndef SWIG
+/// @internal
 class ArDeviceConnectionCreatorHelper
 {
 public:
@@ -1958,6 +2340,17 @@ protected:
   static ArLog::LogLevel ourSuccessLogLevel;
 };
 #endif // SWIG
+
+/// Class for finding robot bounds from the basic measurements
+class ArPoseUtil
+{
+public:
+  static std::list<ArPose> findCornersFromRobotBounds(
+	  double radius, double widthLeft, double widthRight, 
+	  double lengthFront, double lengthRear, bool fastButUnsafe);
+  static std::list<ArPose> breakUpDistanceEvenly(ArPose start, ArPose end, 
+						 int resolution);
+};
 
 #endif // ARIAUTIL_H
 

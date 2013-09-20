@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARDPPTU_H
 #define ARDPPTU_H
@@ -83,6 +83,8 @@ If the DPPTU is connected to the microcontroller, make sure that the baud rate o
 @sa the DPPTU manuals and documentation available at <a
 href="http://robots.mobilerobots.com">http://robots.mobilerobots.com</a>
 
+
+  @ingroup OptionalClasses
 */
 
 /// A class with the commands for the DPPTU
@@ -157,6 +159,7 @@ public:
   AREXPORT virtual ~ArDPPTU();
 
   AREXPORT bool init(void);
+  AREXPORT virtual const char *getTypeName() { return "dpptu"; }
 
   virtual bool canZoom(void) const { return false; }
   virtual bool canGetRealPanTilt() const { return myCanGetRealPanTilt; }
@@ -192,33 +195,34 @@ public:
 ///@}
 
 
+protected:
 ///Move the pan and tilt axes
-///@{
-  virtual bool panTilt(double pdeg, double tdeg) 
+//@{
+  virtual bool panTilt_i(double pdeg, double tdeg) 
   { 
     return pan(pdeg) && tilt(tdeg); 
   }
 
-  AREXPORT virtual bool pan(double deg);
+  AREXPORT virtual bool pan_i(double deg);
 
-  virtual bool panRel(double deg) 
+  virtual bool panRel_i(double deg) 
   { 
     return panTilt(myPan+deg, myTilt); 
   }
 
-  AREXPORT virtual bool tilt(double deg);
+  AREXPORT virtual bool tilt_i(double deg);
 
-  virtual bool tiltRel(double deg) 
+  virtual bool tiltRel_i(double deg) 
   { 
     return panTilt(myPan, myTilt+deg); 
   }
 
-  virtual bool panTiltRel(double pdeg, double tdeg) 
+  virtual bool panTiltRel_i(double pdeg, double tdeg) 
   { 
     return panRel(pdeg) && tiltRel(tdeg);
   }
-
-
+//@}
+public:
   /// Instructs unit to await completion of the last issued command
   AREXPORT bool awaitExec(void);
   /// Halts all pan-tilt movement
@@ -245,10 +249,6 @@ public:
 ///@}
 
 
-  AREXPORT virtual double getMaxPosPan(void) const { return myMaxPan; }
-  AREXPORT virtual double getMaxNegPan(void) const { return myMinPan; }
-  AREXPORT virtual double getMaxPosTilt(void) const { return myMaxTilt; }
-  AREXPORT virtual double getMaxNegTilt(void) const { return myMinTilt; }
   AREXPORT double getMaxPanSlew(void) { return myMaxPanSlew; }
   AREXPORT double getMinPanSlew(void) { return myMinPanSlew; }
   AREXPORT double getMaxTiltSlew(void) { return myMaxTiltSlew; }
@@ -336,24 +336,37 @@ public:
   AREXPORT bool panSlew(double deg);
   /// Sets the rate the unit tilts at 
   AREXPORT bool tiltSlew(double deg);
+  bool canPanTiltSlew() { return true; }
+  
 
   /// Sets the rate that the unit pans at, relative to current slew
   AREXPORT bool panSlewRel(double deg) { return panSlew(myPanSlew+deg); }
   /// Sets the rate the unit tilts at, relative to current slew
   AREXPORT bool tiltSlewRel(double deg) { return tiltSlew(myTiltSlew+deg); }
 
+  /// called automatically by Aria::init()
+  ///@since 2.7.6
+  ///@internal
+#ifndef SWIG
+  static void registerPTZType();
+#endif
+
+protected:
 /// Get current pan/tilt position, if receiving from device, otherwise return
 /// last position request sent to the device. @see canGetRealPanTilt()
 //@{
-  virtual double getPan(void) const 
+  virtual double getPan_i(void) const 
   { 
     return myPan;
   }
-  virtual double getTilt(void) const 
+  virtual double getTilt_i(void) const 
   { 
     return myTilt;
   }
 //@}
+
+
+public:
 
 /// Get last pan/tilt requested. The device may still be moving towards these positions. (@sa getPan(), getTilt(), canGetRealPanTilt())
 //@{
@@ -390,10 +403,12 @@ protected:
   double myTiltAccel;
 
   DeviceType myDeviceType;
+  /*
   int myMaxPan;
   int myMinPan;
   int myMaxTilt;
   int myMinTilt;
+  */
   int myMaxPanSlew;
   int myMinPanSlew;
   int myMaxTiltSlew;
@@ -431,6 +446,11 @@ protected:
 
   bool myGotPanRes;
   bool myGotTiltRes;
+
+  ///@since 2.7.6
+  static ArPTZ* create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot);
+  ///@since 2.7.6
+  static ArPTZConnector::GlobalPTZCreateFunc ourCreateFunc;
 };
 
 #endif // ARDPPTU_H

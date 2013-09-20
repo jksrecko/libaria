@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARFILEPARSER_H
 #define ARFILEPARSER_H
@@ -55,6 +55,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
    (though I don't know why you'd have either).  If you have more than
    2048 words on a line you'll have problems as well.
 
+  @ingroup OptionalClasses
+
  * @note ArFileParser does not escape any special characters when writing or
  * loading to/from a file. Therefore in general keywords, values,
  * and comments must not contain characters which have special meaning
@@ -65,7 +67,8 @@ class ArFileParser
 public:
 
   /// Constructor
-  AREXPORT ArFileParser(const char *baseDirectory = "./");
+  AREXPORT ArFileParser(const char *baseDirectory = "./",
+                        bool isPreCompressQuotes = false);
 
 
 
@@ -95,7 +98,7 @@ public:
 	AREXPORT void setPreParseFunctor(ArFunctor1<const char *> *functor);
 
 
-  /// The function to parse a file
+  /// Opens, parses, and then closes the specified file.
   AREXPORT bool parseFile(const char *fileName, bool continueOnErrors = true,
 			  bool noFileNotFoundMessage = false,
 			  char *errorBuffer = NULL, size_t errorBufferLen = 0);
@@ -109,8 +112,13 @@ public:
    * even after an error is detected
   **/
   AREXPORT bool parseFile(FILE *file, char *buffer, int bufferLength, 
-			  bool continueOnErrors = true, 
-			  char *errorBuffer = NULL, size_t errorBufferLen = 0);
+			                    bool continueOnErrors = true, 
+			                    char *errorBuffer = NULL, size_t errorBufferLen = 0);
+
+
+  /// If parseFile is currently in progress, then terminates it as soon as possible.
+  AREXPORT void cancelParsing();
+
 
   /// Gets the base directory
   AREXPORT const char *getBaseDirectory(void) const;
@@ -136,6 +144,10 @@ public:
   AREXPORT void setQuiet(bool isQuiet);
 
 protected:
+
+  /// Returns true if cancelParsing() has been called during parseFile()
+  bool isInterrupted();
+
   class HandlerCBType
   {
     public:
@@ -202,6 +214,9 @@ protected:
   // handles that NULL case
   HandlerCBType *myRemainderHandler;
   bool myIsQuiet;
+  bool myIsPreCompressQuotes;
+  bool myIsInterrupted;
+  ArMutex myInterruptMutex;
 };
 
 #endif // ARFILEPARSER_H

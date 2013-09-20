@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -123,6 +123,8 @@ AREXPORT ArSimulatedLaser::ArSimulatedLaser(ArLaser *laser) :
   myCurrentReadings = new std::list<ArSensorReading *>;
   myRawReadings = myCurrentReadings;
   myIter = myAssembleReadings->begin();
+
+  myReceivedData = false;
 }
 
 AREXPORT ArSimulatedLaser::~ArSimulatedLaser()
@@ -169,7 +171,7 @@ AREXPORT bool ArSimulatedLaser::blockingConnect(void)
   else
   {
     ArLog::log(ArLog::Normal, 
-	   "%s: Could not figure out what degrees/range to use, failing connection",
+	   "%s: This laser type does not have field of view (start/end degrees) parameters configured, and does not have any defaults, cannot configure the simulated laser. Failing connection",
 	       getName());
     unlockDevice();
     laserFailedConnect();
@@ -187,7 +189,7 @@ AREXPORT bool ArSimulatedLaser::blockingConnect(void)
   else
   {
     ArLog::log(ArLog::Normal, 
-	   "%s: Could not figure out what increment to use, failing connection",
+	   "%s: This laser type does not have increment (resolution) parameter configured, and does not have a default, cannot configure the simulated laser. Failing connection",
 	       getName());
     unlockDevice();
     laserFailedConnect();
@@ -201,14 +203,46 @@ AREXPORT bool ArSimulatedLaser::blockingConnect(void)
   myRobot->remPacketHandler(&mySimPacketHandler);
   myRobot->addPacketHandler(&mySimPacketHandler, ArListPos::LAST);
 
+  bool failed = false;
+  bool robotIsRunning = myRobot->isRunning();
+
   // return true if we could send all the commands
-  if (myRobot->comInt(36, ArMath::roundInt(mySimBegin)) &&   // Start angle
-      myRobot->comInt(37, ArMath::roundInt(mySimEnd)) &&    // End angle
-      myRobot->comInt(38, ArMath::roundInt(mySimIncrement * 100.0)) && // increment
-      myRobot->comInt(35, 2)) // Enable sending data, with extended info 
-    ///@todo only choose extended info if reflector bits desired, also shorten range.
+  if (!failed && !myRobot->comInt(36, ArMath::roundInt(mySimBegin)))
+    failed = true;
+  if (!failed && !myRobot->comInt(37, ArMath::roundInt(mySimEnd)))
+    failed = true;
+  if (!failed && !myRobot->comInt(38, 
+				  ArMath::roundInt(mySimIncrement * 100.0)))
+    failed = true;
+  // Enable sending data, with extended info 
+  ///@todo only choose extended info if reflector bits desired, also shorten range.
+  if (!failed && !myRobot->comInt(35, 2))
+    failed = true;
+
+  myRobot->unlock();
+
+  if (robotIsRunning)
   {
-    myRobot->unlock();
+    ArTime startWait;
+    while (!failed && !myReceivedData)
+    {
+      if (startWait.secSince() >= 30)
+	failed = true;
+    }
+    if (!failed && myReceivedData)
+    {
+      ArLog::log(ArLog::Verbose, "%s::blockingConnect: Got data back", 
+		 getName());
+    }
+  }
+  else
+  {
+    ArLog::log(ArLog::Normal, "%s::blockingConnect: Robot isn't running so can't wait for data", getName());
+  }
+
+
+  if (!failed && (!robotIsRunning || (robotIsRunning && myReceivedData)))
+  {
     lockDevice();
     myIsConnected = true;
     myTryingToConnect = false;
@@ -340,7 +374,8 @@ AREXPORT void *ArSimulatedLaser::runThread(void *arg)
       continue;
     }
 
-    if (getLastReadingTime().secSince() > getConnectionTimeoutSeconds())
+    if (getConnectionTimeoutSeconds() > 0 && 
+	getLastReadingTime().secSince() > getConnectionTimeoutSeconds())
     {
       ArLog::log(ArLog::Terse, 
 		 "%s:  Lost connection to the laser because of error.  Nothing received for %g seconds (greater than the timeout of %g).", getName(), 
@@ -375,9 +410,11 @@ AREXPORT bool ArSimulatedLaser::simPacketHandler(ArRobotPacket *packet)
   ArPose encoderPose;
   //std::list<double>::iterator ignoreIt;  
   bool ignore;
-  
+
   if (packet->getID() != 0x60 && packet->getID() != 0x61)
     return false;
+
+  myReceivedData = true;
 
   bool isExtendedPacket = (packet->getID() == 0x61);
    
@@ -403,12 +440,11 @@ AREXPORT bool ArSimulatedLaser::simPacketHandler(ArRobotPacket *packet)
     mySimPacketEncoderTrans = myRobot->getEncoderTransform();
     mySimPacketCounter = myRobot->getCounter();
   }
-  //printf("ArLMS2xx::simPacketHandler: On reading number %d out of %d, new %d\n", readingNumber, totalNumReadings, newReadings);
+  //printf("ArSimulatedLaser::simPacketHandler: On reading number %d out of %d, new %d\n", readingNumber, totalNumReadings, newReadings);
   // if we have too many readings in our list of raw readings, pop the extras
   while (myAssembleReadings->size() > totalNumReadings)
   {
-    //ArLog::log(ArLog::Verbose, "ArLMS2xx::simPacketHandler, too many readings, popping one.");
-    ArLog::log(ArLog::Terse, "ArLMS2xx::simPacketHandler, too many readings, popping one.");
+    ArLog::log(ArLog::Terse, "ArSimulatedLaser::simPacketHandler, too many readings, popping one.");
     tempIt = myAssembleReadings->begin();
     if (tempIt != myAssembleReadings->end())
       delete (*tempIt);

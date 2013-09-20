@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -42,6 +42,10 @@ AREXPORT ArRobotPacketSender::ArRobotPacketSender(unsigned char sync1,
   myPacket(sync1, sync2)
 {
   myDeviceConn = NULL;
+	myTracking = false;
+	myTrackingLogName.clear();
+  mySendingMutex.setLogName("ArRobotPacketSender");
+  myPacketSentCallback = NULL;
 }
 
 /**
@@ -60,6 +64,37 @@ AREXPORT ArRobotPacketSender::ArRobotPacketSender(
   myPacket(sync1, sync2)
 {
   myDeviceConn = deviceConnection;
+	myTracking = false;
+	myTrackingLogName.clear();
+  mySendingMutex.setLogName("ArRobotPacketSender");
+  myPacketSentCallback = NULL;
+}
+
+/**
+   @param deviceConnection device connection to send packets to
+   @param sync1 first byte of the header this sender will send, this 
+   should be left as the default in nearly all cases, or it won't work with any
+   production robot. ie don't mess with it
+   @param sync2 second byte of the header this sender will send, this 
+   should be left as the default in nearly all cases, or it won't work with any
+   production robot. ie don't mess with it
+   @param tracking if true write packet-tracking log messages for each packet sent.
+   @param trackingLogName name (packet type) to include in packet-tracking log messages 
+
+*/
+AREXPORT ArRobotPacketSender::ArRobotPacketSender(
+	ArDeviceConnection *deviceConnection, 
+    unsigned char sync1,
+	unsigned char sync2,
+	bool tracking,
+	const char *trackingLogName) :
+  myPacket(sync1, sync2),
+	myTracking(tracking),
+	myTrackingLogName(trackingLogName)
+{
+  myDeviceConn = deviceConnection;
+  mySendingMutex.setLogName("ArRobotPacketSender");
+  myPacketSentCallback = NULL;
 }
 
 AREXPORT ArRobotPacketSender::~ArRobotPacketSender()
@@ -93,12 +128,25 @@ AREXPORT bool ArRobotPacketSender::com(unsigned char command)
   if (!connValid())
     return false;
 
+  bool ret;
+  
+  mySendingMutex.lock();
+
   myPacket.empty();
   myPacket.setID(command);
 
   myPacket.finalizePacket();
+
+  // the old one seems wrong...  (next line)
+  //  ret = myDeviceConn->write(myPacket.getBuf(), myPacket.getLength());
+  ret = (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0);
+
+  if (myPacketSentCallback != NULL)
+    myPacketSentCallback->invoke(&myPacket);
+
+  mySendingMutex.unlock();
   
-  return myDeviceConn->write(myPacket.getBuf(), myPacket.getLength());
+  return ret;
 }
 
 /**
@@ -112,6 +160,10 @@ AREXPORT bool ArRobotPacketSender::comInt(unsigned char command,
 
   if (!connValid())
     return false;
+
+  bool ret = true;
+
+  mySendingMutex.lock();
 
   myPacket.empty();
   myPacket.setID(command);
@@ -128,11 +180,14 @@ AREXPORT bool ArRobotPacketSender::comInt(unsigned char command,
 
   myPacket.finalizePacket();
 
-  if (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0)
-    return true;
+  ret = (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0);
 
-  return false;
+  if (myPacketSentCallback != NULL)
+    myPacketSentCallback->invoke(&myPacket);
 
+  mySendingMutex.unlock();
+
+  return ret;
 }
 
 /**
@@ -163,6 +218,10 @@ AREXPORT bool ArRobotPacketSender::comStr(unsigned char command,
   if (size > 199) // 200 - 1 byte for length
     return false;
 
+  bool ret = true;
+
+  mySendingMutex.lock();
+
   myPacket.empty();
   
   myPacket.setID(command);
@@ -172,11 +231,16 @@ AREXPORT bool ArRobotPacketSender::comStr(unsigned char command,
   
   myPacket.finalizePacket();
 
-  if (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0)
-    return true;
+	//myPacket.log();
 
-  return false;
-  
+  ret = (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0);
+
+  if (myPacketSentCallback != NULL)
+    myPacketSentCallback->invoke(&myPacket);
+
+  mySendingMutex.unlock();
+
+  return ret;
 }
 
 /**
@@ -195,6 +259,10 @@ AREXPORT bool ArRobotPacketSender::comStrN(unsigned char command,
 
   if(size > 199) return false;   // 200 - 1 byte for length
 
+  bool ret = true;
+
+  mySendingMutex.lock();
+
   myPacket.empty();
   
   myPacket.setID(command);
@@ -205,10 +273,67 @@ AREXPORT bool ArRobotPacketSender::comStrN(unsigned char command,
   
   myPacket.finalizePacket();
 
-  if (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0)
-    return true;
+	//myPacket.log();
+
+  ret = (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0);
+
+  if (myPacketSentCallback != NULL)
+    myPacketSentCallback->invoke(&myPacket);
+
+  mySendingMutex.unlock();
 
   return false;
+  
+}
+
+
+/**
+ * Sends an ArRobotPacket
+   @param packet ArRobotPacket
+   @return whether the command could be sent or not
+*/
+AREXPORT bool ArRobotPacketSender::sendPacket(ArRobotPacket *packet)
+{
+  if (!connValid())
+    return false;
+
+  //if(size > 199) return false;   // 200 - 1 byte for length
+
+  bool ret = true;
+
+  mySendingMutex.lock();
+  
+  packet->finalizePacket();
+
+	// if tracking is on - log packet - also make sure
+	// buffer length is in range
+	if ((myTracking) && (packet->getLength() < 10000)) {
+
+		unsigned char *buf = (unsigned char *) packet->getBuf();
+		
+		char obuf[10000];
+		obuf[0] = '\0';
+		int j = 0;
+		for (int i = 0; i < packet->getLength(); i++) {
+			sprintf (&obuf[j], "_%02x", buf[i]);
+			j= j+3;
+		}
+		ArLog::log (ArLog::Normal,
+				            "Send Packet: %s packet = %s", 
+										myTrackingLogName.c_str(), obuf);
+
+
+	}
+
+	//packet->log();
+  ret = (myDeviceConn->write(packet->getBuf(), packet->getLength()) >= 0);
+
+  if (myPacketSentCallback != NULL)
+    myPacketSentCallback->invoke(packet);
+
+  mySendingMutex.unlock();
+
+  return ret;
   
 }
 
@@ -216,14 +341,29 @@ AREXPORT bool ArRobotPacketSender::comDataN(unsigned char command, const char* d
 {
   if(!connValid()) return false;
   if(size > 200) return false;
+
+  bool ret = true;
+
+  mySendingMutex.lock();
+
   myPacket.empty();
   myPacket.setID(command);
   myPacket.uByteToBuf(STRARG);
   myPacket.strNToBuf(data, size);
   myPacket.finalizePacket();
-  if(myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0)
-      return true;
-  return false;
+
+  ret = (myDeviceConn->write(myPacket.getBuf(), myPacket.getLength()) >= 0);
+
+  if (myPacketSentCallback != NULL)
+    myPacketSentCallback->invoke(&myPacket);
+
+  mySendingMutex.unlock();
+
+  return ret;
 }
 
-
+AREXPORT void ArRobotPacketSender::setPacketSentCallback(
+	ArFunctor1<ArRobotPacket *> *functor)
+{
+  myPacketSentCallback = functor;
+}

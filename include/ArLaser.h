@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARRANGEDEVICELASER_H
 #define ARRANGEDEVICELASER_H
@@ -33,40 +33,42 @@ class ArDeviceConnection;
 
 
 
-/**
+/** Range device interface specialized for laser rangefinder sensors.
+
    This class is a subclass of ArRangeDeviceThreaded meant for any
    planar scanning lasers, like the SICK lasers, Hokoyo URG series
-   lasers, etc.  Unlike most base classes this contains the superset
+   lasers, etc.  Unlike other base classes this contains the superset
    of everything that may need to be configured on any of the sensors,
-   this is so that the configuration and parameter files don't have to
-   deal with anything sensor specific.
+   even though some subclasses may only provide some of those parameters
+   and features. (This allows the configuration interfaces and parameter
+   files to work for any laser type.)
 
-   Laser objects are created by ArLaserConnector::connectLasers()
+   Normally, a program does not define or create any ArLaser objects
+   directly. Instead,
+   objects (device-specific subclasses of ArLaser) are created by ArLaserConnector::connectLasers()
    based on the robot parameter file and command line arguments, and
-   the resulting laser objects are stored in the ArRobot object
-   (See ArRobot::getLaserMap() and ArRobot::findLaser()).  For most
-   uses, use ArLaserConnector rather than explicitly instantiating
-   an ArLaser class or any subclasses.
+   the resulting ArLaser objects are stored in the ArRobot object
+   Use ArRobot::getLaserMap() or ArRobot::findLaser() to access the ArLaser
+   objects after calling ArLaserConnector::connectLasers(). 
 
-   To see the different things you can set on a laser, call the
-   functions canSetDegrees, canChooseRange, canSetIncrement,
-   canChooseIncrement, canChooseUnits, canChooseReflectorBits,
-   canSetPowerControlled, canChooseStartBaud, and canChooseAutoBaud to
-   see what is available (the help for each of those tells you what
-   functions they are associated with, and for each function
-   associated with one of those it tells you to see the associated
-   function).  You should probably just use the ArLaserConnector to do
-   this though, unless you are a very advanced user with a specific
-   goal.
+   The
+   canSetDegrees(), canChooseRange(), canSetIncrement(),
+   canChooseIncrement(), canChooseUnits(), canChooseReflectorBits(),
+   canSetPowerControlled(), canChooseStartBaud(), and canChooseAutoBaud()  and
+other similar functions are used by ArLaserConnector to test if a parameter
+   is relevant to a specific laser type.
 
-   If you want to create your own new laser class to deal with sensors
-   that are not default in ARIA, you can do that more easily now.  All
-   the laser* calls are ones meant for the inheriting laser classes to
-   call, they all have help that says what they are meant for.  ArUrg
-   is the best current example to show how to use it all (and the
-   smallest and most self contained).  A brief overview is you should
-   use the laserAllow* calls to set up what settings the new laser
-   will allow.  You may also want to use the override the laserSetName
+
+   @par Creating New ArLaser Subclasses
+   If you want to create your own new class to implement a sensor
+   not in ARIA, create a subclass of this class.  ArUrg
+   is the best current example of this.
+   Call the laserAllow* 
+   functions in its constructor depending on what features
+   that laser sensor has (use the laserAllowSet* functions if it is possible
+   to set any value in a range, or use the laserAllow*Choices functions if it
+   is only possible to set specific values).
+   You may also want to use the override the laserSetName
    call so that your own mutexes will get named appropriately.  You
    can use laserSetDefaultTcpPort to set the default TCP port (which
    you should do if the laser normally is connected to over TCP).  You
@@ -102,6 +104,8 @@ class ArDeviceConnection;
    example for that one).
 
    @since 2.7.0
+   @ingroup ImportantClasses
+   @ingroup DeviceClasses
 **/
 
 class ArLaser : public ArRangeDeviceThreaded
@@ -549,6 +553,8 @@ public:
   AREXPORT virtual void applyTransform(ArTransform trans,
                                         bool doCumulative = true);
 
+  /// Makes it so we'll apply simple naming to all the lasers
+  AREXPORT static void useSimpleNamingForAllLasers(void);
 protected:
   
   /// Converts the raw readings into the buffers (needs to be called
@@ -748,6 +754,8 @@ protected:
   int myReadingCurrentCount;
   int myReadingCount;
   bool myRobotRunningAndConnected;
+
+  static bool ourUseSimpleNaming;
 };
 
 #endif // ARRANGEDEVICELASER_H

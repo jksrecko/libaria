@@ -19,6 +19,7 @@
 %feature("directors", "1");*/ /* Enable on all classes. */
 
 %{
+#include <cstddef>
 #include "Aria.h"
 #include "ArNetworking.h"
 #include "../include/wrapper_ExtraClasses.h"

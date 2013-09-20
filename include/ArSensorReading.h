@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARSENSORREADING_H
 #define ARSENSORREADING_H
@@ -51,9 +51,9 @@ public:
   /// Destructor
   AREXPORT virtual ~ArSensorReading();
 
-  /// Gets the range of the reading
+  /// Gets the range from sensor of the reading
   /**
-     @return the distance return from the sensor (how far from the robot)
+     @return the distance to the reading from the sensor itself
   */
   unsigned int getRange(void) const { return myRange; }
 
@@ -80,17 +80,30 @@ public:
   /// @return the position of the reading (ie the obstacle where the sonar pinged back)
   ArPose getLocalPose(void) const { return myLocalReading; }
 
-  /// Gets the pose of the robot at which the reading was taken 
+  /** Gets the pose of the robot at which the reading was taken 
+      @sa getEncoderPoseTaken()
+      @sa getTimeTaken()
+      @sa ArRobot::getPose()
+  */
   ArPose getPoseTaken(void) const { return myReadingTaken; }
 
-  /// Gets the robot's encoder pose the reading was taken at
+  /** Gets the robot's encoder pose the reading was taken at
+      @sa getPoseTaken()
+      @sa ArRobot::getEncoderPose()
+  */
   ArPose getEncoderPoseTaken(void) const { return myEncoderPoseTaken; }
 
-  /// Gets the X location of the sonar on the robot
+  /** Gets the X location of the sonar on the robot
+      @sa getSensorPosition()
+  */
   double getSensorX(void) const { return mySensorPos.getX(); }
-  /// Gets the Y location of the sensor on the robot
+  /** Gets the Y location of the sensor on the robot
+      @sa getsensorPosition()
+  */
   double getSensorY(void) const { return mySensorPos.getY(); }
-  /// Gets the heading of the sensor on the robot
+  /** Gets the heading of the sensor on the robot
+      @sa getsensorPosition()
+  */
   double getSensorTh(void) const { return mySensorPos.getTh(); }
   
   /// Gets whether this reading should be ignore or not. e.g. the sensor
@@ -122,11 +135,17 @@ public:
   /// Gets the sine component of the heading of the sensor reading
   double getSensorDY(void) const { return mySensorSin; }
 
-  /// Gets the X locaiton of the robot when the reading was received
+  /** Gets the X locaiton of the robot when the reading was received
+      @sa getPoseTaken()
+  */
   double getXTaken(void) const { return myReadingTaken.getX(); }
-  /// Gets the Y location of the robot when the reading was received
+  /** Gets the Y location of the robot when the reading was received
+      @sa getPoseTaken()
+  */
   double getYTaken(void) const { return myReadingTaken.getY(); }
-  /// Gets the th (heading) of the robot when the reading was received
+  /** Gets the th (heading) of the robot when the reading was received
+      @sa getPoseTaken()
+  */
   double getThTaken(void) const { return myReadingTaken.getTh(); }
 
   /// Gets the counter from when the reading arrived

@@ -79,12 +79,12 @@ C:\swig\swig.exe -Fmicrosoft -c++ -python -module ArNetworkingPy -DWIN32 -DAREXP
 				DebugInformationFormat="3"/>
 			<Tool
 				Name="VCCustomBuildTool"
-				Description="Custom Build Step: Running C:\swig\swig.exe to generate Python wrapper code"
+				Description="(ArNetworkingSwigPython Custom Build Step) Running C:\swig\swig.exe to generate Python wrapper code"
 				CommandLine="del &quot;$(ProjectDir)\ArNetworkingPy_wrap.cpp&quot;
 del &quot;$(ProjectDir)\ArNetworkingPy_wrap.h&quot;
 del &quot;$(ProjectDir)\ArNetworkingPy.py&quot;
 cd $(ProjectDir)
-C:\swig\swig.exe -Fmicrosoft -c++ -python -module ArNetworkingPy -DWIN32 -DAREXPORT -outdir $(ProjectDir)  -o ArNetworkingPy_wrap.cpp -I$(ProjectDir)\..\include -I$(ProjectDir)\..\ArNetworking\include $(ProjectDir)\..\ArNetworking\include\wrapper.i
+C:\swig\swig.exe -Fmicrosoft -c++ -python -module ArNetworkingPy -DWIN32 -DAREXPORT -outdir .  -o ArNetworkingPy_wrap.cpp -I..\include -I..\ArNetworking\include ..\ArNetworking\include\wrapper.i
 "
 				AdditionalDependencies="../ArNetworking/include/wrapper.i;../ArNetworking/include/*.h"
 				Outputs="$(ProjectDir)/ArNetworkingPy.py;$(ProjectDir)/ArNetworkingPy_wrap.cpp;$(ProjectDir)/ArNetworkingPy_wrap.h"/>

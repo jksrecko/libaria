@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -348,71 +348,104 @@ For more information about the use of <code>MapInfo</code> metadata, see the dis
  * For <code>GoalType</code>, <code>DockType</code>, and
  * <code>LocationType</code>, the following ParamNames are 
  * also supported:
- *  - <code>Shape=[Plain|Cross|HBars|Triangle|T|U|VBars]</code> : Shape of the icon used 
+ * <ul>
+ *  <li> <code>Shape=</code>[Plain|Cross|HBars|Triangle|T|U|VBars] : Shape of the icon used 
  *    to draw the pose. (The default is <code>Plain</code>.)   
- *      - <code>Plain</code>: The default shape, a filled square
- *      - <code>Cross</code>: A cross shape
- *      - <code>HBars</code>: A square shape containing horizontal bars or stripes
- *      - <code>Label</code>: A location that simply marks a text label expected to be
+ *    <ul>
+ *      <li> <code>Plain</code>: The default shape, a filled square
+ *      <li> <code>Cross</code>: A cross shape
+ *      <li> <code>HBars</code>: A square shape containing horizontal bars or stripes
+ *      <li> <code>Label</code>: A location that simply marks a text label expected to be
  *        used with <code>LocationType</code> and a fixed size font (<code>FtFix</code>, see below)
- *      - <code>Triangle</code>: A Triangle
- *      - <code>T</code>: A "T" shape
- *      - <code>U</code>: A "U" shape
- *      - <code>VBars</code>: A square shape containing vertical bars or stripes
- *  - <code>Size=</code><i>Integer</i> : Width/height of the displayed icon in mm.  
- *  - <code>Color</code><i>0|1|2</i><code>=</code><i>ColorVal</i> : Colors with which to draw the icon.
+ *      <li> <code>Triangle</code>: A Triangle
+ *      <li> <code>T</code>: A "T" shape
+ *      <li> <code>U</code>: A "U" shape
+ *      <li> <code>VBars</code>: A square shape containing vertical bars or stripes
+ *    </ul>
+    </li>
+ *  <li> <code>Size=</code><i>Integer</i> : Width/height of the displayed icon in mm.  
+ *  <li> <code>Color</code><i>0|1|2</i><code>=</code><i>ColorVal</i> : Colors with which to draw the icon.
  *    (In general, <code>Color0</code> is the primary icon color, <code>Color1</code> is the heading 
- *    color, and <code>Color2</code> is the background/outline color.) *    <i>ColorVal</i>
+ *    color, and <code>Color2</code> is the background/outline color.)   <i>ColorVal</i>
  *    is a hexadecimal number starting with <code>0x</code>, and followed
  *    by two digits for the red component, two digits for green, and two
  *    digits for blue. For example, <code>0xff00ff</code>.
- *  - <code>FtFix=</code><i>Integer</i> : A boolean.  Set to 0 if the label font should be scaled 
+ *  <li> <code>FtFix=</code><i>Integer</i> : A boolean.  Set to 0 if the label font should be scaled 
  *    when the map is zoomed (the default) set to 1 if the label should remain
  *    a fixed size.  Note that the label font will only be scaled if the platform 
  *    supports it.  Also note that if this is set to 1, then the <code>FtSize</code> <em>must</em>
  *    also be specified.
- *  - <code>FtSize=</code><i>Integer</i> : Point size of the displayed font.  This will vary greatly 
+ *  <li> <code>FtSize=</code><i>Integer</i> : Point size of the displayed font.  This will vary greatly 
  *    depending on the value of <code>FtFix</code>.  If the font is scaled, then
  *    the point size is expressed in mm and <em>must</em> be a multiple 
  *    of 100. If the font is fixed, then the point size is in pixels.  
  *    (If the font should be scaled, but the platform does not support it,
  *    then a best guess is made as to the desired size.)
- *  .
+ *  </ul>
  *
  * In addition, the following ParamName is supported only for 
  * <code>GoalType</code>s:
- *  - <code>Heading=[Required|Optional|Never]</code> : Whether a heading is required
+  <ul>
+ *  <li> <code>Heading=[Required|Optional|Never]</code> : Whether a heading is required
  *    to be given with this goal, is optional, or is irrelevant.
- *  .
+ * </ul>
  *
  * For <code>BoundaryType</code>, the following ParamNames are also supported:
- *  - <code>NameRequired=</code><i>0|1</i> : Whether the item must be named
+ * <ul>
+ *  <li> <code>NameRequired=</code><i>0|1</i> : Whether the item must be named
  *  (1=true, 0=false)
- *  - <code>Color</code><i>0|1|2</i><code>=</code><i>ColorVal</i>: Color with which to draw the line.
- *  - <code>IsData=</code><i>0|1</i> : Set to 1 to indicate that the item is inherently 
+ *  <li> <code>Shape=[Plain|Measure|Dash] </code> Shape or decoration of the line. 
+ *    (The default is <code>Plain</code>.)  
+ *  <li> <code>Color</code><i>0|1|2</i><code>=</code><i>ColorVal</i>: Color with which to draw the line.
+ *  <li> <code>IsData=</code><i>0|1</i> : Set to 1 to indicate that the item is inherently 
  *    part of the map data.  The default is 0 to indicate user-created
  *    items. 
- *  - <code>FtFix=</code><i>Integer</i> : A boolean.  Set to 0 if the label font should be scaled 
+ *  <li> <code>FtFix=</code><i>Integer</i> : A boolean.  Set to 0 if the label font should be scaled 
  *    when the map is zoomed (the default) set to 1 if the label should remain
  *    a fixed size.  Note that the label font will only be scaled if the platform 
  *    supports it.  Also note that if this is set to 1, then the <code>FtSize</code> <em>must</em>
  *    also be specified.
- *  - <code>FtSize=</code><i>Integer</i> : Point size of the displayed font.  This will vary greatly 
+ *  <li> <code>FtSize=</code><i>Integer</i> : Point size of the displayed font.  This will vary greatly 
  *    depending on the value of <code>FtFix</code>.  If the font is scaled, then
  *    the point size is expressed in mm and <em>must</em> be a multiple 
  *    of 100. If the font is fixed, then the point size is in pixels.  
  *    (If the font should be scaled, but the platform does not support it,
  *    then a best guess is made as to the desired size.)
- *  .
+ * </ul>
  *
  * For <code>SectorType</code>, the following ParamNames are also supported:
- *  - <code>NameRequired=</code><i>0|1</i> : Whether the item must be named
- *  - <code>Shape=</code><i>Plain|Arrow</i> : Shape of the icon used to draw the rectangle. 
- *    (The default is <code>Plain</code>.)  
- *  - <code>Color</code><i>0|1</i><code>=</code><i>ColorVal</i>: Colors with which to draw the 
+ * <ul>
+ *  <li> <code>NameRequired=</code><i>0|1</i> : Whether the item must be named
+ *  <li> <code>Shape=[Plain|
+ *                 Arrow|FillArrow|GradArrow|
+ *                 Door|
+ *                 Elevator|
+ *                 Stairs|
+ *                 Circle|FillCircle|
+ *                 Cross|FillCross|
+ *                 Diamond|FillDiamond|
+ *                 Octagon|FillOctagon|
+ *                 PrefWayDriveOnLeft|FillPrefWayDriveOnLeft|GradPrefWayDriveOnLeft|
+ *                 PrefWayDriveOnRight|FillPrefWayDriveOnRight|GradPrefWayDriveOnRight|
+ *                 Star|FillStar|
+ *                 Triangle|FillTriangle|
+ *                 TwoWayDriveOnLeft|FillTwoWayDriveOnLeft|GradTwoWayDriveOnLeft|
+ *                 TwoWayDriveOnRight|FillTwoWayDriveOnRight|GradTwoWayDriveOnRight|
+ *                 Dash] 
+ *    </code> 
+ *		Shape of the icon used to draw the rectangle. The default is <code>Plain</code>.
+ *    The <code>Dash</code> shape means that the rectangle is drawn with a dashed outline.  
+ *    The <code>Door</code>, <code>Elevator</code>, and <code>Stairs</code> shapes designate
+ *    a special icon to be drawn in the rectangle.  All other shapes refer to a repeating
+ *    pattern of geometric shapes.  If the <code>Fill</code> prefix is specified, then the 
+ *    geometric shape is filled with Color1.  If the <code>Grad</code> prefix is specified
+ *    (when available), then the geometric shape is filled with a gradient, shaded pattern 
+ *    from Color0 to Color1.
+ *  <li> <code>Color</code><i>0|1</i><code>=</code><i>ColorVal</i>: Colors with which to draw the 
  *     rectangle. (In general, <code>Color0</code> is the primary rectangle color, 
  *     <code>Color1</code> is the shape/icon color.) 
- *  .
+ * </ul>
+ *  
  * 
  * <i>Important Note</i>: if a map defines special <code>GoalType</code> or
  * <code>DockType</code> items, 
@@ -458,7 +491,8 @@ AREXPORT ArMap::ArMap(const char *baseDirectory,
 		                  const char *configDesc,
                       bool ignoreEmptyFileName,
                       ArPriority::Priority priority,
-                      const char *tempDirectory) :
+                      const char *tempDirectory,
+		      int configProcessFilePriority) :
 
   myMutex(),
   myBaseDirectory((baseDirectory != NULL) ? baseDirectory : ""),
@@ -471,6 +505,7 @@ AREXPORT ArMap::ArMap(const char *baseDirectory,
 
   myConfigProcessedBefore(false),
   myConfigMapName(),
+  myForceMapLoad(false),
 
   myCurrentMap(new ArMapSimple(baseDirectory, tempDirectory)),
   myLoadingMap(NULL),
@@ -492,7 +527,7 @@ AREXPORT ArMap::ArMap(const char *baseDirectory,
 
     myConfigMapName[0] = '\0';
     myConfigProcessedBefore = false;
-    
+    myForceMapLoad = false;
     const char *displayHint = "RobotFile:Map Files (*.map)|*.map";
 
     Aria::getConfig()->addParam(ArConfigArg(configParam, 
@@ -502,7 +537,8 @@ AREXPORT ArMap::ArMap(const char *baseDirectory,
 				                        configSection, 
 				                        priority,
                                 displayHint);
-    Aria::getConfig()->addProcessFileWithErrorCB(&myProcessFileCB, 100);
+    Aria::getConfig()->addProcessFileWithErrorCB(&myProcessFileCB, 
+						 configProcessFilePriority);
   }
 #endif //ARINTERFACE
 
@@ -522,6 +558,8 @@ AREXPORT ArMap::ArMap(const ArMap &other) :
 
   myConfigProcessedBefore(false), // TODO This is not always init in ArMap
   myConfigMapName(),
+  myForceMapLoad(false),
+
 
   myCurrentMap(new ArMapSimple(*other.myCurrentMap)),
   myLoadingMap(NULL),
@@ -565,6 +603,7 @@ AREXPORT ArMap &ArMap::operator=(const ArMap &other)
 
     myConfigProcessedBefore(false), // TODO This is not always init in ArMap
     myConfigMapName(),
+    myForceMapLoad(false),
     **/
 
     *myCurrentMap = *other.myCurrentMap;
@@ -928,7 +967,7 @@ AREXPORT void ArMap::mapChanged(void)
 
 
 AREXPORT void ArMap::addMapChangedCB(ArFunctor *functor, 
-				                                   ArListPos::Pos position)
+				     int position)
 { 
   myCurrentMap->addMapChangedCB(functor, position);
 
@@ -941,7 +980,7 @@ AREXPORT void ArMap::remMapChangedCB(ArFunctor *functor)
 } // end method remMapChangedCB
 
 AREXPORT void ArMap::addPreMapChangedCB(ArFunctor *functor,
-                                              ArListPos::Pos position)
+					int position)
 { 
   myCurrentMap->addPreMapChangedCB(functor, position);
 
@@ -1313,6 +1352,11 @@ AREXPORT ArMapObjectsInterface *ArMap::getInactiveObjects()
   return myCurrentMap->getInactiveObjects();
 }
 
+AREXPORT ArMapObjectsInterface *ArMap::getChildObjects()
+{
+  return myCurrentMap->getChildObjects();
+}
+
 // TODO ???????????????????????????????????????
 
 AREXPORT bool ArMap::readDataPoint( char *line)
@@ -1381,7 +1425,19 @@ AREXPORT bool ArMap::remFromFileParser(ArFileParser *fileParser)
 
 
 AREXPORT bool ArMap::parseLine(char *line)
-{ 
+{
+  // Normally, myLoadingMap is already constructed (e.g. in readFile). 
+  // The mapClient example simply calls parseLine and parsingComplete,
+  // thereby bypassing the normal contruction.  And so, it has been 
+  // added here.
+  if (myLoadingMap == NULL) {
+
+    myLoadingMap = new ArMapSimple(myBaseDirectory.c_str(),
+                                   myCurrentMap->getTempDirectory(), 
+                                   "ArMapLoading::myMutex");
+    myLoadingMap->setQuiet(myIsQuiet);
+  }
+  
   if (myLoadingMap) {
     return myLoadingMap->parseLine(line);
   }
@@ -1477,6 +1533,12 @@ bool ArMap::processFile(char *errorBuffer, size_t errorBufferLen)
   // If file name is empty, clear out all current information
   if (myIgnoreEmptyFileName && myConfigMapName[0] == '\0')
   {
+    if (ArUtil::strcmp(myConfigMapName, myFileName.c_str()) == 0)
+    {
+      ArLog::log(ArLog::Normal, "Using an empty map since file name is still empty");
+      return true;
+    }
+
     ArLog::log(ArLog::Normal, "Using an empty map since empty map file name");
     lock();
 
@@ -1491,18 +1553,19 @@ bool ArMap::processFile(char *errorBuffer, size_t errorBufferLen)
 
   // Reload map if this is the first time, or we need to use a new file, or the
   // existing file has changed.
-  if (!myConfigProcessedBefore || 
+  if (!myConfigProcessedBefore || myForceMapLoad ||
       ArUtil::strcmp(myConfigMapName, myFileName.c_str()) != 0 ||
       mapFileStat.st_mtime != myReadFileStat.st_mtime)
   {
 
     ArLog::log(myCurrentMap->getMapChangedLogLevel(), 
-               "ArMap::processFile Loading map because configProcessedBefore %d myFileName \"%s\" configFileName \"%s\" mapFileTime %lu readFileTime %lu (Diff %ld)", 
-	             myConfigProcessedBefore, 
+               "ArMap::processFile Loading map because configProcessedBefore %d forceMapLoad %d myFileName \"%s\" configFileName \"%s\" mapFileTime %lu readFileTime %lu (Diff %ld)", 
+	       myConfigProcessedBefore, myForceMapLoad,
                myFileName.c_str(), myConfigMapName,
-	             mapFileStat.st_mtime, myReadFileStat.st_mtime, 
+	       mapFileStat.st_mtime, myReadFileStat.st_mtime, 
                mapFileStat.st_mtime - myReadFileStat.st_mtime);
     myConfigProcessedBefore = true; 
+    myForceMapLoad = false;
 
     // If successful, the call to readFile will update the myFileName attribute.
     if (readFile(myConfigMapName, errorBuffer, errorBufferLen))

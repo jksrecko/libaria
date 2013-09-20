@@ -29,12 +29,15 @@ public:
   AREXPORT void closePopup(ArTypes::Byte4 id,
 			    const char *closeMessage);
   /// The call from the network that the popup was clicked
+  /// @internal
   AREXPORT void netPopupClicked(ArServerClient *client, 
 				ArNetPacket *packet);
   /// The call from the network for getting the popup list
+  /// @internal
   AREXPORT void netPopupList(ArServerClient *client, 
 				ArNetPacket *packet);
   /// Our cycle callback
+  /// @internal
   AREXPORT void serverCycleCallback(void);
   enum PopupType { 
     NOICON = 0, ///< No icon at all

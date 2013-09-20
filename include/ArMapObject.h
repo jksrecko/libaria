@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 /*  \file ArMapObject.h
  *  \brief Contains the definition of the ArMapObject class.
@@ -77,6 +77,28 @@ public:
    * occurred
   **/
   AREXPORT static ArMapObject *createMapObject(ArArgumentBuilder *arg);
+  
+
+  /// ArArgumentBuilder indices for the various map object attributes
+  enum ArgIndex {
+    TYPE_ARG_INDEX = 0,
+    POSE_X_ARG_INDEX = 1,
+    POSE_Y_ARG_INDEX = 2,
+    TH_ARG_INDEX = 3,
+    DESC_ARG_INDEX = 4,
+    ICON_ARG_INDEX = 5,
+    NAME_ARG_INDEX = 6,
+    LAST_POSE_ARG_INDEX = NAME_ARG_INDEX,
+    FROM_X_ARG_INDEX = 7,
+    FROM_Y_ARG_INDEX = 8,
+    TO_X_ARG_INDEX = 9,
+    TO_Y_ARG_INDEX = 10,
+    LAST_ARG_INDEX = TO_Y_ARG_INDEX
+  };
+
+  enum {
+    ARG_INDEX_COUNT = LAST_ARG_INDEX + 1
+  };
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Instance Methods
@@ -90,7 +112,8 @@ public:
    * location; for rectangles, this specifies the rotation of the rectangle (in
    * pose.getTh())
    * @param description an optional char * description of the object.
-   * @param iconName char * currently unused
+   * @param iconName char * currently unused: use "ICON" or NULL as a dummy value. Must
+   * be a non-empty, non-whitespace string.
    * @param name the char * name of the map object; depending on the object type,
    * this may be optional or required
    * @param hasFromTo a bool set to true if the object is a region (i.e. line or
@@ -144,9 +167,17 @@ public:
 
   /// Returns the icon string of the object 
   /**
-   * Reserved for future use
+   * The use of the ICON field is application-dependent.  It currently contains
+   * either the string "ICON" or "ID=<n>".  The ID is used only when auto-numbering
+   * has been turned on in the MapInfo.
   **/
   AREXPORT const char *getIconName(void) const;
+
+  /// Returns the numerical identifier of the object, when auto-numbering is on.
+  /**
+   * This method returns 0 when auto-numbering is off.
+  **/
+  AREXPORT int getId() const;
 
   /// Sets the description of the map object
   /**
@@ -199,6 +230,19 @@ public:
   **/
   AREXPORT std::list<ArLineSegment> getFromToSegments(void);
 
+  /// Gets a line segment that goes from the from to the to
+  /**
+   * Note that this function doesn't know whether this is supposed to
+   * be a rectangle or a line.  (For example, it makes sense on a
+   * ForbiddenLine but not a ForbiddenAra.)  This is just here to
+   * store it.  Note that this might be a little more CPU/Memory
+   * intensive transfering these around, so you may want to keep a
+   * copy of them if you're using them a lot (but make sure you clear
+   * the copy if the map changes).  It may not make much difference on
+   * a modern processor though (its set up this way for safety).
+  **/
+  AREXPORT ArLineSegment getFromToSegment(void);
+
   /// Computes the center pose of the map object.
   /**
    * This method determines the center of map objects that have a "from" and a 
@@ -230,7 +274,7 @@ public:
   /**
    * @param intro an optional string that should appear before the object
   **/
-  AREXPORT void log(const char *intro = NULL);
+  AREXPORT void log(const char *intro = NULL) const;
 
 
   // --------------------------------------------------------------------------
@@ -284,6 +328,8 @@ protected:
 
   /// For rectangle objects, the line segments that comprise the perimeter (even if rotated)
   std::list<ArLineSegment> myFromToSegments;
+  /// For line objects, the line
+  ArLineSegment myFromToSegment;
   
   /// Text representation written to the map file
   mutable std::string myStringRepresentation;

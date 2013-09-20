@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ariaOSDef.h"
 #include "ArExport.h"
@@ -126,6 +126,9 @@ AREXPORT void ArJoyHandler::setStats(int maxX, int minX, int maxY, int minY,
   myCenY = cenY;
 }
 
+/**
+   @swignote   Use the version of this method returning ArJoyVec3i
+*/
 AREXPORT void ArJoyHandler::getSpeeds(int *x, int *y, int *z)
 {
   *x = myTopX;
@@ -147,6 +150,8 @@ AREXPORT void ArJoyHandler::getSpeeds(int *x, int *y, int *z)
    will be within the range [-1 * y given in setSpeeds(), y given in setSpeeds()]
    @param z pointer to an integer in which to store the z value, which
    will be within the range [-1 * z given in setSpeeds(), z given in setSpeeds()]
+   @java   Use the version of this method returning ArJoyVec3i
+   @python returns a tuple of (x, y, z) instead
 **/
 
 AREXPORT void ArJoyHandler::getAdjusted(int *x, int *y, int *z)
@@ -185,8 +190,10 @@ AREXPORT void ArJoyHandler::getAdjusted(int *x, int *y, int *z)
 }
 
 /**
-   If useOSCal is true then this gets normalized values as calibrated
-   by the OS.  If useOSCal is false this finds the percentage of the
+   If useOSCal is true then this gets normalized values 
+   (between -1.0 and 1.0)  as calibrated
+   by the OS. In other words, the range [-1.0,1.0] is scaled
+   to the calibrated range determined by the set maximum.   If useOSCal is false this finds the percentage of the
    distance between center and max (or min) then takes this percentage
    and multiplies it by the speeds given the class, and returns the
    values computed from this.
@@ -197,6 +204,10 @@ AREXPORT void ArJoyHandler::getAdjusted(int *x, int *y, int *z)
     Will be within the range [-1.0, 1.0]
    @param z pointer to an integer in which to store the z value.
     Will be within the range [-1.0, 1.0]
+
+   @python Returns a tuple of (x, y, z) instead
+   @java   Use the version of this method returning ArJoyVec3f
+   @python Returns a tuple of (x, y, z) instead
 **/
 
 AREXPORT void ArJoyHandler::getDoubles(double *x, double *y, double *z)
@@ -241,6 +252,8 @@ AREXPORT void ArJoyHandler::getDoubles(double *x, double *y, double *z)
    @param x pointer to an integer in which to store x value
    @param y pointer to an integer in which to store y value
    @param z pointer to an integer in which to store z value
+   @java   Use the version of this method returning ArJoyVec3i
+   @python Returns a tuple of (x, y, z) instead
 */
 AREXPORT void ArJoyHandler::getUnfiltered(int *x, int* y, int *z)
 {

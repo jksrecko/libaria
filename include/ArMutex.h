@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,14 +19,14 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARMUTEX_H
 #define ARMUTEX_H
 
-#ifndef WIN32
+#if !defined(WIN32) || defined(MINGW)
 #include <pthread.h>
 #endif
 #include <string>
@@ -35,14 +35,16 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 class ArTime;
 class ArFunctor;
 
-/// Mutex wrapper class
+/// Cross-platform mutex wrapper class 
 /**
    This class wraps the operating system's mutex functions. It allows mutualy
    exclusive access to a critical section. This is extremely useful for
    multiple threads which want to use the same variable. On Linux, ArMutex simply
    uses the POSIX pthread interface in an object oriented manner. It also
    applies the same concept to Windows using Windows' own abilities to restrict
-   access to critical sections.
+   access to critical sections. ArMutex also adds additional
+  diagnostic/debugging tools such as logging and timing.
+ 
 
    @note ArMutex is by default a recursive mutex. This means that a 
       thread is allowed to acquire an additional lock (whether via lock() or tryLock())
@@ -52,12 +54,14 @@ class ArFunctor;
       from interrupting it.
       If you want a non-recursive mutex, so that multiple attempts by the same thread 
       to lock a mutex to block, supply an argument of 'false' to the constructor.
+
+  @ingroup UtilityClasses
 */
 class ArMutex
 {
 public:
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(MINGW)
   typedef HANDLE MutexType;
 #else
   typedef pthread_mutex_t MutexType;
@@ -170,7 +174,7 @@ protected:
   bool myFailedInit;
   MutexType myMutex;
 // Eliminating this from Windows in an attempt to debug a memory issue
-#ifndef WIN32
+#if !defined(WIN32) || defined(MINGW)
   ArStrMap myStrMap;
 #endif 
 

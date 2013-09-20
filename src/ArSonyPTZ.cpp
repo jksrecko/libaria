@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -101,9 +101,19 @@ AREXPORT ArSonyPTZ::ArSonyPTZ(ArRobot *robot) :
 {
   myRobot = robot;
   initializePackets();
+
+  setLimits(90, -90, 30, -30, 1024, 0);
+    /*
+  AREXPORT virtual double getMaxPosPan(void) const { return 90; }
+  AREXPORT virtual double getMaxNegPan(void) const { return -90; }
+  AREXPORT virtual double getMaxPosTilt(void) const { return 30; }
+  AREXPORT virtual double getMaxNegTilt(void) const { return -30; }
+  AREXPORT virtual int getMaxZoom(void) const { return 1024; }
+  AREXPORT virtual int getMinZoom(void) const { return 0; }
+  */
   
-  myDegToTilt = 0x12c / ((double) MAX_TILT);
-  myDegToPan = 0x370 / ((double) MAX_PAN);
+  myDegToTilt = 0x12c / ((double) getMaxTilt() /*MAX_TILT*/ );
+  myDegToPan = 0x370 / ((double) getMaxPan() /*MAX_PAN*/ );
 }
 
 AREXPORT ArSonyPTZ::~ArSonyPTZ()
@@ -190,18 +200,18 @@ AREXPORT bool ArSonyPTZ::backLightingOff(void)
   return sendPacket(&myPacket);
 }
 
-AREXPORT bool ArSonyPTZ::panTilt(double degreesPan, double degreesTilt)
+AREXPORT bool ArSonyPTZ::panTilt_i(double degreesPan, double degreesTilt)
 {
-  if (degreesPan > MAX_PAN)
-    degreesPan = MAX_PAN;
-  if (degreesPan < -MAX_PAN)
-    degreesPan = -MAX_PAN;
+  if (degreesPan > getMaxPan())
+    degreesPan = getMaxPan();
+  if (degreesPan < getMinPan())
+    degreesPan = getMinPan();
   myPan = degreesPan;
 
-  if (degreesTilt > MAX_TILT)
-    degreesTilt = MAX_TILT;
-  if (degreesTilt < -MAX_TILT)
-    degreesTilt = -MAX_TILT;
+  if (degreesTilt > getMaxTilt())
+    degreesTilt = getMaxTilt();
+  if (degreesTilt < getMinTilt())
+    degreesTilt = getMinTilt();
   myTilt = degreesTilt;
 
   myPanTiltPacket.byte2ToBufAtPos(ArMath::roundInt(myPan * myDegToPan), 6);
@@ -209,37 +219,37 @@ AREXPORT bool ArSonyPTZ::panTilt(double degreesPan, double degreesTilt)
   return sendPacket(&myPanTiltPacket);
 }
 
-AREXPORT bool ArSonyPTZ::panTiltRel(double degreesPan, double degreesTilt)
+AREXPORT bool ArSonyPTZ::panTiltRel_i(double degreesPan, double degreesTilt)
 {
   return panTilt(myPan + degreesPan, myTilt + degreesTilt);
 }
 
-AREXPORT bool ArSonyPTZ::pan(double degrees)
+AREXPORT bool ArSonyPTZ::pan_i(double degrees)
 {
   return panTilt(degrees, myTilt);
 }
 
-AREXPORT bool ArSonyPTZ::panRel(double degrees)
+AREXPORT bool ArSonyPTZ::panRel_i(double degrees)
 {
   return panTiltRel(degrees, 0);
 }
 
-AREXPORT bool ArSonyPTZ::tilt(double degrees)
+AREXPORT bool ArSonyPTZ::tilt_i(double degrees)
 {
   return panTilt(myPan, degrees);
 }
 
-AREXPORT bool ArSonyPTZ::tiltRel(double degrees)
+AREXPORT bool ArSonyPTZ::tiltRel_i(double degrees)
 {
   return panTiltRel(0, degrees);
 }
 
 AREXPORT bool ArSonyPTZ::zoom(int zoomValue)
 {
-  if (zoomValue > MAX_ZOOM)
-    zoomValue = MAX_ZOOM;
-  if (zoomValue < MIN_ZOOM)
-    zoomValue = MIN_ZOOM;
+  if (zoomValue > getMaxZoom())
+    zoomValue = getMaxZoom();
+  if (zoomValue < getMinZoom())
+    zoomValue = getMinZoom();
   myZoom = zoomValue;
     
   myZoomPacket.byte2ToBufAtPos(ArMath::roundInt(myZoom), 4);
@@ -261,3 +271,15 @@ AREXPORT bool ArSonyPTZ::packetHandler(ArRobotPacket *packet)
   return true;
 }
 */
+
+ArPTZConnector::GlobalPTZCreateFunc ArSonyPTZ::ourCreateFunc(&ArSonyPTZ::create);
+
+ArPTZ* ArSonyPTZ::create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot)
+{
+  return new ArSonyPTZ(robot);
+}
+
+void ArSonyPTZ::registerPTZType()
+{
+  ArPTZConnector::registerPTZType("sony", &ourCreateFunc);
+}

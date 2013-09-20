@@ -5,14 +5,23 @@
 #include "ArClientCommands.h"
 #include "ArServerMode.h"
 
+//#define ARDEBUG_SERVERBASE
+
+#if (defined(ARDEBUG_SERVERBASE))
+//#if ((_DEBUG) && defined(ARDEBUG_SERVERBASE))
+#define IFDEBUG(code) {code;}
+#else
+#define IFDEBUG(code)
+#endif 
+
 /**
    @param addAriaExitCB whether to add an exit callback to aria or not
    @param serverName the name for logging
    @param addBackupTimeoutToConfig whether to add the backup timeout
    (to clients of this server) as a config option, if this is true it
    sets a default value for the timeout of 2 minutes, if its false it
-   has no timeout (but you can set one, @see
-   ArServerBase::setBackupTimeout)
+   has no timeout (but you can set one, see
+   ArServerBase::setBackupTimeout())
    @param backupTimeoutName the name of backup timeout
    @param backupTimeoutName the description of backup timeout
    @param masterServer If this is a master server (ie a central manager)
@@ -25,6 +34,8 @@
    their own thread and are processed only when the robot is idle) or
    not... if we don't then they're processed in the main thread like
    they have always been
+   @param numClientsAllowed This is the number of client connections
+   allowed, negative values mean allow any number (the default is -1)
 **/
 
 AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB, 
@@ -35,7 +46,8 @@ AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB,
 				    bool masterServer, bool slaveServer,
 				    bool logPasswordFailureVerbosely,
 				    bool allowSlowPackets,
-				    bool allowIdlePackets) :
+				    bool allowIdlePackets,
+				    int maxClientsAllowed) :
   myProcessPacketCB(this, &ArServerBase::processPacket),
   mySendUdpCB(this, &ArServerBase::sendUdp),
   myAriaExitCB(this, &ArServerBase::close),
@@ -45,9 +57,10 @@ AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB,
   myIdentSetConnectionIDCB(this, &ArServerBase::identSetConnectionID),
   myIdentSetSelfIdentifierCB(this, &ArServerBase::identSetSelfIdentifier),
   myIdentSetHereGoalCB(this, &ArServerBase::identSetHereGoal),
+	myStartRequestTransactionCB(this, &ArServerBase::handleStartRequestTransaction),
+	myEndRequestTransactionCB(this, &ArServerBase::handleEndRequestTransaction),
   myIdleProcessingPendingCB(this, &ArServerBase::netIdleProcessingPending)
 {
-
 
 
   myDataMutex.setLogName("ArServerBase::myDataMutex");
@@ -59,7 +72,8 @@ AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB,
 	  "ArServerBase::myProcessingSlowIdleMutex");
   myIdleCallbacksMutex.setLogName(
 	  "ArServerBase::myIdleCallbacksMutex");
-
+  myBackupTimeoutMutex.setLogName("ArServerBase::myBackupTimeoutMutex");
+  
   if (serverName != NULL && serverName[0] > 0)
     myServerName = serverName;
   else
@@ -88,6 +102,8 @@ AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB,
   myConnectionNumber = 1;
   
   myMostClients = 0;
+  myUsingOwnNumClients = true;
+  myNumClients = 0;
   
   myLoopMSecs = 1;
 
@@ -110,6 +126,10 @@ AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB,
   myHaveIdlePackets = false;
   myHaveIdleCallbacks = false;
 
+  myMaxClientsAllowed = maxClientsAllowed;
+
+  myEnforceType = ArServerCommands::TYPE_UNSPECIFIED;
+
   if (addBackupTimeoutToConfig)
   {
     myBackupTimeout = 10;
@@ -124,6 +144,8 @@ AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB,
   }
   else
     myBackupTimeout = -1;
+
+  myNewBackupTimeout = false;
 
   if (masterServer)
   {
@@ -162,6 +184,39 @@ AREXPORT ArServerBase::ArServerBase(bool addAriaExitCB,
 	    &myIdleProcessingPendingCB, "none", "byte: 1 for idle processing pending, 0 for idle processing not pending",
 	    "RobotInfo", "RETURN_SINGLE");
 
+  addData("requestClientRestart", 
+	  "If certain changes on the robot happen the clients may need to restart, this message is broadcast when those changes occur.",
+	  NULL,
+	  "none",
+	  "byte: restartNumber, which is 1 for a restart because of config changes (there will likely be more reasons later); string: human readable reason for restart.   (The restartNumber is intended for heavy weight clients, the string is intended for lighter weight clients.)",
+	  "RobotInfo", "RETURN_NONE");
+	
+
+
+  // The start/end-RequestTransaction packets encapsulate a sequence of related 
+  // messages. Their primary purpose is to delay the execution of any queued
+  // idle packets until the sequence has completed. (This somewhat implies that
+  // they shouldn't be used to create a sequence of idle packets.) 
+  //
+  // Currently, these packets are only used by the Central Server when 
+  // it is determining whether the map file needs to be downloaded to the robot.
+  // The checkMap or setConfig* commands are executed in the idle thread after
+  // the download has completed.
+  //
+  addData("startRequestTransaction", 
+          "Special packet that marks the beginning of a multiple-packet request-response sequence. Must be followed by an endRequestTransaction packet upon completion.",
+	        &myStartRequestTransactionCB,
+	        "none",
+	        "",
+	        "RobotInfo", "RETURN_NONE");
+  
+  addData("endRequestTransaction", 
+          "Special packet that marks the end of a multiple-packet request-response sequence. Idle processing does not proceed until transaction is ended.",
+	        &myEndRequestTransactionCB,
+	        "none",
+	        "",
+	        "RobotInfo", "RETURN_NONE");
+	
 }
 
 AREXPORT ArServerBase::~ArServerBase()
@@ -266,7 +321,8 @@ AREXPORT void ArServerBase::close(void)
     return;
   }
 
-  ArLog::log(ArLog::Normal, "Server shutting down.");
+  ArLog::log(ArLog::Normal, "%sServer shutting down.", 
+	     myLogPrefix.c_str());
   myOpened = false;
   // now send off the client packets to shut down
   for (it = myClients.begin(); it != myClients.end(); ++it)
@@ -314,17 +370,19 @@ void ArServerBase::acceptTcpSockets(void)
 }
 
 AREXPORT ArServerClient *ArServerBase::makeNewServerClientFromSocket(
-	ArSocket *socket, bool doNotReject)
+	ArSocket *socket, bool overrideGeneralReject)
 {
   ArServerClient *serverClient = NULL;
   //myDataMutex.lock();
-  serverClient = finishAcceptingSocket(socket, true, doNotReject);
+  serverClient = finishAcceptingSocket(socket, true, 
+				       overrideGeneralReject);
   //myDataMutex.unlock();
   return serverClient;
 }
 
 AREXPORT ArServerClient *ArServerBase::finishAcceptingSocket(
-	ArSocket *socket, bool skipPassword, bool doNotReject)
+	ArSocket *socket, bool skipPassword, 
+	bool overrideGeneralReject)
 {
   ArServerClient *client;
   bool foundAuthKey;
@@ -379,7 +437,23 @@ AREXPORT ArServerClient *ArServerBase::finishAcceptingSocket(
   }
   int reject;
   const char *rejectString;
-  if (doNotReject)
+
+  char tooManyClientsBuf[1024];
+    
+  // if we have too many clients, reject this because of that...
+  if (myMaxClientsAllowed > 0 && myNumClients + 1 > myMaxClientsAllowed)
+  {
+    sprintf(tooManyClientsBuf, "Server rejecting connection since it would exceed the maximum number of allowed connections (which is %d)",
+	    myMaxClientsAllowed);
+    reject = 5;
+    rejectString = tooManyClientsBuf;
+
+    myTooManyClientsCBList.invoke(socket->getIPString());
+  }
+  // if we're overriding the blanket reject it's probably because we
+  // are rejecting direct connections and this connection is from the
+  // client switch....
+  else if (overrideGeneralReject)
   {
     reject = 0;
     rejectString = "";
@@ -399,7 +473,9 @@ AREXPORT ArServerClient *ArServerBase::finishAcceptingSocket(
 			      myUserInfo, reject, rejectString,
 			      myDebugLogging, serverClientName.c_str(),
 			      myLogPasswordFailureVerbosely,
-			      myAllowSlowPackets, myAllowIdlePackets);
+			      myAllowSlowPackets, myAllowIdlePackets,
+			      myEnforceProtocolVersion.c_str(),
+			      myEnforceType);
   //client->setUdpAddress(socket->sockAddrIn());
   // put the client onto our list of clients...
   //myClients.push_front(client);
@@ -495,8 +571,13 @@ AREXPORT bool ArServerBase::broadcastPacketTcpWithExclusion(
   // first find our number so each client doesn't have to
   std::map<unsigned int, ArServerData *>::iterator it;  
   unsigned int command = 0;
+
+//  ArLog::log(ArLog::Normal,
+//             "ArServerBase::broadcastPacketTcpWithExclusion() called");
   
   myDataMutex.lock();  
+//  ArLog::log(ArLog::Normal,
+//             "ArServerBase::broadcastPacketTcpWithExclusion() data lock obtained");
   for (it = myDataMap.begin(); it != myDataMap.end(); it++)
   {
     if (!strcmp((*it).second->getName(), name))
@@ -555,8 +636,13 @@ AREXPORT bool ArServerBase::broadcastPacketTcpByCommandWithExclusion(
   std::list<ArServerClient *>::iterator lit;
   ArServerClient *serverClient;
   ArNetPacket emptyPacket;
+  
+//  ArLog::log(ArLog::Normal,
+//             "ArServerBase::broadcastPacketTcpByCommandWithExclusion() called");
 
   myClientsMutex.lock();  
+//  ArLog::log(ArLog::Normal,
+//             "ArServerBase::broadcastPacketTcpByCommandWithExclusion() client lock obtained");
   emptyPacket.empty();
 
   if (!myOpened)
@@ -819,6 +905,15 @@ AREXPORT void ArServerBase::loopOnce(void)
     myLastIdleProcessingPending = needIdleProcessing;
   }
 
+  myBackupTimeoutMutex.lock();
+
+  double backupTimeout = myBackupTimeout;
+  bool newBackupTimeout = myNewBackupTimeout;
+  myNewBackupTimeout = false;
+
+  myBackupTimeoutMutex.unlock();
+
+
   bool haveSlowPackets = false;
   bool haveIdlePackets = false;
   int numClients = 0;
@@ -831,6 +926,10 @@ AREXPORT void ArServerBase::loopOnce(void)
   {
     client = (*it);
     numClients++;
+
+    if (newBackupTimeout)
+      client->setBackupTimeout(backupTimeout);      
+
     if (!client->tcpCallback())
     {
       client->forceDisconnect(true);
@@ -851,11 +950,21 @@ AREXPORT void ArServerBase::loopOnce(void)
   myHaveSlowPackets = haveSlowPackets;
   myHaveIdlePackets = haveIdlePackets;
 
-  // remember how many we've had at max so its easier to track down memory
-  if (numClients > myMostClients)
-    myMostClients = numClients;
-
-  myNumClients = numClients;
+  // if we're using our own num clients then check the max and set it
+  if (myUsingOwnNumClients)
+  {
+    // remember how many we've had at max so its easier to track down memory
+    if (numClients > myMostClients)
+      myMostClients = numClients;
+    
+    myNumClients = numClients;
+  }
+  else
+  {
+    // if not then check the max
+    if (myNumClients > myMostClients)
+      myMostClients = myNumClients;
+  }
 
   //printf("Before...\n");
   if (myProcessingSlowIdleMutex.tryLock() == 0)
@@ -1052,7 +1161,7 @@ AREXPORT bool ArServerBase::addDataAdvanced(
 	const char *commandGroup, const char *dataFlags,
 	unsigned int advancedCommandNumber,
 	ArFunctor2<long, unsigned int> *requestChangedFunctor, 
-	ArFunctor2<ArServerClient *, ArNetPacket *> *requestOnceFunctor)
+	ArRetFunctor2<bool, ArServerClient *, ArNetPacket *> *requestOnceFunctor)
 {
   ArServerData *serverData;
   std::map<unsigned int, ArServerData *>::iterator it;
@@ -1420,6 +1529,29 @@ AREXPORT void ArServerBase::rejectSinceUsingCentralServer(
   myDataMutex.unlock();
 }
 
+
+
+AREXPORT void ArServerBase::enforceProtocolVersion(const char *protocolVersion)
+{
+  myDataMutex.lock();
+  if (protocolVersion != NULL)
+    myEnforceProtocolVersion = protocolVersion;
+  else
+    myEnforceProtocolVersion = "";
+  myDataMutex.unlock();
+  ArLog::log(ArLog::Normal, "%sNew enforceProtocolVersionSet", myLogPrefix.c_str());
+}
+
+AREXPORT void ArServerBase::enforceType(ArServerCommands::Type type)
+{
+  myDataMutex.lock();
+  myEnforceType = type;
+  myDataMutex.unlock();
+  ArLog::log(ArLog::Normal, "%sNew enforce type: %s", 
+	     myLogPrefix.c_str(), ArServerCommands::toString(type));
+	     
+}
+
 /**
    Sets up the backup timeout, if there are packets to send to clients
    and they haven't been sent for longer than this then the connection
@@ -1428,7 +1560,13 @@ AREXPORT void ArServerBase::rejectSinceUsingCentralServer(
 **/
 AREXPORT void ArServerBase::setBackupTimeout(double timeoutInMins)
 {
+  myBackupTimeoutMutex.lock();
   myBackupTimeout = timeoutInMins;
+  myNewBackupTimeout = true;
+  myBackupTimeoutMutex.unlock();
+
+  /* Taking this out, since it can cause deadlocks in some central
+   * server circumstances... and doing it next time through is good enough
 
   std::list<ArServerClient *>::iterator it;
 //  ArLog::log(ArLog::Normal, "Setting server base backup time to %g\n", myBackupTimeout);
@@ -1436,6 +1574,7 @@ AREXPORT void ArServerBase::setBackupTimeout(double timeoutInMins)
   for (it = myClients.begin(); it != myClients.end(); it++)
     (*it)->setBackupTimeout(myBackupTimeout);
   myClientsMutex.unlock();
+  */
 }
 
 AREXPORT void ArServerBase::logTracking(bool terse)
@@ -1488,6 +1627,73 @@ AREXPORT void ArServerBase::setUserInfo(const ArServerUserInfo *userInfo)
   myUserInfo = userInfo;
   myDataMutex.unlock();
 }
+
+/** 
+    @param command the command name as a string
+
+    @param frequency the frequency to get the data, > 0 ==
+    milliseconds, -1 == on broadcast, -2 == never...  This function
+    won't set the value to anything slower than has already been
+    requested
+*/
+AREXPORT bool ArServerBase::internalSetDefaultFrequency(
+	const char *command, int frequency)
+{
+ 
+
+  // first find our number so each client doesn't have to
+  std::map<unsigned int, ArServerData *>::iterator it;  
+  ArServerData *data = NULL;
+  unsigned int commandNumber = 0;
+
+  myClientsMutex.lock();
+  myDataMutex.lock();    
+
+  for (it = myDataMap.begin(); it != myDataMap.end(); it++)
+  {
+    if (!strcmp((*it).second->getName(), command))
+    {
+      data = (*it).second;
+      commandNumber = data->getCommand();
+    }
+  }  
+
+  if (commandNumber == 0)
+  {
+    myDataMutex.unlock();
+    myClientsMutex.unlock();
+    ArLog::log(ArLog::Normal, 
+	       "%s::setDefaultFrequency: No command of name %s", 
+	       myServerName.c_str(), command);
+    return false;
+  }
+
+  int freq = -2;
+  if (myDefaultFrequency.find(commandNumber) != myDefaultFrequency.end())
+    freq = myDefaultFrequency[commandNumber];
+
+  // if the freq is an interval and so is this but this
+  // is a smaller interval
+  if (frequency >= 0 && (freq < 0 || (freq >= 0 && frequency < freq)))
+    freq = frequency;
+  // if this just wants the data when pushed but freq is still
+  // at never then set it to when pushed
+  else if (frequency == -1 && freq == -2)
+    freq = -1;
+
+  myDefaultFrequency[commandNumber] = freq;
+
+  data->callRequestChangedFunctor();
+
+  ArLog::log(ArLog::Normal, "%s: Set default frequency for %s (%u) to %d",
+	     myServerName.c_str(), command, commandNumber, freq);
+  
+  myDataMutex.unlock();
+  myClientsMutex.unlock();
+  return true;
+}
+
+
 /**
    @param command the command number, you can use findCommandFromName
    
@@ -1509,7 +1715,11 @@ AREXPORT long ArServerBase::getFrequency(unsigned int command,
 
   if (!internalCall)
     myClientsMutex.lock();
-  
+
+  // if we have a default frequency start with that
+  if (myDefaultFrequency.find(command) != myDefaultFrequency.end())
+    ret = myDefaultFrequency[command];
+    
   for (it = myClients.begin(); it != myClients.end(); it++)
   {
     clientFreq = (*it)->getFrequency(command);
@@ -1693,6 +1903,57 @@ AREXPORT void ArServerBase::identSetHereGoal(ArServerClient *client, ArNetPacket
   identifier.setHereGoal(buf);
   client->setIdentifier(identifier);
 }
+  
+AREXPORT void ArServerBase::handleStartRequestTransaction(ArServerClient *client, ArNetPacket *packet)
+{
+  client->startRequestTransaction();
+  
+  ArLog::log(ArLog::Verbose,
+             "ArServerBase::handleStartRequestTransaction() from %s complete",
+             client->getIPString());
+
+} // end method handleStartRequestTransaction
+
+
+AREXPORT void ArServerBase::handleEndRequestTransaction(ArServerClient *client, ArNetPacket *packet)
+{
+  if (client->endRequestTransaction()) {
+    ArLog::log(ArLog::Verbose,
+               "ArServerBase::handleEndRequestTransaction() from %s complete",
+               client->getIPString());
+
+  }
+  else {
+    ArLog::log(ArLog::Verbose,
+               "ArServerBase::handleEndRequestTransaction() error from %s" ,
+               client->getIPString());
+
+  }
+    
+
+} // end method handleEndRequestTransaction
+
+
+AREXPORT int ArServerBase::getRequestTransactionCount()
+{
+  myClientsMutex.lock();
+  int c = 0;
+  for (std::list<ArServerClient *>::iterator iter = myClients.begin();
+       iter != myClients.end();
+       iter++) {
+    ArServerClient *client = *iter;
+    if (client != NULL) {
+      c += client->getRequestTransactionCount();
+    }
+
+  } // end for each client
+  
+  myClientsMutex.unlock(); 
+
+  return c;
+
+} // end method getRequestTransactionCount
+
 
 AREXPORT void ArServerBase::closeConnectionID(ArTypes::UByte4 idNum)
 {
@@ -1791,11 +2052,13 @@ void ArServerBase::slowIdleCallback(void)
     return;
   }
 
+  bool isRequestTransactionInProgress = (getRequestTransactionCount() > 0);
+  
   std::list<ArServerClient *>::iterator it;
-  ArServerClient *client;
+  ArServerClient *client = NULL;
 
   std::list<ArFunctor *>::iterator cIt;
-  ArFunctor *functor;
+  ArFunctor *functor = NULL;
 
   if (myAllowSlowPackets)
   {
@@ -1817,7 +2080,27 @@ void ArServerBase::slowIdleCallback(void)
   }
 
   int activityTime = ArServerMode::getActiveModeActivityTimeSecSince();
-  if (myAllowIdlePackets && (activityTime < 0 || activityTime > 1))
+
+  // This check is solely for the purpose of logging a message if idle 
+  // processing is being delayed because a request transaction is still 
+  // in progress. (Could/should be improved so that it does not spam.)
+  // 
+  // The if statement is similar to the following one -- except with
+  // isRequestTransactionInProgress inverted.
+  if (myAllowIdlePackets && 
+      (activityTime < 0 || activityTime > 1) &&
+      isRequestTransactionInProgress) {
+    ArLog::log(ArLog::Verbose,
+               "ArServerBase::slowIdleCallback() waiting until request transaction complete");
+  } // end if 
+
+
+  // Don't process idle packets until all "request transactions" are complete.
+  // These are multi-step handshake sequences that should not be interrupted.
+  //
+  if (myAllowIdlePackets && 
+      (activityTime < 0 || activityTime > 1) &&
+      !isRequestTransactionInProgress)
   {
     /*
     if (idleProcessingPending() && ArServerMode::getActiveMode() != NULL)
@@ -1866,6 +2149,53 @@ void ArServerBase::slowIdleCallback(void)
   }
   ArUtil::sleep(myLoopMSecs);
 }
+
+/**
+ * Call this method to delay the current thread after a packet has been sent.  
+ * This allows the packet to be transmitted before any subsequent action.
+ *
+ * If the call is made in the main server thread, then loop once will be called
+ * until the specified time has passed.  If the call is made in the idle thread,
+ * then ArUtil::sleep is used.  (Note that if ArUtil::sleep() were called in the
+ * main thread, then the packet would not actually be transmitted until after
+ * the sleep exits.) 
+**/
+void ArServerBase::sleepAfterSend(int msecDelay)
+{
+  if (msecDelay < 0) {
+    ArLog::log(ArLog::Normal,
+               "ArServerBase::sleepAfterSend() unexpected msecDelay = %i",
+               msecDelay);
+    return;
+  }
+
+  if (ArThread::self() == mySlowIdleThread) {
+    IFDEBUG(ArLog::log(ArLog::Normal,
+                       "ArServerBase::sleepAfterSend() about to sleep in idle thread"));
+
+    ArUtil::sleep(msecDelay);
+
+    IFDEBUG(ArLog::log(ArLog::Normal,
+                       "ArServerBase::sleepAfterSend() finished sleep in idle thread"));
+  }
+  else { // not idle thread
+
+    IFDEBUG(ArLog::log(ArLog::Normal,
+                       "ArServerBase::sleepAfterSend() about to loop in main thread"));
+
+    ArTime startTime;
+    while (startTime.mSecSince() < msecDelay) {
+      loopOnce();
+      ArUtil::sleep(1);
+    } // end while keep delaying
+    
+    IFDEBUG(ArLog::log(ArLog::Normal,
+                       "ArServerBase::sleepAfterSend() finished loop in main thread"));
+
+  }
+
+} // end method sleepAfterSend
+
 
 AREXPORT bool ArServerBase::hasSlowPackets(void)
 {
@@ -1928,6 +2258,19 @@ AREXPORT bool ArServerBase::addIdleSingleShotCallback(ArFunctor *functor)
 	       "Adding anonymous idle singleshot callback functor");
   myIdleCallbacksMutex.unlock();
   return true;
+}
+
+AREXPORT void ArServerBase::internalSetNumClients(int numClients)
+{
+  myUsingOwnNumClients = false;
+  myNumClients = numClients;
+}
+
+
+AREXPORT void ArServerBase::internalLockup(void)
+{
+  ArLog::log(ArLog::Normal, "%s locking up by request", myServerName.c_str());
+  myDataMutex.lock();  
 }
 
 ArServerBase::SlowIdleThread::SlowIdleThread(ArServerBase *serverBase)

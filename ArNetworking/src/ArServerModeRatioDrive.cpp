@@ -180,11 +180,14 @@ AREXPORT void ArServerModeRatioDrive::setSafeDriving(bool safe, bool internal)
     myNewDriveSafely = true;
   }
   myDriveSafely = safe;
-  // ratioDrive is only called if this mode is already active
+  // ratioDrive is only called if this mode is already active (and now just sends 0s)
   if (isActive())
+    ratioDrive(0, 0, 0, false, 0);
+  /*
     ratioDrive(myRatioAction->getTransRatio(), 
-               myRatioAction->getRotRatio(),
-	             myRatioAction->getThrottleRatio());
+    myRatioAction->getRotRatio(),
+    myRatioAction->getThrottleRatio());
+  */
   if (!internal)
     myRobot->unlock();
 }
@@ -238,8 +241,7 @@ AREXPORT void ArServerModeRatioDrive::ratioDrive(
 {
   bool wasActive;
   wasActive = isActive();
-  
-  
+
   myTransRatio = transRatio;
   myRotRatio = rotRatio;
   myThrottleRatio = throttleRatio;
@@ -256,7 +258,6 @@ AREXPORT void ArServerModeRatioDrive::ratioDrive(
       return;
     }
   } // end if activating and wasn't previously active
-
 
   // This is to handle the case where ratioDrive is called outside the
   // activate() method, and the activation was not successful.
@@ -294,12 +295,15 @@ AREXPORT void ArServerModeRatioDrive::ratioDrive(
   myLatRatio = latRatio;
   
   setActivityTimeToNow();
+  myLastCommand.setToNow();
+  
+  
   // SEEKUR
   mySentRecenter = false;
   
   if (myPrinting)
-    printf("cmd %.0f %.0f %.0f %.0f\n", transRatio, rotRatio, throttleRatio, 
-	   latRatio);
+    ArLog::log(ArLog::Normal, "%s: cmd %.0f %.0f %.0f %.0f", 
+	       getName(), transRatio, rotRatio, throttleRatio, latRatio);
   if (myTransRatio < -0.1)
     myDrivingBackwardsCallbacks.invoke();
   //myRatioAction.setRatios(transRatio, rotRatio, throttleRatio);
@@ -325,11 +329,14 @@ AREXPORT void ArServerModeRatioDrive::serverRatioDrive(ArServerClient *client,
   if (!isActive()) {
     activate();
   }
-  /*
-  ArLog::log(ArLog::Normal, 
-	     "RatioDrive trans %.0f rot %.0f lat %.0f ratio %.0f",
-	     transRatio, rotRatio, lateralRatio, throttleRatio);
-  */
+  
+  if (myPrinting)
+    ArLog::log(ArLog::Normal, 
+	       "%s: serverCmd (%s) trans %.0f rot %.0f lat %.0f ratio %.0f",
+	       
+	       getName(), client->getIPString(),
+	       transRatio, rotRatio, lateralRatio, throttleRatio);
+
   ratioDrive(transRatio, rotRatio, throttleRatio, false, lateralRatio);
   myRobot->unlock();
 }
@@ -358,7 +365,6 @@ AREXPORT void ArServerModeRatioDrive::serverGetSafeDrive(
 
 AREXPORT void ArServerModeRatioDrive::joyUserTask(void)
 {
-  
   // if we're not active but we should be
   if (myTakeControlOnJoystick && !isActive() && 
       ((myUseComputerJoystick && myJoyHandler->haveJoystick() && 
@@ -369,8 +375,8 @@ AREXPORT void ArServerModeRatioDrive::joyUserTask(void)
     if (ArServerMode::getActiveMode() != NULL)
       ArLog::log(ArLog::Normal, 
 		 "%s: Activating instead of %s because of local joystick", 
-		 ArServerMode::getActiveMode()->getName(),
-		 myName.c_str());
+		 myName.c_str(),
+		 ArServerMode::getActiveMode()->getName());
     else
       ArLog::log(ArLog::Normal, 
 		 "%s: Activating because of local joystick",
@@ -404,14 +410,26 @@ AREXPORT void ArServerModeRatioDrive::userTask(void)
   // Sets the robot so that we always think we're trying to move in
   // this mode
   myRobot->forceTryingToMove();
-  
+
+  bool moving = (fabs(myRobot->getVel()) > 1 || 
+		 fabs(myRobot->getRotVel()) > 1 || 
+		 fabs(myRobot->getLatVel()) > 1);
+
+  bool wantToMove;
+  if ((myTransRatio < .1 && myRotRatio < .1 && myLatRatio < .1) ||
+      myThrottleRatio < .1)
+    wantToMove = false;
+  else
+    wantToMove = true;
+
   // if the joystick is pushed then set that we're active, server
   // commands'll go into ratioDrive and set it there too
   if ((myUseComputerJoystick && myJoyHandler->haveJoystick() && 
        myJoyHandler->getButton(1)) ||
       (myUseRobotJoystick && myRobotJoyHandler->gotData() && 
        myRobotJoyHandler->getButton1()) || 
-      (myUseServerCommands && myGotServerCommand))
+      (myUseServerCommands && myGotServerCommand) || 
+      moving)
   {
     setActivityTimeToNow();
   }
@@ -419,13 +437,11 @@ AREXPORT void ArServerModeRatioDrive::userTask(void)
   myGotServerCommand = false;
 
   bool timedOut = false;
-  // if we're moving, and there is a timeout, and the activity time is
+  // if we want to move, and there is a timeout, and the activity time is
   // greater than the timeout, then stop the robot
-  if ((fabs(myRobot->getVel()) > 0 || 
-       fabs(myRobot->getRotVel()) > 0 || 
-       fabs(myRobot->getLatVel()) > 0) &&
+  if (wantToMove &&
       myTimeout > .0000001 && 
-      getActivityTime().mSecSince()/1000.0 >= myTimeout)
+      myLastCommand.mSecSince()/1000.0 >= myTimeout)
 
   {
     if (!myLastTimedOut)
@@ -433,7 +449,9 @@ AREXPORT void ArServerModeRatioDrive::userTask(void)
       ArLog::log(ArLog::Normal, "Stopping the robot since teleop timed out");
       myRobot->stop();
       myRobot->clearDirectMotion();
-      ratioDrive(0, 0, 0, 0);
+      ArTime lastCommand = myLastCommand;
+      ratioDrive(0, 0, 0, false, 0);
+      myLastCommand = lastCommand;
     }
     timedOut = true;
   }
@@ -459,7 +477,7 @@ AREXPORT void ArServerModeRatioDrive::userTask(void)
     else if (myRobot->getStallValue())
       myStatus = "Bumped";
     else if (ArMath::fabs(myRobot->getVel()) < 2 && 
-	     ArMath::fabs(myRobot->getRotVel()) < 2 && 
+	     ArMath::fabs(myRobot->getRotVel()) < 1 && 
 	     (!myRobot->hasLatVel() || ArMath::fabs(myRobot->getLatVel()) < 2))
       myStatus = "Stopped";
     else

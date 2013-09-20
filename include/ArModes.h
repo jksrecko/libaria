@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARMODES_H
 #define ARMODES_H
@@ -34,6 +34,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArSerialConnection.h"
 #include "ArPTZ.h"
 #include "ArTCMCompassRobot.h"
+#include "ArRobotConfigPacketReader.h"
 
 class ArTCMCompassRobot;
 class ArACTS_1_2;
@@ -57,6 +58,7 @@ protected:
   //ArActionGroupTeleop myGroup;
   // use our new ratio drive instead
   ArActionGroupRatioDrive myGroup;
+  ArFunctorC<ArRobot> myEnableMotorsCB;
 };
 
 /// Mode for teleoping the robot with joystick + keyboard
@@ -75,6 +77,7 @@ protected:
   //ArActionGroupUnguardedTeleop myGroup;
   // use our new ratio drive instead
   ArActionGroupRatioDriveUnsafe myGroup;
+  ArFunctorC<ArRobot> myEnableMotorsCB;
 };
 
 /// Mode for wandering around
@@ -234,7 +237,8 @@ protected:
   ArFunctorC<ArModeCamera> myCom4CB;
   ArFunctorC<ArModeCamera> myAux1CB;
   ArFunctorC<ArModeCamera> myAux2CB;
-  
+  const int myPanAmount;
+  const int myTiltAmount;
 };
 
 /// Mode for displaying the sonar
@@ -481,6 +485,25 @@ protected:
   ArFunctorC<ArTCM2> *myStopCalibrationCB;
   ArFunctorC<ArTCM2> *myResetCB;
 
+};
+
+
+/// Mode for requesting config packet
+class ArModeConfig : public ArMode
+{
+public:
+  /// Constructor
+  AREXPORT ArModeConfig(ArRobot *robot, const char *name, char key, char key2);
+  AREXPORT virtual void activate(void);
+  AREXPORT virtual void deactivate(void);
+  AREXPORT virtual void help(void);
+  
+protected:
+  ArRobot *myRobot;
+  ArRobotConfigPacketReader myConfigPacketReader;
+  ArFunctorC<ArModeConfig> myGotConfigPacketCB;
+
+  void gotConfigPacket();
 };
 
 

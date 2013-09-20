@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -35,6 +35,8 @@ AREXPORT const char *ArSocket::toString(Type t)
     return "TCP";
   case UDP:
     return "UDP";
+  default:
+    return "Unknown";
   }
   return "Unknown";
 
@@ -121,7 +123,6 @@ AREXPORT int ArSocket::recvFrom(void *msg, int len, sockaddr_in *sin)
 **/
 AREXPORT int ArSocket::write(const void *buff, size_t len)
 {
-
   if (myFD < 0)
   {
     ArLog::log(ArLog::Terse, "ArSocket::write: called after socket closed");
@@ -315,13 +316,14 @@ AREXPORT char *ArSocket::readString(unsigned int msWait)
   size_t i;
   int n;
 
+  bool printing = false;
+
   myReadStringMutex.lock();
   myStringBufEmpty[0] = '\0';
-  
+
   // read one byte at a time
   for (i = myStringPos; i < sizeof(myStringBuf); i++)
   {
-    
     n = read(&myStringBuf[i], 1, msWait);
     if (n > 0)
     {
@@ -337,8 +339,27 @@ AREXPORT char *ArSocket::readString(unsigned int msWait)
 
       if (myStringBuf[i] == '\n' || myStringBuf[i] == '\r')
       {
+	// if we aren't at the start, it's a complete string
 	if (i != 0)
+	{
 	  myStringGotComplete = true;
+	}
+	// if it is at the start, we should read basically ignore this
+	// character since otherwise when we get a \n\r we're
+	// returning an empty string (which is what is returned when
+	// there is nothing to read, so causes problems)... so here
+	// it's just calling itself and returning that since it
+	// changes the logic the least
+	else 
+	{
+	  myLastStringReadTime.setToNow();
+	  if (printing)
+	    ArLog::log(ArLog::Normal, 
+		       "ArSocket::ReadString: calling readstring again since got \\n or \\r as the first char",
+		       myStringBuf, strlen(myStringBuf));
+	  myReadStringMutex.unlock();
+	  return readString(msWait);
+	}
 	myStringBuf[i] = '\0';
 	myStringPos = 0;
 	myStringPosLast = 0;
@@ -354,12 +375,20 @@ AREXPORT char *ArSocket::readString(unsigned int msWait)
 	  // okay now return the good stuff
 	  doStringEcho();
 	  myLastStringReadTime.setToNow();
+	  if (printing)
+	    ArLog::log(ArLog::Normal, 
+		       "ArSocket::ReadString: '%s' (%d) (got \\n or \\r)",
+		       &myStringBuf[ei], strlen(&myStringBuf[ei]));
 	  myReadStringMutex.unlock();
 	  return &myStringBuf[ei];
 	}
 	// if we don't return what we got
 	doStringEcho();
 	myLastStringReadTime.setToNow();
+	if (printing)
+	  ArLog::log(ArLog::Normal, 
+		     "ArSocket::ReadString: '%s' (%d) (got \\n or \\r)",
+		     myStringBuf, strlen(myStringBuf));
 	myReadStringMutex.unlock();
 	return myStringBuf;
       }
@@ -372,6 +401,8 @@ AREXPORT char *ArSocket::readString(unsigned int msWait)
     {
       myStringPos = i;
       myStringBuf[myStringPos] = '\0';
+      if (printing)
+	ArLog::log(ArLog::Normal, "ArSocket::ReadString: NULL (0) (got 0 bytes, means connection closed");
       myReadStringMutex.unlock();
       return NULL;
     }
@@ -382,6 +413,9 @@ AREXPORT char *ArSocket::readString(unsigned int msWait)
       {
 	myStringPos = i;
 	doStringEcho();
+	if (printing)
+	  ArLog::log(ArLog::Normal, "ArSocket::ReadString: '%s' (%d) (got WSAEWOULDBLOCK)",
+		     myStringBufEmpty, strlen(myStringBufEmpty));
 	myReadStringMutex.unlock();
 	return myStringBufEmpty;
       }
@@ -391,11 +425,17 @@ AREXPORT char *ArSocket::readString(unsigned int msWait)
       {
 	myStringPos = i;
 	doStringEcho();
+	if (printing)
+	  ArLog::log(ArLog::Normal, 
+		     "ArSocket::ReadString: '%s' (%d) (got EAGAIN)",
+		     myStringBufEmpty, strlen(myStringBufEmpty));
 	myReadStringMutex.unlock();
 	return myStringBufEmpty;
       }
 #endif
-      perror("Error in reading from network");
+      ArLog::logErrorFromOS(ArLog::Normal, "ArSocket::readString: Error in reading from network");
+      if (printing)
+	ArLog::log(ArLog::Normal, "ArSocket::ReadString: NULL (0) (got 0 bytes,  error reading network)");
       myReadStringMutex.unlock();
       return NULL;
     }
@@ -403,6 +443,9 @@ AREXPORT char *ArSocket::readString(unsigned int msWait)
   // if they want a 0 length string
   ArLog::log(ArLog::Normal, "Some trouble in ArSocket::readString to %s (cannot fit string into buffer?)", getIPString());
   writeString("String too long");
+      if (printing)
+	ArLog::log(ArLog::Normal, "ArSocket::ReadString: NULL (0) (string too long?)");
+
   myReadStringMutex.unlock();
   return NULL;
 }
@@ -507,3 +550,6 @@ void ArSocket::separateHost(const char *rawHost, int rawPort, char *useHost,
   ArLog::log(ArLog::Normal, "ArSocket: too many arguments in hostname %s", separator.getFullString());
   return;
 }
+
+
+  

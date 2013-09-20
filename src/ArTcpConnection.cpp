@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -35,6 +35,7 @@ AREXPORT ArTcpConnection::ArTcpConnection()
   buildStrMap();
   myOwnSocket = true;
   mySocket = new ArSocket();
+  setPortType("tcp");
 }
 
 AREXPORT ArTcpConnection::~ArTcpConnection()
@@ -77,6 +78,15 @@ AREXPORT void ArTcpConnection::setPort(const char *host, int port)
     myHostName = "localhost";
   else
     myHostName = host;
+
+  char portBuf[1024];
+  sprintf(portBuf, "%d", port); 
+  
+  std::string portName;
+  portName = myHostName;
+  portName += ":";
+  portName += portBuf;
+  setPortName(portName.c_str());
 }
 
 AREXPORT bool ArTcpConnection::openSimple(void)
@@ -88,8 +98,10 @@ AREXPORT bool ArTcpConnection::openSimple(void)
 }
 
 /**
-   @param host the host to connect to, if NULL (default) then localhost
-   @param port the port to connect to
+   @param host the hostname or IP address to connect to, if NULL (default) then localhost
+   @param port the port to connect to. (the default port, 8101, is the TCP port
+number used by the wireless bridge device and by the simulator for robot
+connection)
    @return 0 for success, otherwise one of the open enums
    @see getOpenMessage
 */
@@ -102,6 +114,9 @@ AREXPORT int ArTcpConnection::open(const char *host, int port)
 AREXPORT int ArTcpConnection::internalOpen(void)
 {
   mySocket->init();
+
+  ArLog::log(ArLog::Verbose, "ArTcpConnection::internalOpen: Connecting to %s %d", myHostName.c_str(), myPortNum);
+
   if (mySocket->connect(const_cast<char *>(myHostName.c_str()), myPortNum,
 		       ArSocket::TCP)) 
   {
@@ -163,6 +178,7 @@ AREXPORT int ArTcpConnection::read(const char *data, unsigned int size,
     return -1;
   }
 
+
   int timeToWait;  
   timeDone.setToNow();
   if (!timeDone.addMSec(msWait)) {
@@ -176,6 +192,16 @@ AREXPORT int ArTcpConnection::read(const char *data, unsigned int size,
     timeToWait = timeDone.mSecTo();
     if (timeToWait < 0)
       timeToWait = 0;
+    // if the sockets empty don't read it, but pause some
+    if (mySocket->getFD() < 0)
+    {
+      ArLog::log(ArLog::Terse, 
+		 "ArTcpConnection::read: Attempt to read port that already closed. (%d)", timeToWait);
+      if (timeToWait > 0)
+	ArUtil::sleep(timeToWait);
+      return -1;
+    }
+
     n = mySocket->read(const_cast<char *>(data) + bytesRead, size - bytesRead,
 		       timeToWait);
     /*if (n == -1) 

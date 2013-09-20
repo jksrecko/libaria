@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #ifndef ARGPSCONNECTOR_H
@@ -39,10 +39,16 @@ class ArDeviceConnection;
 class ArRobot;
 
 /** 
- *  @brief Factory for creating ArGPS objects based on command-line
- *  parameters.
+ *  @brief Factory for creating GPS interface object (for any kind of GPS supported by ARIA) based on robot parameter file and command-line arguments.
  *
- *  Use createGPS() to create a GPS object.
+ *  First, create an ArGPSConnector object before 
+ *  calling Aria::parseArgs().  After connecting to the robot, call
+ *  Aria::parseArgs().  Then, call createGPS() to create the GPS object.
+ *  
+ *  ArGPSConnector can connect to a Novatel GPS ("novatel" type), Trimble AgGPS
+ *  ("trimble" type), or any GPS
+ *  supporting the NMEA standard protocol ("standard" type), if that GPS does not need any special
+ *  commands to initialize.
  *
  *  @note The device connection object created by 
  *  ArGPSConnector is destroyed  when ArGPSConnector is 
@@ -52,6 +58,10 @@ class ArRobot;
  * The following command-line arguments are checked:
  * @verbinclude ArGPSConnector_options
  *
+ * Only one GPS device may be configured and connected to by this object.
+ *
+  @ingroup OptionalClasses
+   @ingroup DeviceClasses
 */
 
 class ArGPSConnector {
@@ -101,7 +111,10 @@ public:
       Invalid,
       /// Novatel SPAN
       /// @since Aria 2.7.2
-      NovatelSPAN
+      NovatelSPAN,
+      /// Simulated (program must set dummy positions)
+      /// @since Aria 2.7.6
+      Simulator
   } GPSType;
 
   AREXPORT GPSType getGPSType() const { return myDeviceType; }

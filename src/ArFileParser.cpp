@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -31,12 +31,27 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include <ctype.h>
 
 
-AREXPORT ArFileParser::ArFileParser(const char *baseDirectory) :
+/**
+ * @param baseDirectory the char * name of the base directory; the file name
+ * is specified relative to this directory
+ * @param isPreCompressQuotes a bool set to true if the file parser should 
+ * treat strings enclosed in double-quotes as a single argument (such strings
+ * must be surrounded by spaces).  This is roughly equivalent to calling 
+ * ArArgumentBuilder::compressQuoted(false) on the resulting builder, but 
+ * is more efficient and handles embedded spaces better.  The default value
+ * is false and preserves the original behavior where each argument is a 
+ * space-separated alphanumeric string.
+**/
+AREXPORT ArFileParser::ArFileParser(const char *baseDirectory,
+                                    bool isPreCompressQuotes) :
   myCommentDelimiterList(),
   myPreParseFunctor(NULL),
   myMap(),
   myRemainderHandler(NULL),
-  myIsQuiet(false)
+  myIsQuiet(false),
+  myIsPreCompressQuotes(isPreCompressQuotes),
+  myIsInterrupted(false),
+  myInterruptMutex()
 {
   setBaseDirectory(baseDirectory);
 
@@ -438,6 +453,7 @@ AREXPORT bool ArFileParser::parseLine(char *line,
   // lower that keyword
   ArUtil::lower(keyword, keyword, 512);
 
+
   // a variable for if we're using the remainder handler or not (don't
   // do a test just because someone could set the remainder handler to
   // some other handler they're using)
@@ -484,7 +500,10 @@ AREXPORT bool ArFileParser::parseLine(char *line,
   // now toss the rest of the argument into an argument builder then
   // form it up to send to the functor
   
-  ArArgumentBuilder builder(myMaxNumArguments);
+  ArArgumentBuilder builder(myMaxNumArguments,
+                            '\0',  // no special space character
+                            false, // do not ignore normal spaces
+                            myIsPreCompressQuotes); // whether to pre-compress quotes
   // if we have arguments add them
   if (!noArgs)
     builder.addPlain(valueStart);
@@ -525,6 +544,7 @@ AREXPORT void ArFileParser::setPreParseFunctor(ArFunctor1<const char *> *functor
 } // end method setPreParseFunctor
 
 
+
 /**
    @param fileName the file to open
    
@@ -546,7 +566,11 @@ AREXPORT bool ArFileParser::parseFile(const char *fileName,
                                       char *errorBuffer,
                                       size_t errorBufferLen)
 {
-  FILE *file;
+  myInterruptMutex.lock();
+  myIsInterrupted = false;
+  myInterruptMutex.unlock();
+
+  FILE *file = NULL;
 
   char line[10000];
   bool ret = true;
@@ -585,22 +609,44 @@ AREXPORT bool ArFileParser::parseFile(const char *fileName,
 **/
 
   resetCounters();
+
   // read until the end of the file
-  while (fgets(line, sizeof(line), file) != NULL)
+  while (!isInterrupted() &&
+         (fgets(line, sizeof(line), file) != NULL)) 
   {
     if (!parseLine(line, errorBuffer, errorBufferLen))
     {
       ArLog::log(ArLog::Terse, "## Last error on line %d of file '%s'", 
-		 myLineNumber, realFileName.c_str());
+		             myLineNumber, realFileName.c_str());
       ret = false;
       if (!continueOnErrors)
-	break;
+	      break;
     }
   }
   
   fclose(file);
   return ret;
 }
+  
+
+bool ArFileParser::isInterrupted() {
+
+  myInterruptMutex.lock();
+  bool b = myIsInterrupted;
+  myInterruptMutex.unlock();
+
+  return b;
+
+} // end method isInterrupted
+
+
+AREXPORT void ArFileParser::cancelParsing()
+{
+  myInterruptMutex.lock();
+  myIsInterrupted = true;
+  myInterruptMutex.unlock();
+
+} // end method cancelParsing
 
 
 /**
@@ -615,12 +661,17 @@ AREXPORT bool ArFileParser::parseFile(const char *fileName,
  *  immediately empties the errorBuffer
  * @param errorBufferLen the length of @a errorBuffer
 */
-AREXPORT bool ArFileParser::parseFile(FILE *file, char *buffer, 
+AREXPORT bool ArFileParser::parseFile(FILE *file, 
+                                      char *buffer, 
                                       int bufferLength, 
                                       bool continueOnErrors,
                                       char *errorBuffer,
                                       size_t errorBufferLen)
 {
+  myInterruptMutex.lock();
+  myIsInterrupted = false;
+  myInterruptMutex.unlock();
+
   if (errorBuffer)
     errorBuffer[0] = '\0';
 
@@ -635,7 +686,8 @@ AREXPORT bool ArFileParser::parseFile(FILE *file, char *buffer,
   resetCounters();
 
   // read until the end of the file
-  while (fgets(buffer, bufferLength, file) != NULL)
+  while (!isInterrupted() &&
+         (fgets(buffer, bufferLength, file) != NULL))
   {
     if (!parseLine(buffer, errorBuffer, errorBufferLen))
     {

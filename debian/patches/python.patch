@@ -2,7 +2,7 @@ Description: Building Python package from SWIG generated wrapper.
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
-@@ -230,7 +230,7 @@
+@@ -272,7 +272,7 @@
  ####
  
  # Default Rule
@@ -11,22 +11,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  # Build all targets, docs, params, etc. etc.
  everything: dirs $(ALL_TARGETS) 
-@@ -440,37 +440,25 @@
- 
- ### Python wrapper: ###
- 
--
--ifdef PYTHON_INCLUDE
--PYTHON_INCLUDE_FLAGS=-I$(PYTHON_INCLUDE)
--else
--$(warning WARNING using default value of /usr/include/python2.5 for PYTHON_INCLUDE directory. Set PYTHON_INCLUDE environment variable if you would like to use a different version of the Python C development library to build the Python ARIA wrapper.)
--PYTHON_INCLUDE:=/usr/include/python2.5
--PYTHON_INCLUDE_FLAGS=-I/usr/include/python2.5
--endif
--
- python: python/_AriaPy.so python/AriaPy.py
- 
- py: python
+@@ -506,22 +506,19 @@
  
  python-doc: python/AriaPy.html
  
@@ -40,20 +25,20 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  	cd python; $(SWIG) -Wall -c++ -python -modern -module AriaPy -Dlinux -DAREXPORT -o AriaPy_wrap.cpp -I../include ../include/wrapper.i 
  
  python/_AriaPy.so: obj/AriaPy_wrap.o lib/libAria.so Makefile.dep
--	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system?; exit 1; fi
--	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o -lpthread -ldl -lrt -Llib -lAria
-+	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o $(LDFLAGS) -Llib -lAria -lpthread -ldl -lrt
+-	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system? Is PYTHON_INCLUDE set correctly?; exit 1; fi
+-	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o $(CXXLINK)
++	$(CXX) -shared -o $(@) obj/AriaPy_wrap.o $(LDFLAGS) $(CXXLINK)
  
  obj/AriaPy_wrap.o: python/AriaPy_wrap.cpp
  	mkdir -p obj
 -	@ if test -z "$(PYTHON_INCLUDE)"; then echo "*** Error: PYTHON_INCLUDE is not set, cannot build ARIA python wrapper"; fi
--	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system?; exit 1; fi
+-	if ! test -f $(PYTHON_INCLUDE)/Python.h; then echo Error: $(PYTHON_INCLUDE)/Python.h not found. Is the Python development package installed on this system? Is PYTHON_INCLUDE set correctly?; exit 1; fi
 -	$(CXX) -c $(BARECXXFLAGS) $(CXXINC) $(PYTHON_INCLUDE_FLAGS) $< -o $@
 +	$(CXX) -c $(CPPFLAGS) -O2 $(BARECXXFLAGS) $(CXXINC) $(shell python-config --includes) $< -o $@
  
  
  ### Java Wrapper: ###
-@@ -668,6 +656,8 @@
+@@ -737,6 +734,8 @@
  		if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi ;\
  		echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria ;\
  	fi

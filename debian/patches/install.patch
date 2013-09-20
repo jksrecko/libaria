@@ -5,7 +5,7 @@ Description: Changes to the install target.
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
-@@ -230,7 +230,7 @@
+@@ -272,7 +272,7 @@
  ####
  
  # Default Rule
@@ -14,7 +14,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  # Build all targets, docs, params, etc. etc.
  everything: dirs $(ALL_TARGETS) 
-@@ -536,7 +536,9 @@
+@@ -589,7 +589,9 @@
  ####
  
  lib/libAria.so: $(OFILES) Makefile.dep 
@@ -25,7 +25,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  lib/libAria.a: $(OFILES) Makefile.dep 
  	ar -cr $(@) $(OFILES)
-@@ -638,7 +640,7 @@
+@@ -703,7 +705,7 @@
  
  # What to put in /etc/Aria:
  ifndef STORED_INSTALL_DIR
@@ -34,7 +34,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  endif
  
  # How to run 'install' for the install rule:
-@@ -653,35 +655,18 @@
+@@ -722,35 +724,18 @@
  # Override installation locations with INSTALL_DIR environment variable.
  # Things are installed group-writable so as to be hacked upon.
  install:

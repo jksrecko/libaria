@@ -22,8 +22,8 @@ Description: Run some tests with dh_autotest
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
-@@ -224,6 +224,15 @@
- UTILS:=$(patsubst %.$(CFILEEXT),%,$(UTILS_CPP))
+@@ -263,6 +263,15 @@
+ UTILS:=$(patsubst %.$(CFILEEXT),%$(binsuffix),$(UTILS_CPP))
  SRC_FILES:=$(patsubst %,src/%,$(CFILES))
  HEADER_FILES:=$(shell find include -type f -name \*.h)
 +# Tests to run for the testsuite
@@ -36,9 +36,9 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 +	tests/mathTests \
 +	tests/robotListTest
  
- ####
- #### General rules for user invocation
-@@ -249,6 +258,11 @@
+ 
+ 
+@@ -293,6 +302,11 @@
  
  tests: $(TESTS) $(MOD_TESTS)
  

@@ -95,7 +95,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 +	zcat $< | $(CXX) $(CXXFLAGS) $(CXXINC) -x c++ - -o $(OUT_DIR)/$@ $(CXXLINK)
 --- a/Makefile
 +++ b/Makefile
-@@ -656,6 +656,7 @@
+@@ -734,6 +734,7 @@
  		if test \! -d $(DESTDIR)$(SYSTEM_ETC_DIR); then install -d $(DESTDIR)$(SYSTEM_ETC_DIR); fi ;\
  		echo $(STORED_INSTALL_DIR) > $(DESTDIR)$(SYSTEM_ETC_DIR)/Aria ;\
  	fi

@@ -2,7 +2,7 @@ Subject: Patching detected hardening problems in libaria.
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/src/ArMap.cpp
 +++ b/src/ArMap.cpp
-@@ -1542,7 +1542,7 @@
+@@ -1605,7 +1605,7 @@
  {
    myConfigMapName[0] = '\0';
    if (fileName != NULL) {
@@ -13,7 +13,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  } // end method changeConfigMapName
 --- a/src/ArMapInterface.cpp
 +++ b/src/ArMapInterface.cpp
-@@ -100,7 +100,7 @@
+@@ -101,7 +101,7 @@
      char *nameBuf = new char[totalLen];
      nameBuf[0] = '\0';
  
@@ -24,7 +24,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
      realFileName = nameBuf;
 --- a/src/ArSocket.cpp
 +++ b/src/ArSocket.cpp
-@@ -484,7 +484,7 @@
+@@ -527,7 +527,7 @@
    }
    if (separator.getArgc() == 1)
    {
@@ -33,7 +33,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
      *port = rawPort;
      return;
    }
-@@ -492,7 +492,7 @@
+@@ -535,7 +535,7 @@
    {
      if (separator.isArgInt(1))
      {
@@ -44,7 +44,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
      }
 --- a/src/ArSocket_LIN.cpp
 +++ b/src/ArSocket_LIN.cpp
-@@ -684,7 +684,7 @@
+@@ -678,7 +678,7 @@
    {
      myErrorStr="Trying to get socket name on an unopened socket";
      myError = NetFail;
@@ -55,23 +55,21 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
 --- a/Makefile
 +++ b/Makefile
-@@ -24,12 +24,12 @@
+@@ -24,10 +24,10 @@
  # this is set up with the extra layer since the python wrapper needs exceptions
  # but I didn't want to have two sets of defines
- BARECXXFLAGS:= -fPIC -g -Wall -D_REENTRANT 
+ BARECXXFLAGS:=-g -Wall -D_REENTRANT  #-pg -fprofile-arcs
 -CXXFLAGS+=$(BARECXXFLAGS) -fno-exceptions 
 +CXXFLAGS+=$(CPPFLAGS) $(BARECXXFLAGS) -fno-exceptions 
- 
  CXXINC:=-Iinclude
--CXXLINK:=-Llib -lAria -lpthread -ldl -lrt
-+CXXLINK:=$(LDFLAGS) -Llib -lAria -lpthread -ldl -lrt
+-CXXLINK=-Llib -lAria
+-CXXSTATICLINK:=-Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic 
++CXXLINK=$(LDFLAGS) -Llib -lAria
++CXXSTATICLINK:=$(LDFLAGS) -Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic 
  
--CXXSTATICLINK:=-Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic -lpthread -ldl -lrt -Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
-+CXXSTATICLINK:=$(LDFLAGS) -Llib -Xlinker -Bstatic -lAria -Xlinker -Bdynamic -lpthread -ldl -lrt -Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
- 
- 
- ifndef JAVAC
-@@ -536,7 +536,7 @@
+ host:=$(shell uname | cut -d _ -f 1)
+ ifeq ($(host),MINGW32)
+@@ -589,7 +589,7 @@
  ####
  
  lib/libAria.so: $(OFILES) Makefile.dep 

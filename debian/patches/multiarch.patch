@@ -2,7 +2,7 @@ Description: Multi-Arch support for shared libraries
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
-@@ -660,10 +660,10 @@
+@@ -729,10 +729,10 @@
  	$(INSTALL) -D -m 644 include/*.h $(DESTDIR)$(INSTALL_DIR)/include/Aria
  	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
  	$(INSTALL) -D -m 644 params/* $(DESTDIR)$(INSTALL_DIR)/share/Aria/params

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
         /* SWIG 1.3 Wrapper Interface Definition for Aria */
@@ -65,6 +65,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 /*#include "SwigTestClass.h"*/
 #include "wrapper_ExtraClasses.h"
 #include "wrapper_Functors.h"
+
+#include <cstddef>
 %}
 
 /* Filter out warnings about setting const char* members in these classes--
@@ -542,9 +544,6 @@ struct ArJoyVec3i { int x, y, z; };
 %include "ArIrrfDevice.h"
 %include "ArJoyHandler.h"
 %include "ArKeyHandler.h"
-%include "ArLMS2xx.h"
-%include "ArLMS2xxPacket.h"
-%include "ArLMS2xxPacketReceiver.h"
 %include "ArLaserConnector.h"
 %include "ArLaserFilter.h"
 %include "ArLaserLogger.h"
@@ -567,7 +566,6 @@ struct ArJoyVec3i { int x, y, z; };
 %include "ArNetServer.h"
 %include "ArNovatelGPS.h"
 %include "ArP2Arm.h"
-%include "ArPixelDevice.h"
 %include "ArPriorityResolver.h"
 %include "ArRangeBuffer.h"
 %include "ArRatioInputJoydrive.h"
@@ -587,7 +585,6 @@ struct ArJoyVec3i { int x, y, z; };
 %include "ArRVisionPTZ.h"
 %include "ArSensorReading.h"
 %include "ArSerialConnection.h"
-%include "ArSick.h"
 %include "ArSignalHandler.h"
 %include "ArSimpleConnector.h"
 %include "ArSimulatedLaser.h"
@@ -613,6 +610,7 @@ struct ArJoyVec3i { int x, y, z; };
 %include "ArVCC4.h"
 #if !defined(SWIGWIN) && !defined(WIN32)
 %include "ArVersalogicIO.h"
+%include "ArMTXIO.h"
 #endif
 %include "ariaInternal.h"
 

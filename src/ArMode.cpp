@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -116,6 +116,7 @@ AREXPORT bool ArMode::baseActivate(void)
 {
   if (ourActiveMode == this)
     return false;
+  myRobot->deactivateActions();
   if (myRobot != NULL)
   {
     myRobot->addUserTask(myName.c_str(), 50, &myUserTaskCB);
@@ -186,7 +187,7 @@ AREXPORT void ArMode::baseHelp(void)
   }
 }
 
-void ArMode::addKeyHandler(int keyToHandle, ArFunctor *functor)
+AREXPORT void ArMode::addKeyHandler(int keyToHandle, ArFunctor *functor)
 {
   ArKeyHandler *keyHandler;
   std::string charStr;
@@ -198,8 +199,10 @@ void ArMode::addKeyHandler(int keyToHandle, ArFunctor *functor)
     ArLog::log(ArLog::Terse,"ArMode '%s'::keyHandler: There should already be a key handler, but there isn't... mode won't work right.", getName());
     return;
   }
+
   if (!keyHandler->addKeyHandler(keyToHandle, functor))
   {
+    bool specialKey = true;
     switch (keyToHandle) {
     case ArKeyHandler::UP:
       charStr = "Up";
@@ -242,15 +245,20 @@ void ArMode::addKeyHandler(int keyToHandle, ArFunctor *functor)
       break;
     default:
       charStr = (char)keyToHandle;
+      specialKey = false;
       break;
     }
-    ArLog::log(ArLog::Terse,  
-	       "ArMode '%s': The key handler has a duplicate key for '%s' so the mode may not work right.", getName(), charStr.c_str());
+    if (specialKey || (keyToHandle >= '!' && keyToHandle <= '~'))
+      ArLog::log(ArLog::Terse,  
+		 "ArMode '%s': The key handler has a duplicate key for '%s' so the mode may not work right.", getName(), charStr.c_str());
+    else
+      ArLog::log(ArLog::Terse,  
+		 "ArMode '%s': The key handler has a duplicate key for number %d so the mode may not work right.", getName(), keyToHandle);
   }
   
 }
 
-void ArMode::remKeyHandler(ArFunctor *functor)
+AREXPORT void ArMode::remKeyHandler(ArFunctor *functor)
 {
   ArKeyHandler *keyHandler;
   std::string charStr;

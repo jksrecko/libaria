@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,15 +19,16 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARROBOTPACKETRECEIVER_H
 #define ARROBOTPACKETRECEIVER_H
 
 #include "ariaTypedefs.h"
 #include "ArRobotPacket.h"
+
 
 class ArDeviceConnection;
 
@@ -44,6 +45,13 @@ public:
 				 bool allocatePackets = false,
 				 unsigned char sync1 = 0xfa, 
 				 unsigned char sync2 = 0xfb);
+  /// Constructor with assignment of a device connection and tracking
+  AREXPORT ArRobotPacketReceiver(ArDeviceConnection *deviceConnection, 
+				 bool allocatePackets,
+				 unsigned char sync1, 
+				 unsigned char sync2,
+					bool tracking,
+					const char *trackingLogName);
   /// Destructor
   AREXPORT virtual ~ArRobotPacketReceiver();
   
@@ -57,14 +65,37 @@ public:
   
   /// Gets whether or not the receiver is allocating packets
   AREXPORT bool isAllocatingPackets(void) { return myAllocatePackets; }
+  /// Sets whether or not the receiver is allocating packets
+  AREXPORT void setAllocatingPackets(bool allocatePackets) 
+    { myAllocatePackets = allocatePackets; }
 
+#ifdef DEBUG_SPARCS_TESTING
+  AREXPORT void setSync1(unsigned char s1) { mySync1 = s1; }
+  AREXPORT void setSync2(unsigned char s2) { mySync2 = s2; }
+#endif
+
+	AREXPORT void setTracking(bool tracking)
+	{ myTracking = tracking; }
+
+	AREXPORT void setTrackingLogName(const char *trackingLogName)
+	{ myTrackingLogName = trackingLogName; }
+
+  /// Sets the callback that gets called with the finalized version of
+  /// every packet set... this is ONLY for very internal very
+  /// specialized use
+  AREXPORT void setPacketReceivedCallback(ArFunctor1<ArRobotPacket *> *functor);
 protected:
   ArDeviceConnection *myDeviceConn;
+	bool myTracking;
+	std::string myTrackingLogName;
+
   bool myAllocatePackets;
   ArRobotPacket myPacket;
   enum { STATE_SYNC1, STATE_SYNC2, STATE_ACQUIRE_DATA };
   unsigned char mySync1;
   unsigned char mySync2;
+
+  ArFunctor1<ArRobotPacket *> *myPacketReceivedCallback;
 };
 
 #endif // ARROBOTPACKETRECEIVER_H

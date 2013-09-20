@@ -40,6 +40,7 @@
 #include "ArCentralForwarder.h"
 #include "ArClientSwitchManager.h"
 #include "ArServerModeIdle.h"
+#include "ArTempDirectoryHelper.h"
 
 /**
    \mainpage ArNetworking
@@ -47,7 +48,7 @@
    MobileRobots <b>Advanced Robotics Networking Infrastructure (ArNetworking)</b>
    Developer's API Reference Manual<br>
    Copyright 2005 ActivMedia Robotics, LLC. All rights reserved.<br>
-   Copyright 2006, 2007, 2008, 2009 MobileRobots Inc. All rights reserved.
+   Copyright 2006, 2007, 2008, 2009, 2010 MobileRobots Inc. All rights reserved.
 
 
    ArNetworking is an extensible networking protocol and infrastructure. It 

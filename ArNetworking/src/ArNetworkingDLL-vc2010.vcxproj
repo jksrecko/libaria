@@ -286,6 +286,12 @@
     <ClInclude Include="..\include\ArServerUserInfo.h" />
     <ClInclude Include="..\include\md5.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AriaDLL-vc2010.vcxproj">
+      <Project>{606257ae-e882-4c66-84c0-72331642d09f}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

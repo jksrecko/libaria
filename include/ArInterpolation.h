@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARINTERPOLATION_H
 #define ARINTERPOLATION_H
@@ -39,6 +39,14 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
     numberOfReadings and the setNumberOfReadings control the number of entries
     in the list.  If a size is set that is smaller than the current size, then
     the old ones are chopped off.
+    
+    This class now has a couple of variables for when it allows
+    prediction, they're set with setAllowedMSForPrediction and
+    setAllowedPercentageForPrediction.  If either is below 0 than they
+    are ignored (if both are below 0 it means any prediction is
+    allowed, which would be bad).  Previous there was no MS limit, and
+    the percentage limit was 50 (and so that is what the default is
+    now).
 **/
 class ArInterpolation
 {
@@ -50,7 +58,24 @@ public:
   /// Adds a new reading
   AREXPORT bool addReading(ArTime timeOfReading, ArPose position);
   /// Finds a position
-  AREXPORT int getPose(ArTime timeStamp, ArPose *position);
+  AREXPORT int getPose(ArTime timeStamp, ArPose *position, 
+		       ArPoseWithTime *lastData = NULL);
+  /// Sets the name
+  AREXPORT void setName(const char *name);
+  /// Gets the name
+  AREXPORT const char *getName(void);
+  /// Sets the allowed milliseconds for prediction
+  AREXPORT void setAllowedMSForPrediction(int ms = -1);
+  /// Sets the allowed milliseconds for prediction
+  AREXPORT int getAllowedMSForPrediction(void);
+  /// Sets the allowed percentage for prediction
+  AREXPORT void setAllowedPercentageForPrediction(int percentage = 5000);
+  /// Sets the allowed milliseconds for prediction
+  AREXPORT int getAllowedPercentageForPrediction(void);
+  /// Sets if we should log events for this interpolation
+  AREXPORT void setLogPrediction(bool logPrediction = false);
+  /// Gets if we should log events for this interpolation
+  AREXPORT bool getLogPrediction(void);
   /// Sets the number of readings this instance holds back in time
   AREXPORT void setNumberOfReadings(size_t numberOfReadings);
   /// Gets the number of readings this instance holds back in time
@@ -59,9 +84,13 @@ public:
   AREXPORT void reset(void);
 protected:
   ArMutex myDataMutex;
+  std::string myName;
   std::list<ArTime> myTimes;
   std::list<ArPose> myPoses;
   size_t mySize;
+  bool myLogPrediction;
+  int myAllowedMSForPrediction;
+  int myAllowedPercentageForPrediction;
 };
 
 #endif

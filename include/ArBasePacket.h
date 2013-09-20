@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARBASEPACKET_H
 #define ARBASEPACKET_H
@@ -31,39 +31,39 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaTypedefs.h"
 
 /// Base packet class
-/** This class is a base class for all packets... most software will never 
-    need to use this class, it is there mostly to help people do more advanced
-    client and server communications. 
+/** This class is a base class for specific packet types implemented by base
+    classes.  In most cases, you would not instantiate this class directly, but instead 
+    use a subclass. However, ArBasePacket contains many of the functions used to
+    access the packet's data.
 
-    All of the functions are virtual so it can be completely overridden if 
-    desired... but the few most likely ones to be overridden are empty and 
-    makeFinal...  
-    
-    The theory of the packet works like this, the packet has a buffer,
-    headerLength, footer length, readLength, length, and a maxLength.
-    When the packet is initialized it is given a buffer and its
-    maxLength.  All of the functions that are somethingToBuf put data
-    in at the current length of the packet, and advance the length.
-    All of the functions that do bufToSomething get the data from
-    where readLength points, and advance read length.  If
-    bufToSomething would go beyond the data length of the packet it
-    returns a 0 (note that this includes if it goes into the footer
-    length).  resetRead sets readLength back to the header (since no
-    one outside of the person who writes the class should touch the
-    header).  empty likewise sets the length back to the header since
-    the header will be calculated in the finalizePacket method.
+    A packet is a sequence of values stored in a buffer.  The contents 
+    of a packet's data buffer is read from a device or other program or written to the
+    device (for example, a serial port or TCP port
+    using an ArDeviceConnection or using ArNetworking), optionally preceded
+    by a header with some identifying data and a length, and optionally followed by a 
+    footer with a checksum of the data. (If the
+    header length of a particular packet type is 0, no header is written or expected on read, and likewise
+    with footer.)
 
-    
+    Values are added to the buffer or removed from the buffer in sequence. 
+    The "bufTo" methods are used to remove values from the buffer, and the
+    "ToBuf" methods are used to add values to the buffer. There are different
+    methods for different sized values.
 
-    The base class and most classes of this kind will have an integer before
-    the string, denoting the strings length... this is hidden by the function 
-    calls, but something someone may want to be aware of... it should not 
-    matter much as this same packet class should be used on both sides.
-   
-    Uses of this class that don't get newed and deleted a lot can just go 
-    ahead and use the constructor with buf = NULL, as this will have the
-    packet manage its own memory, making life easier.
+    ArBasePacket keeps a current position index in the buffer, which is the position
+    at which new values are added or values are removed. 
 
+    A buffer may be statically allocated externally and supplied to the
+    constructor
+    (also give a buffer size to determine the maximum amount of data that can be
+    placed in that bufer),
+    or automatically and dynamically allocated by ArBasePacket as needed
+    (the default behavior).
+
+    When it is time to write out a packet, call finalizePacket() to set 
+    up the footer if neccesary.
+    To reuse a packet, use empty() to reset the buffer; new data will
+    then be added to the beginning of the buffer again.
 */
 class ArBasePacket
 {
@@ -162,26 +162,29 @@ public:
   // Accessors
 
   /// Gets the total length of the packet
-  virtual ArTypes::UByte2 getLength(void) { return myLength; }
+  virtual ArTypes::UByte2 getLength(void) const { return myLength; }
   /// Gets the length of the data in the packet
-  virtual ArTypes::UByte2 getDataLength(void) { return myLength - myHeaderLength - myFooterLength; }
+  virtual ArTypes::UByte2 getDataLength(void) const { return myLength - myHeaderLength - myFooterLength; }
 
   /// Gets how far into the packet that has been read
-  virtual ArTypes::UByte2 getReadLength(void) { return myReadLength; }
+  virtual ArTypes::UByte2 getReadLength(void) const { return myReadLength; }
   /// Gets how far into the data of the packet that has been read
-  virtual ArTypes::UByte2 getDataReadLength(void) { return myReadLength - myHeaderLength; }
+  virtual ArTypes::UByte2 getDataReadLength(void) const { return myReadLength - myHeaderLength; }
   /// Gets the length of the header
-  virtual ArTypes::UByte2 getHeaderLength(void)
+  virtual ArTypes::UByte2 getHeaderLength(void) const
   { return myHeaderLength; }
   /// Gets the length of the header
-  virtual ArTypes::UByte2 getFooterLength(void)
+  virtual ArTypes::UByte2 getFooterLength(void) const
   { return myFooterLength; }
 
   /// Gets the maximum length packet
-  virtual ArTypes::UByte2 getMaxLength(void) { return myMaxLength; }
+  virtual ArTypes::UByte2 getMaxLength(void) const { return myMaxLength; }
+
+  /// Gets a const pointer to the buffer the packet uses 
+  AREXPORT virtual const char * getBuf(void) const;
 
   /// Gets a pointer to the buffer the packet uses 
-  AREXPORT virtual const char * getBuf(void);
+  AREXPORT virtual char * getBuf(void);
 
   /// Sets the buffer the packet is using
   AREXPORT virtual void setBuf(char *buf, ArTypes::UByte2 bufferSize);

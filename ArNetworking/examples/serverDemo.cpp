@@ -60,6 +60,9 @@ int main(int argc, char **argv)
     Aria::exit(1);
   }
 
+  ArDataLogger dataLogger(&robot, "dataLog.txt");
+  dataLogger.addToConfig(Aria::getConfig());
+  
   // our base server object
   ArServerBase server;
 
@@ -93,7 +96,8 @@ int main(int argc, char **argv)
   }
 
   // Range devices:
-  
+ 
+ 
   ArSonarDevice sonarDev;
   robot.addRangeDevice(&sonarDev);
 
@@ -124,13 +128,16 @@ int main(int argc, char **argv)
   ArServerSimpleServerCommands serverCommands(&commands, &server); // control ArNetworking debug logging
   ArServerSimpleLogRobotDebugPackets logRobotDebugPackets(&commands, &robot, ".");  // debugging tool
 
-  // This is an older drive mode. ArServerModeDrive is newer and generally performs better,
+  // ArServerModeDrive is an older drive mode. ArServerModeRatioDrive is newer and generally performs better,
   // but you can use this for old clients if neccesary.
   //ArServerModeDrive modeDrive(&server, &robot);
   //modeDrive.addControlCommands(&commands); // configure the drive modes (e.g. enable/disable safe drive)
 
   ArServerHandlerConfig serverHandlerConfig(&server, Aria::getConfig()); // make a config handler
   ArLog::addToConfig(Aria::getConfig()); // let people configure logging
+
+  modeRatioDrive.addToConfig(Aria::getConfig(), "Teleop settings"); // able to configure teleop settings
+  modeRatioDrive.addControlCommands(&commands);
 
   // Forward video if either ACTS or SAV server are running.
   // You can find out more about SAV and ACTS on our website
@@ -178,7 +185,6 @@ int main(int argc, char **argv)
   */
   
   // start the robot running, true means that if we lose connection the run thread stops
-  robot.enableMotors();
   robot.runAsync(true);
 
 
@@ -215,7 +221,34 @@ int main(int argc, char **argv)
     printf("To exit, press escape.\n");
   }
 
+  // Read in parameter files.
+  std::string configFile = "serverDemoConfig.txt";
+  Aria::getConfig()->setBaseDirectory("./");
+  if (Aria::getConfig()->parseFile(configFile.c_str(), true, true))
+  {
+    ArLog::log(ArLog::Normal, "Loaded config file %s", configFile.c_str());
+  }
+  else
+  {
+    if (ArUtil::findFile(configFile.c_str()))
+    {
+      ArLog::log(ArLog::Normal, 
+		 "Trouble loading configuration file %s, continuing",
+		 configFile.c_str());
+    }
+    else
+    {
+      ArLog::log(ArLog::Normal, 
+		 "No configuration file %s, will try to create if config used",
+		 configFile.c_str());
+    }
+  }
+
   clientSwitchManager.runAsync();
+
+  robot.lock();
+  robot.enableMotors();
+  robot.unlock();
 
   robot.waitForRunExit();
   Aria::exit(0);

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -36,7 +36,11 @@ AREXPORT ArLaserReflectorDevice::ArLaserReflectorDevice(ArRangeDevice *laser,
   ArRangeDevice(laser->getCurrentRangeBuffer()->getSize(), 
 		laser->getCumulativeRangeBuffer()->getSize(), name,
 		laser->getMaxRange()), */
-  ArRangeDevice(361, 361, name, 32000),
+  // MPL 12/11/12 this is how it was... but the part I'm putting in was above commented out, so this may go wrong
+  //ArRangeDevice(361, 361, name, 32000),
+  ArRangeDevice(laser->getCurrentRangeBuffer()->getSize(), 
+		laser->getCumulativeRangeBuffer()->getSize(), name,
+		laser->getMaxRange()), 
   myProcessCB(this, &ArLaserReflectorDevice::processReadings)
 {
   myLaser = laser;
@@ -67,6 +71,11 @@ AREXPORT void ArLaserReflectorDevice::setRobot(ArRobot *robot)
 AREXPORT void ArLaserReflectorDevice::addToConfig(ArConfig *config, 
 						  const char *section)
 {
+
+  config->addSection(ArConfig::CATEGORY_ROBOT_PHYSICAL,
+                     section,
+                     "Settings for using the reflector readings from this laser");
+
   config->addParam(
 	  ArConfigArg("ReflectanceThreshold", &myReflectanceThreshold,
 		      "The threshold to start showing reflector readings at (normalized from 0 to 255, 31 is the default)", 

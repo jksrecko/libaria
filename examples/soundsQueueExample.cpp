@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 /** @example soundsQueueExample.cpp  This program demonstrates the sound output queue ArSoundsQueue
@@ -107,6 +107,13 @@ int main(int argc, char** argv) {
       << "\tc\tclear the queue\n"
       << "\tC\tclear priority < 4 from the queue.\n"
       << "\tn\tAdd " << filenames[0] << " to the queue, but with a condition callback to prevent it playing.\n"
+      << "\tv\tAdjust volume -50%\n"
+      << "\tV\tAdjust volume +50%\n"
+      << "\to\tAdjust volume -100%\n"
+      << "\tO\tAdjust volume +100%\n"
+      << "\tl\tAdjust volume -200%\n"
+      << "\tL\tAdjust volume +200%\n"
+      << "\t-\tSet volume adjustment to normal level\n"
       ;
     for(size_t i = 0; i < filenames.size(); i++)
       cout << "\t" << i << "\tadd " << filenames[i] << " to the queue\n";
@@ -131,6 +138,13 @@ int main(int argc, char** argv) {
         soundQueue.addItem(item);
         break;
       }
+      case 'v': ArSoundPlayer::setVolumePercent(-50.0); break;
+      case 'V': ArSoundPlayer::setVolumePercent(50.0); break;
+      case 'o': ArSoundPlayer::setVolumePercent(-100.0); break;
+      case 'O': ArSoundPlayer::setVolumePercent(100.0); break;
+      case 'l': ArSoundPlayer::setVolumePercent(-200.0); break;
+      case 'L': ArSoundPlayer::setVolumePercent(200.0); break;
+      case '-': ArSoundPlayer::setVolumePercent(0.0); break; 
       default:
         if(filenames.size() > 0 && c >= '0' && c <= '9')
         {

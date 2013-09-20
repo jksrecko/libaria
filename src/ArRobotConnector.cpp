@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -29,21 +29,43 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArRobot.h"
 #include "ArSick.h"
 #include "ariaInternal.h"
+#include "ArCommands.h"
+#include "ArSonarConnector.h"
+#include "ArBatteryConnector.h"
+//#include "ArLCDConnector.h"
 
 
 /** @warning do not delete @a parser during the lifetime of this
  * ArRobotConnector, which may need to access its contents later.
+
+ * @param parser argument parser object (see parseArgs() for list of command
+ * line arguments recognized)
+ * @param robot ArRobot object to connect to the robot
+ * @param autoParseArgs if true (default), trigger argument parsing before
+ * connection if not already done. (normally, a program will call
+ * Aria::parseArgs() to trigger argument parsing for all created objects.
+ * @param connectAllComponents if true (default), then connect to all robot
+ * components. If false, then your program may need to create additional
+ * connector objects for
+ * components such as sonar and battery.  (MTX-series robots have separate
+ * connections to components such as battery, sonar, etc. Other robots do
+ * not require this.)
  */
 AREXPORT ArRobotConnector::ArRobotConnector(
-	ArArgumentParser *parser, ArRobot *robot, bool autoParseArgs) :
+	ArArgumentParser *parser, ArRobot *robot, bool autoParseArgs, bool
+connectAllComponents) :
   myParseArgsCB(this, &ArRobotConnector::parseArgs),
-  myLogOptionsCB(this, &ArRobotConnector::logOptions)
+  myLogOptionsCB(this, &ArRobotConnector::logOptions),
+  myBatteryConnector(NULL),
+//  myLCDConnector(NULL),
+  mySonarConnector(NULL)
 {
   myParser = parser;
   myOwnParser = false;
   myRobot = robot;
   myAutoParseArgs = autoParseArgs;
   myHaveParsedArgs = false;
+  myConnectAllComponents = connectAllComponents;
 
   myParseArgsCB.setName("ArRobotConnector");
   Aria::addParseArgsCB(&myParseArgsCB, 75);
@@ -63,11 +85,22 @@ AREXPORT ArRobotConnector::ArRobotConnector(
   myRobotLogVelocitiesReceived = false;
   myRobotLogActions = false;
 
+  if(myConnectAllComponents)
+  {
+    myBatteryConnector = new ArBatteryConnector(myParser, myRobot, this);
+//    myLCDConnector = new ArLCDConnector(myParser, myRobot, this);
+    mySonarConnector = new ArSonarConnector(myParser, myRobot, this);
+  }
 }
 
 AREXPORT ArRobotConnector::~ArRobotConnector(void)
 {
-
+  if(myBatteryConnector)
+    delete myBatteryConnector;
+//  if(myLCDConnector)
+//    delete myLCDConnector;
+  if(mySonarConnector)
+    delete mySonarConnector;
 }
 
 /**
@@ -84,7 +117,8 @@ AREXPORT bool ArRobotConnector::parseArgs(void)
 }
 
 /**
- * Parse command line arguments held by the given ArArgumentParser.
+ * Parse command line arguments for ArRobotConnector held by the given ArArgumentParser.
+ * Normally called via global Aria::parseArgs() method.
  *
   @return true if the arguments were parsed successfully false if not
 
@@ -194,6 +228,7 @@ AREXPORT bool ArRobotConnector::parseArgs(ArArgumentParser *parser)
   return true;
 }
 
+/** Normally called by Aria::logOptions(). */
 AREXPORT void ArRobotConnector::logOptions(void) const
 {
   ArLog::log(ArLog::Terse, "Options for ArRobotConnector (see docs for more details):");
@@ -302,6 +337,12 @@ AREXPORT bool ArRobotConnector::setupRobot(ArRobot *robot)
   if (myRobotLogActions)
     robot->setLogActions(true);
 
+  if (myRobot->getDeviceConnection() != NULL)
+  {
+    ArLog::log(ArLog::Normal, 
+	       "ArRobotConnector::setupRobot: robot already has device connection, will not setup robot");
+    return true;
+  }
 
   // We see if we can open the tcp connection, if we can we'll assume
   // we're connecting to the sim, and just go on...  if we can't open
@@ -363,7 +404,56 @@ AREXPORT bool ArRobotConnector::setupRobot(ArRobot *robot)
  */
 AREXPORT bool ArRobotConnector::connectRobot(void)
 {
-  return connectRobot(myRobot);
+  if(! connectRobot(myRobot) )
+    return false;
+
+  myRobot->comInt(ArCommands::JOYINFO, 0); // make sure we start with Joystick packets disabled (Pioneer starts with them disabled, but MTX starts with them enabled, even if program doesn't request them)
+
+  if(myConnectAllComponents)
+  {
+    if(getRemoteIsSim() )
+    {
+      ArLog::log(ArLog::Normal, "ArRobotConnector: Connected to simulator, not connecting to additional hardware components.");
+    }
+    else
+    {
+      
+      if(myBatteryConnector)
+      {
+        ArLog::log(ArLog::Normal, "ArRobotConnector: Connecting to MTX batteries (if neccesary)...");
+        if(!myBatteryConnector->connectBatteries())
+        {
+          ArLog::log(ArLog::Terse, "ArRobotConnector: Error: Could not connect to robot batteries.");
+          return false;
+        }
+      }
+
+/*
+      if(myLCDConnector)
+      {
+        ArLog::log(ArLog::Normal, "ArRobotConnector: Connecting to MTX LCD (if neccesary)...");
+        if(!myLCDConnector->connectLCDs())
+        {
+          ArLog::log(ArLog::Terse, "ArRobotConnector: Error: Could not connect to robot LCD interface.");
+          return false;
+        }
+      }
+*/
+
+      if(mySonarConnector)
+      {
+        ArLog::log(ArLog::Normal, "ArRobotConnector: Connecting to MTX sonar (if neccesary)...");
+        if(!mySonarConnector->connectSonars())
+        {
+          ArLog::log(ArLog::Terse, "ArRobotConnector: Error: Could not connect to sonar(s).");
+          return false;
+        }
+        
+      }
+    }
+  }
+
+  return true;
 }
 
 /** Prepares the given ArRobot object for connection, then begins
@@ -396,6 +486,20 @@ AREXPORT bool ArRobotConnector::getRemoteIsSim(void) const
     return true;
   else
     return false;
+}
+
+AREXPORT void ArRobotConnector::setRemoteIsSim(bool remoteIsSim) 
+{
+  if (remoteIsSim)
+  {
+    myRemoteIsSim = true;
+    myRemoteIsNotSim = false;
+  }
+  else 
+  {
+    myRemoteIsSim = false;
+    myRemoteIsNotSim = true;
+  }
 }
 
 AREXPORT ArRobot *ArRobotConnector::getRobot(void) 

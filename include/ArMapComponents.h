@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 /*! \file ArMapComponents.h
  *  \brief Contains the set of component classes used to implement Aria maps.
@@ -437,6 +437,9 @@ class ArMapObjects : public ArMapObjectsInterface
 
 public :
 
+  /// Default keyword that prefixes each map object line in the map file
+  static const char *DEFAULT_KEYWORD;
+
   /// Constructor
   /**
    * @param keyword the char * keyword that prefixes each map object line in
@@ -556,6 +559,7 @@ public:
    * standard ArMapInfo::InfoType's; if NULL, then the default keywords are
    * used
    * @param infoNameCount the size_t length of the infoNameList array
+   * @param keywordPrefix optional prefix to add to keywords.
   **/ 
   AREXPORT ArMapInfo(const char **infoNameList = NULL,
                      size_t infoNameCount = 0,
@@ -623,7 +627,7 @@ protected:
   
   /// Writes the specified info arguments to the given ArMapFileLineSet.
   /**
-   * @param infoType the unique int identifier of the info to be written
+   * @param infoName unique identifier for the info to be written
    * @param multiSet the ArMapFileLineSet * to which to write the info; 
    * must be non-NULL
    * @param changeDetails the ArMapChangeDetails * that specifies the 
@@ -1018,12 +1022,12 @@ public:
   AREXPORT virtual void mapChanged(void);
 
   AREXPORT virtual void addMapChangedCB(ArFunctor *functor, 
- 				                                ArListPos::Pos position = ArListPos::LAST);
+					int position = 50);
 
   AREXPORT virtual void remMapChangedCB(ArFunctor *functor);
 
   AREXPORT virtual void addPreMapChangedCB(ArFunctor *functor,
-                                           ArListPos::Pos position = ArListPos::LAST);
+                                           int position = 50);
 
   AREXPORT virtual void remPreMapChangedCB(ArFunctor *functor);
 
@@ -1112,6 +1116,12 @@ public:
   AREXPORT virtual ArMapObjectsInterface *getInactiveObjects();
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // Child Objects Section
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  AREXPORT virtual ArMapObjectsInterface *getChildObjects();
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Miscellaneous
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -1142,7 +1152,7 @@ public:
    * The CairnInfo list stores the parameter information (if any) for map 
    * objects. If a map object is removed (or activated), then the CairnInfo 
    * must also be updated.
-   * @param mapObject the ArMapObject for which to find the parameters
+   * @param mapObjectName the ArMapObject for which to find the parameters
    * @param cairnInfoList the list of ArArgumentBuilder *'s that contain the
    * map object parameters (also may be set to the inactive section)
    * @return iterator that points to the parameter information for the map
@@ -1161,6 +1171,10 @@ protected:
   AREXPORT void setInactiveObjects(const std::list<ArMapObject *> *mapObjects,
                                    bool isSortedObjects = false,
                                    ArMapChangeDetails *changeDetails = NULL); 
+
+  AREXPORT void setChildObjects(const std::list<ArMapObject *> *mapObjects,
+                                bool isSortedObjects = false,
+                                ArMapChangeDetails *changeDetails = NULL); 
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1245,6 +1259,7 @@ protected:
 
   AREXPORT virtual void updateMapCategory(const char *updatedInfoName = NULL);
 
+  AREXPORT virtual bool mapInfoContains(const char *arg0Text);
 
   AREXPORT bool isDataTag(const char *line); 
 
@@ -1329,6 +1344,8 @@ protected:
   ArMapInfo    * const myInactiveInfo;
   ArMapObjects * const myInactiveObjects;
 
+  ArMapObjects * const myChildObjects;
+
   std::map<std::string, ArArgumentBuilder *, ArStrCaseCmpOp> myMapObjectNameToParamsMap;
 
   /// List of map file lines that were not recognized
@@ -1348,6 +1365,8 @@ protected:
   ArRetFunctor1C<bool, ArMapSimple, ArArgumentBuilder *> myRemCB;
 
   bool myIsQuiet;
+  bool myIsReadInProgress;
+  bool myIsCancelRead;
 
 }; // end class ArMapSimple
 

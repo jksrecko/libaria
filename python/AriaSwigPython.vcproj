@@ -79,10 +79,11 @@
 				Name="VCCustomBuildTool"
 				Description="Running C:\swig\swig.exe to generate Python wrapper code"
 				CommandLine="echo ProjectDir is $(ProjectDir)
+cd &quot;$(ProjectDir)&quot;
 del &quot;$(ProjectDir)\AriaPy_wrap.cpp&quot;
 del &quot;$(ProjectDir)\AriaPy_wrap.h&quot;
 del &quot;$(ProjectDir)\AriaPy.py&quot;
-C:\swig\swig.exe -Fmicrosoft -c++ -python -module AriaPy -DWIN32 -DAREXPORT -outdir $(ProjectDir) -o AriaPy_wrap.cpp -I$(ProjectDir)\..\include $(ProjectDir)\..\include\wrapper.i
+C:\swig\swig.exe -Fmicrosoft -c++ -python -module AriaPy -DWIN32 -DAREXPORT -outdir . -o AriaPy_wrap.cpp -I..\include ..\include\wrapper.i
 "
 				AdditionalDependencies="../include/wrapper.i"
 				Outputs="AriaPy.py;AriaPy_wrap.cpp;AriaPy_wrap.h"/>

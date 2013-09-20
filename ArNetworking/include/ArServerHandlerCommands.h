@@ -17,6 +17,9 @@ public:
   AREXPORT ArServerHandlerCommands(ArServerBase *server);
   /// Destructor
   AREXPORT virtual ~ArServerHandlerCommands();
+  /// Sets the text server 
+  AREXPORT void setTextServer(ArNetServer *textServer)
+		{ myTextServer = textServer; }
   /// Adds a command with no arguments
   AREXPORT bool addCommand(const char *name, const char *description,
 			   ArFunctor *functor, 
@@ -37,10 +40,16 @@ public:
   
 protected:
   ArServerBase *myServer;
+  ArNetServer *myTextServer;
   void netParseCommand(ArServerClient *client, ArNetPacket *packet, 
 		       ArFunctor *functor);
   void netParseStringCommand(ArServerClient *client, ArNetPacket *packet, 
 			     ArFunctor1<ArArgumentBuilder *> *functor);
+
+  void textParseCommand(char **argv, int argc, ArSocket *socket, ArFunctor *functor);
+  void textParseStringCommand(char **argv, int argc, ArSocket *socket, 
+																		ArFunctor1<ArArgumentBuilder *> *functor);
+
   std::list<std::string> myCommands;
   std::list<std::string> myCommandDescriptions;
   std::list<std::string> myStringCommands;
@@ -54,6 +63,7 @@ protected:
       ArServerClient *, ArNetPacket *> myNetListCommandsCB;
   ArFunctor2C<ArServerHandlerCommands, 
       ArServerClient *, ArNetPacket *> myNetListStringCommandsCB;
+
 };
 
 #endif 

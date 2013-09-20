@@ -2,6 +2,7 @@
 #define NLSERVERBASE_H
 
 #include "Aria.h"
+#include "ArServerCommands.h"
 #include "ArServerClient.h"
 #include "ArServerData.h"
 #include "ArNetPacket.h"
@@ -9,6 +10,8 @@
 #include "ArServerUserInfo.h"
 
 /**
+   Base server for all networking services.
+
    This class is the "base" server for network services. Start
    this server by calling open(), and then running the loop with run() or runAsync(),
    (or loopOnce() if it is absolutely neccesary to use your own loop; see the
@@ -89,7 +92,8 @@ public:
 	  const char *backupTimeoutDesc = "The amount of time the central server can go without sending a packet to the robot successfully (when there are packets to send).  A number less than 0 means this won't happen.  The time is in minutes but takes doubles (ie .5) (5 seconds is used if the value is positive, but less than that amount)",
 	  bool masterServer = false, bool slaveServer = false,
 	  bool logPasswordFailureVerbosely = false, 
-	  bool allowSlowPackets = true, bool allowIdlePackets = true);
+	  bool allowSlowPackets = true, bool allowIdlePackets = true,
+	  int maxClientsAllowed = -1);
 
   /// Destructor
   AREXPORT virtual ~ArServerBase();
@@ -135,9 +139,16 @@ public:
   /// Sets a 'key' needed to access the server through any account
   AREXPORT void setServerKey(const char *serverKey);
 
+
   /// Tells the server to reject connectings because we're usinga central server
   AREXPORT void rejectSinceUsingCentralServer(
 	  const char *centralServerIPString);
+
+  /// Enforces that the server is using this protocol version
+  AREXPORT void enforceProtocolVersion(const char *protocolVersion);
+
+  /// Enforces that the robots that connect are this type
+  AREXPORT void enforceType(ArServerCommands::Type type);
 
   /// Sets the backup timeout
   AREXPORT void setBackupTimeout(double timeoutInMins);
@@ -159,7 +170,7 @@ public:
 
   /// Broadcasts packets to any client wanting this data
   AREXPORT bool broadcastPacketTcp(ArNetPacket *packet, const char *name);
-
+  
   /// Broadcasts packets to any client wanting this data that matches the ID
   AREXPORT bool broadcastPacketTcpToMatching(
 	  ArNetPacket *packet, const char *name, 
@@ -186,6 +197,9 @@ public:
   AREXPORT bool broadcastPacketUdpToMatching(
 	  ArNetPacket *packet, const char *name, 
 	  ArServerClientIdentifier identifier, bool matchConnectionID);
+ 
+  /// Delays the current thread by the specified msecs, for use after packet sent.
+  AREXPORT void sleepAfterSend(int msecDelay);
 
   /// Sees if we have any idle processing pending (idle packets or callbacks)
   AREXPORT bool idleProcessingPending(void);
@@ -225,8 +239,8 @@ public:
   /// Remove the callback invoked when a client has been removed
   AREXPORT void remClientRemovedCallback(ArFunctor1<ArServerClient *> *functor);
   /// Makes a new serverclient from this socket (for switching, needs no password since this was an outgoing connection to a trusted server)
-  AREXPORT ArServerClient *makeNewServerClientFromSocket(ArSocket *socket, 
-							 bool doNotReject);
+  AREXPORT ArServerClient *makeNewServerClientFromSocket(
+	  ArSocket *socket, bool overrideGeneralReject);
   /// Gets the user info we're using (mostly internal for switching)
   AREXPORT const ArServerUserInfo *getUserInfo(void) const;
   /// Sets the user info we'll use (mostly internal for switching)
@@ -239,7 +253,7 @@ public:
 	  const char *commandGroup = NULL, const char *dataFlags = NULL, 
 	  unsigned int commandNumber = 0,
 	  ArFunctor2<long, unsigned int> *requestChangedFunctor = NULL, 
-	  ArFunctor2<ArServerClient *, ArNetPacket *> 
+	  ArRetFunctor2<bool, ArServerClient *, ArNetPacket *> 
 	  *requestOnceFunctor = NULL);
   /// Sets the data flags to add in addition to those passed in
   AREXPORT void setAdditionalDataFlags(const char *additionalDataFlags);
@@ -296,6 +310,23 @@ public:
 
   /// Internal, Sees if we have any idle callbacks we are waiting to process
   AREXPORT bool hasIdleCallbacks(void);
+  
+  /// Internal, sets the maximum number of clients 
+  AREXPORT void internalSetNumClients(int numClients);
+
+  /// Adds a callback when we switch states while starting
+  AREXPORT void addTooManyClientsCB(
+	  ArFunctor1<const char *> *functor, int position = 50) 
+    { myTooManyClientsCBList.addCallback(functor, position); }
+  /// Removes a callback when we switch to running
+  AREXPORT void remTooManyClientsCB(ArFunctor1<const char *> *functor)
+    { myTooManyClientsCBList.remCallback(functor); }
+
+  /// Internal call that sets the default frequency as a helper for forwarding (if it's faster than the current default)
+  AREXPORT bool internalSetDefaultFrequency(const char *command, int frequency);
+
+  /// Internal call to lockup the server (for testing)
+  AREXPORT void internalLockup(void);
 protected:
 
   /// The command get the ConnectionID of this server client connection
@@ -309,13 +340,48 @@ protected:
 				       ArNetPacket *packet);
   /// The command set the here goal of this server client connection
   AREXPORT void identSetHereGoal(ArServerClient *client, ArNetPacket *packet);
+  
+
+  /// Handles the "startRequestTransaction" packet, and updates the state of the client. 
+  /**
+   *  "Request transactions" are used to indicate that a sequence of request /
+   *  reply packets must be completed before idle processing can proceed. 
+   *  Any "startRequestTransaction" MUST be followed by an "endRequestTransaction".
+   *
+   *  The packets are meant to be used sparingly. They are currently only used
+   *  when the Central Server is determining whether the map file needs to 
+   *  be downloaded to the client robot. 
+   * 
+   *  @param client the ArServerClient* that sent the request; updated to indicate
+   *  a new transaction is in progress
+   *  @param packet the ArNetPacket* that contains the request (no additional data)
+  **/
+  AREXPORT void handleStartRequestTransaction(ArServerClient *client, 
+                                              ArNetPacket *packet);
+
+  /// Handles the "endRequestTransaction" packet, and updates the state of the client. 
+  /**
+   *  @param client the ArServerClient* that sent the request; updated to indicate
+   *  that a transaction has completed
+   *  @param packet the ArNetPacket* that contains the request (no additional data)
+   *  @see handleStartRequestTransaction
+  **/
+	AREXPORT void handleEndRequestTransaction(ArServerClient *client, 
+                                            ArNetPacket *packet);
+
+  /// Returns the number of request transactions in progress for all connected clients.
+  /**
+   * @see handleStartRequestTransaction
+  **/
+  AREXPORT int getRequestTransactionCount();
+
 
   /// accepts new sockets and moves them into the client list
   void acceptTcpSockets(void);
   /// Internal function for server/client switching
-  AREXPORT ArServerClient *finishAcceptingSocket(ArSocket *socket, 
-						 bool skipPassword = false, 
-						 bool doNotReject = false);
+  AREXPORT ArServerClient *finishAcceptingSocket(
+	  ArSocket *socket, bool skipPassword = false, 
+	  bool overrideGeneralReject = false);
   bool processFile(void);
 
   /// callback for our slow idle thread, which is down below...
@@ -324,6 +390,7 @@ protected:
 					 ArNetPacket *packet);
 
   void slowIdleCallback(void);
+  
 
   
   std::string myServerName;
@@ -343,9 +410,21 @@ protected:
  /// our mapping of the group names
   std::map<std::string, std::string> myGroupDescription;			
 
+  // default frequency (helper for forwarding)
+  std::map<unsigned int, int> myDefaultFrequency;
+
   int myRejecting;
   std::string myRejectingString;
+
+  std::string myEnforceProtocolVersion;
+  ArServerCommands::Type myEnforceType;
+
   double myBackupTimeout;
+  bool myNewBackupTimeout;
+  ArMutex myBackupTimeoutMutex;
+
+  ArCallbackList1<const char *> myTooManyClientsCBList;
+
   // the number we're on for the current data
   unsigned int myNextDataNumber;
   std::string myAdditionalDataFlags;
@@ -364,7 +443,9 @@ protected:
   ArSocket myAcceptingSocket;
   
   int myMostClients;
+  bool myUsingOwnNumClients;
   int myNumClients;
+  
 
   unsigned int myLoopMSecs;
 
@@ -389,13 +470,19 @@ protected:
   ArFunctor2C<ArServerBase, ArServerClient *, 
 	      ArNetPacket *> myIdentSetHereGoalCB;
 
+  ArFunctor2C<ArServerBase, ArServerClient *, 
+	                          ArNetPacket *> myStartRequestTransactionCB;
+  ArFunctor2C<ArServerBase, ArServerClient *, 
+	                          ArNetPacket *> myEndRequestTransactionCB;
 
   ArFunctor2C<ArServerBase, ArServerClient *, 
 	      ArNetPacket *> myIdleProcessingPendingCB;
 
   bool myAllowSlowPackets;
   bool myAllowIdlePackets;
-  
+
+  int myMaxClientsAllowed;
+
   ArMutex myProcessingSlowIdleMutex;
 
   

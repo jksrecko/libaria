@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARACTIONSTALLRECOVER_H
 #define ARACTIONSTALLRECOVER_H
@@ -35,14 +35,16 @@ class ArResolver;
 /**
    This action tries to recover if one of the wheels has stalled, it has a 
    series of actions it tries in order to get out of the stall.
+   @ingroup ActionClasses
 */
 class ArActionStallRecover : public ArAction
 {
 public:
   /// Constructor
   AREXPORT ArActionStallRecover(const char * name = "stall recover", 
-		       double obstacleDistance = 225, int cyclesToMove = 50, 
-		       double speed = 150, double degreesToTurn = 45);
+				double obstacleDistance = 225, int cyclesToMove = 50, 
+				double speed = 150, double degreesToTurn = 45,
+				bool enabled = true);
   /// Destructor
   AREXPORT virtual ~ArActionStallRecover();
   AREXPORT virtual ArActionDesired *fire(ArActionDesired currentDesired);
@@ -52,7 +54,8 @@ public:
   AREXPORT virtual const ArActionDesired *getDesired(void) const 
                                                    { return &myActionDesired; }
 #endif
-  AREXPORT void addToConfig(ArConfig* config, const char* sectionName, int priority = ArPriority::NORMAL);
+  AREXPORT void addToConfig(ArConfig* config, const char* sectionName, ArPriority::Priority priority = ArPriority::NORMAL);
+  AREXPORT virtual void activate(void);
 protected:
   // these are internal things, don't touch unless you know what you are doing
   void doit(void); // does whatever should be done
@@ -85,6 +88,7 @@ protected:
   time_t myLastFired;
   double myObstacleDistance;
   int myCyclesToMove;
+  bool myEnabled;
   double mySpeed;
   int myCyclesToTurn;
   double myDegreesToTurn;

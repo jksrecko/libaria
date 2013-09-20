@@ -33,7 +33,8 @@ class ArServerSimpleOpener
 public:
   /// Constructor 
   AREXPORT ArServerSimpleOpener(ArArgumentParser *parser, 
-				const char *prefix = "");
+				const char *prefix = "", 
+				bool addAriaCallbacks = true);
   /// Destructor
   AREXPORT ~ArServerSimpleOpener();
   /// Function to open up the server
@@ -55,6 +56,12 @@ public:
    *  @return the server's port number
    */
   int getPort() { return myServerPort; } 
+
+  /** Set default server port number (normally 7272). This must be called before
+  * parsing command line arguments. 
+  * @since 2.7.6
+  */
+  void setDefaultPort(int port) { myServerPort = port; }
 
   /// Parses the file for holding the server key
   AREXPORT bool parseFile(const char *fileName);

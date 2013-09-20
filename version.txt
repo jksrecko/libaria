@@ -1,5 +1,5 @@
-ARIA Version 2.7.5.2
-August 02, 2012
+ARIA Version 2.8.0
+August 22, 2013
 Adept MobileRobots
 Linux 
-gcc-4.3.2
+gcc-4.6.3

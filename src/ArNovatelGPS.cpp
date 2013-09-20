@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "ArExport.h"
@@ -105,9 +105,7 @@ AREXPORT ArNovatelSPAN::ArNovatelSPAN() :
   myINGLLHandler(this, &ArNovatelSPAN::handleINGLL),
   GPSLatitude(0), GPSLongitude(0), haveGPSPosition(false), GPSValidFlag(false) 
 {
-  //replaceNMEAHandler("GPRMC", &myGPRMCHandler);
-  removeNMEAHandler("GPRMC");
-  addNMEAHandler("GPRMC", &myGPRMCHandler);
+  replaceNMEAHandler("GPRMC", &myGPRMCHandler);
 
   // NOTE if the SPAN provides an "INRMC" that has the same format as GPRMC,
   // then this class could be simplified by supplying ArGPS::myGPRMCHandler as
@@ -126,7 +124,7 @@ void ArNovatelSPAN::handleGPRMC(ArNMEAParser::Message msg)
 
 void ArNovatelSPAN::handleINGLL(ArNMEAParser::Message msg)
 {
-  ArNMEAParser::MessageVector *mv = msg.message;
+  const ArNMEAParser::MessageVector *mv = msg.message;
 
   if(mv->size() < 5) return;
   double lat, lon;

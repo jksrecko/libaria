@@ -18,7 +18,7 @@ all: ../lib/libAria.so
 %: ../lib/libAria.so %.cpp 
 	$(MAKE) -C .. tests/$@
 
-%Static: ../lib/libAria.so %.cpp
+%Static: ../lib/libAria.a %.cpp
 	$(MAKE) -C .. tests/$@
 
 clean: 

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -30,8 +30,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaUtil.h"
 
 
-/**
-   @param allocatePackets whether to allocate memory for the packets before
+/*
+   allocatePackets: whether to allocate memory for the packets before
    returning them (true) or to just return a pointer to an internal 
    packet (false)... most everything should use false as this will help prevent
    many memory leaks or corruptions
@@ -46,9 +46,8 @@ AREXPORT ArLMS2xxPacketReceiver::ArLMS2xxPacketReceiver(
   myUseBase0Address = useBase0Address;
 }
 
-/**
-   @param deviceConnection the connection which the receiver will use
-   @param allocatePackets whether to allocate memory for the packets before
+/*
+   allocatePackets: whether to allocate memory for the packets before
    returning them (true) or to just return a pointer to an internal 
    packet (false)... most everything should use false as this will help prevent
    many memory leaks or corruptions
@@ -111,6 +110,7 @@ AREXPORT ArLMS2xxPacket *ArLMS2xxPacketReceiver::receivePacket(
   if (myDeviceConn == NULL || 
       myDeviceConn->getStatus() != ArDeviceConnection::STATUS_OPEN)
   {
+    myDeviceConn->debugEndPacket(false, -10);
     return NULL;
   }
   
@@ -126,10 +126,15 @@ AREXPORT ArLMS2xxPacket *ArLMS2xxPacketReceiver::receivePacket(
     if (timeToRunFor < 0)
       timeToRunFor = 0;
 
+    if (state == STATE_START)
+      myDeviceConn->debugStartPacket();
+
     if (myDeviceConn->read((char *)&c, 1, timeToRunFor) == 0) 
     {
+      myDeviceConn->debugBytesRead(0);
       if (state == STATE_START)
       {
+	myDeviceConn->debugEndPacket(false, -20);
 	return NULL;
       }
       else
@@ -138,6 +143,8 @@ AREXPORT ArLMS2xxPacket *ArLMS2xxPacketReceiver::receivePacket(
 	continue;
       }
     }
+
+    myDeviceConn->debugBytesRead(1);
 
     //printf("%x\n", c);
     switch (state) {
@@ -212,9 +219,17 @@ AREXPORT ArLMS2xxPacket *ArLMS2xxPacketReceiver::receivePacket(
       {
 	numRead = myDeviceConn->read(buf + count, packetLength + 2- count, 1);
 	if (numRead > 0)
+	{	
+	  myDeviceConn->debugBytesRead(numRead);
 	  lastDataRead.setToNow();
+	}
+	else
+	{
+	  myDeviceConn->debugBytesRead(0);
+	}
 	if (lastDataRead.mSecTo() < -100)
 	{
+	  myDeviceConn->debugEndPacket(false, -30);
 	  return NULL;
 	}
 	count += numRead;
@@ -223,6 +238,7 @@ AREXPORT ArLMS2xxPacket *ArLMS2xxPacketReceiver::receivePacket(
       if (myPacket.verifyCRC()) 
       {
 	myPacket.resetRead();
+	myDeviceConn->debugEndPacket(true, myPacket.getID());
 	//printf("Received ");
 	//myPacket.log();
 	if (myAllocatePackets)
@@ -248,6 +264,7 @@ AREXPORT ArLMS2xxPacket *ArLMS2xxPacketReceiver::receivePacket(
     }
   } while (timeDone.mSecTo() >= 0 || state != STATE_START);
 
+  myDeviceConn->debugEndPacket(false, -40);
   //printf("finished the loop...\n");
   return NULL;
 

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -55,7 +55,9 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 AREXPORT ArLaserConnector::ArLaserConnector(
 	ArArgumentParser *parser, ArRobot *robot,
 	ArRobotConnector *robotConnector, bool autoParseArgs,
-	ArLog::LogLevel infoLogLevel) :
+	ArLog::LogLevel infoLogLevel,
+	ArRetFunctor1<bool, const char *> *turnOnPowerOutputCB,
+	ArRetFunctor1<bool, const char *> *turnOffPowerOutputCB) :
   myParseArgsCB(this, &ArLaserConnector::parseArgs),
   myLogOptionsCB(this, &ArLaserConnector::logOptions)
 {
@@ -66,6 +68,9 @@ AREXPORT ArLaserConnector::ArLaserConnector(
   myAutoParseArgs = autoParseArgs;
   myParsedArgs = false;
   myInfoLogLevel = infoLogLevel;
+
+  myTurnOnPowerOutputCB = turnOnPowerOutputCB;
+  myTurnOffPowerOutputCB = turnOffPowerOutputCB;
 
   myParseArgsCB.setName("ArLaserConnector");
   Aria::addParseArgsCB(&myParseArgsCB, 60);
@@ -93,20 +98,13 @@ AREXPORT bool ArLaserConnector::parseArgs(void)
 }
 
 /**
- * Parse command line arguments held by the given ArArgumentParser.
+ * This function parses command line arguments held by the given ArArgumentParser.
+ * Normally, it is automatically called by ArArgumentParser::parseArgs().
  *
   @return true if the arguments were parsed successfully false if not
 
-   The following arguments are used for the robot connection:
-
-   <dl>
-    <dt><code>-robotPort</code> <i>port</i></dt>
-    <dt><code>-rp</code> <i>port</i></dt>
-    <dd>Use the given serial port device name for a serial port connection (e.g. <code>COM1</code>, or <code>/dev/ttyS0</code> if on Linux.)
-    The default is the first serial port, or COM1, which is the typical Pioneer setup.
-    </dd>
-
-  The following arguments are accepted for laser connections.  A program may request support for more than one laser
+  The following arguments are accepted for laser connections.  A program may
+  request support for up to a specific number of lasers
   using setMaxNumLasers(); if multi-laser support is enabled in this way, then these arguments must have the laser index
   number appended. For example, "-laserPort" for laser 1 would instead by "-laserPort1", and for laser 2 it would be
   "-laserPort2".
@@ -114,8 +112,8 @@ AREXPORT bool ArLaserConnector::parseArgs(void)
   <dl>
     <dt>-laserPort <i>port</i></dt>
     <dt>-lp <i>port</i></dt>
-    <dd>Use the given port device name when connecting to a laser. For example, <code>COM2</code> or on Linux, <code>/dev/ttyS1</code>.
-    The default laser port is COM2, which is the typical Pioneer laser port setup.
+    <dd>Use the given serial port device name when connecting to a laser. For example, <code>COM2</code> or on Linux, <code>/dev/ttyS1</code>.
+    The default laser port is COM2, which is the typical Pioneer laser port.
     </dd>
 
     <dt>-laserFlipped <i>true|false</i></dt>
@@ -155,142 +153,136 @@ AREXPORT bool ArLaserConnector::parseArgs(void)
 
  **/
 
-AREXPORT bool ArLaserConnector::parseArgs(ArArgumentParser *parser)
+AREXPORT bool ArLaserConnector::parseArgs (ArArgumentParser *parser)
 {
-  if (myParsedArgs)
-    return true;
-
-  myParsedArgs = true;
-
-  bool typeReallySet;
-  const char *type;
-  char buf[1024];
-  int i;
-  std::map<int, LaserData *>::iterator it;
-  LaserData *laserData;
-
-  bool wasReallySetOnlyTrue = parser->getWasReallySetOnlyTrue();
-  parser->setWasReallySetOnlyTrue(true);
-
-  for (i = 1; i <= Aria::getMaxNumLasers(); i++)
-  {
-    if (i == 1)
-      buf[0] = '\0';
-    else
-      sprintf(buf, "%d", i);
-    
-    typeReallySet = false;
-    
-    // see if the laser is being added from the command line
-    if (!parser->checkParameterArgumentStringVar(&typeReallySet, &type,
-						 "-laserType%s", buf) ||
-	!parser->checkParameterArgumentStringVar(&typeReallySet, &type,
-						 "-lt%s", buf))
-    {
-      ArLog::log(ArLog::Normal, 
-		 "ArLaserConnector: Bad laser type given for laser number %d", 
-		 i);
-      parser->setWasReallySetOnlyTrue(wasReallySetOnlyTrue);
-      return false;
-    }
-
-    // if we didn't have an argument then just return
-    if (!typeReallySet)
-      continue;
-
-    if ((it = myLasers.find(i)) != myLasers.end())
-    {
-      ArLog::log(ArLog::Normal, "ArLaserConnector: A laser already exists for laser number %d, replacing it with a new one of type %s", 
-		 i, type);
-      laserData = (*it).second;   
-      delete laserData;
-      myLasers.erase(i);
-    }
-
-    if (typeReallySet && type != NULL)
-    {
-      ArLaser *laser = NULL;
-      if ((laser = Aria::laserCreate(type, i, "ArLaserConnector: ")) != NULL)
-      {
-	ArLog::log(myInfoLogLevel, 
-		   "ArLaserConnector: Created %s as laser %d from arguments",
-		   laser->getName(), i);
-	myLasers[i] = new LaserData(i, laser);
-	laser->setInfoLogLevel(myInfoLogLevel);
-      }
-      else
-      {
-	ArLog::log(ArLog::Normal, 
-		   "Unknown laser type %s for laser %d, choices are %s", 
-		   type, i, Aria::laserGetTypes());
-	parser->setWasReallySetOnlyTrue(wasReallySetOnlyTrue);
-	return false;
-      }
-    }
-  }
-
-  // go through the robot param list and add the lasers defined
-  // in the parameter file.
-  const ArRobotParams *params = NULL;
-  if (myRobot != NULL)
-  {
-    params = myRobot->getRobotParams();
-    if (params != NULL)
-    {
-
-      for (i = 1; i <= Aria::getMaxNumLasers(); i++)
-      {
-	// if we already have a laser for this then don't add one from
-	// the param file, since it was added either explicitly by a
-	// program or from the command line
-	if (myLasers.find(i) != myLasers.end())
-	  continue;
-	
-	type = params->getLaserType(i);
-
-	// if we don't have a laser type for that number continue
-	if (type == NULL || type[0] == '\0')
-	  continue;
-
-	ArLaser *laser = NULL;
-	if ((laser = 
-	     Aria::laserCreate(type, i, "ArLaserConnector: ")) != NULL)
-	{
-	  ArLog::log(myInfoLogLevel, 
-	     "ArLaserConnector: Created %s as laser %d from parameter file",
-		     laser->getName(), i);
-	  myLasers[i] = new LaserData(i, laser);
-	  laser->setInfoLogLevel(myInfoLogLevel);
+	if (myParsedArgs)
+		return true;
+	myParsedArgs = true;
+	bool typeReallySet;
+	const char *type;
+	char buf[1024];
+	int i;
+	std::map<int, LaserData *>::iterator it;
+	LaserData *laserData;
+	bool wasReallySetOnlyTrue = parser->getWasReallySetOnlyTrue();
+	parser->setWasReallySetOnlyTrue (true);
+	for (i = 1; i <= Aria::getMaxNumLasers(); i++) {
+		if (i == 1)
+			buf[0] = '\0';
+		else
+			sprintf (buf, "%d", i);
+		typeReallySet = false;
+		// see if the laser is being added from the command line
+		if (!parser->checkParameterArgumentStringVar (&typeReallySet, &type,
+		    "-laserType%s", buf) ||
+		    !parser->checkParameterArgumentStringVar (&typeReallySet, &type,
+		        "-lt%s", buf)) {
+			ArLog::log (ArLog::Normal,
+			            "ArLaserConnector: Bad laser type given for laser number %d",
+			            i);
+			parser->setWasReallySetOnlyTrue (wasReallySetOnlyTrue);
+			return false;
+		}
+		// if we didn't have an argument then just return
+		if (!typeReallySet)
+			continue;
+		if ( (it = myLasers.find (i)) != myLasers.end()) {
+			ArLog::log (ArLog::Normal, "ArLaserConnector: A laser already exists for laser number %d, replacing it with a new one of type %s",
+			            i, type);
+			laserData = (*it).second;
+			delete laserData;
+			myLasers.erase (i);
+		}
+		if (typeReallySet && type != NULL) {
+			ArLaser *laser = NULL;
+			if ( (laser = Aria::laserCreate (type, i, "ArLaserConnector: ")) != NULL) {
+				ArLog::log (myInfoLogLevel,
+				            "ArLaserConnector: Created %s as laser %d from arguments",
+				            laser->getName(), i);
+				myLasers[i] = new LaserData (i, laser);
+				laser->setInfoLogLevel (myInfoLogLevel);
+			} else {
+				ArLog::log (ArLog::Normal,
+				            "Unknown laser type %s for laser %d, choices are %s",
+				            type, i, Aria::laserGetTypes());
+				parser->setWasReallySetOnlyTrue (wasReallySetOnlyTrue);
+				return false;
+			}
+		}
 	}
-	else
-	{
-	  ArLog::log(ArLog::Normal, 
-		     "Unknown laser type %s for laser %d from the .p file, choices are %s", 
-		     type, i, Aria::laserGetTypes());
-	  parser->setWasReallySetOnlyTrue(wasReallySetOnlyTrue);
-	  return false;
+	// go through the robot param list and add the lasers defined
+	// in the parameter file.
+	const ArRobotParams *params = NULL;
+	if (myRobot != NULL) {
+		params = myRobot->getRobotParams();
+		if (params != NULL) {
+			for (i = 1; i <= Aria::getMaxNumLasers(); i++) {
+				// if we already have a laser for this then don't add one from
+				// the param file, since it was added either explicitly by a
+				// program or from the command line
+				if (myLasers.find (i) != myLasers.end())
+				{
+				  ArLog::log(myInfoLogLevel, "ArLaserConnector: Already a laser %d", i);
+				  continue;
+				}
+				type = params->getLaserType (i);
+				// if we don't have a laser type for that number continue
+				if (type == NULL || type[0] == '\0')
+				{
+				  if (params->getConnectLaser(i))
+				  {
+				    myLasers[i] = new LaserData(i, NULL);
+				    myLasers[i]->myConnect = true;
+				    myLasers[i]->myConnectReallySet = true;
+				    ArLog::log(myInfoLogLevel,
+	       "ArLaserConnector: Will connect a NULL laser %d, since the parameter file wants to connect and it'll be clearer to fail in connectLasers",
+					       i);
+				  }
+				  continue;
+				}
+				ArLaser *laser = NULL;
+				if ( (laser =
+				        Aria::laserCreate (type, i, "ArLaserConnector: ")) != NULL) {
+					ArLog::log (myInfoLogLevel,
+					            "ArLaserConnector: Created %s as laser %d from parameter file",
+					            laser->getName(), i);
+					myLasers[i] = new LaserData (i, laser);
+					laser->setInfoLogLevel (myInfoLogLevel);
+				} else {
+					ArLog::log (ArLog::Normal,
+					            "Unknown laser type %s for laser %d from the .p file, choices are %s",
+					            type, i, Aria::laserGetTypes());
+					parser->setWasReallySetOnlyTrue (wasReallySetOnlyTrue);
+					return false;
+				}
+				if (params->getConnectLaser(i))
+				{
+				  myLasers[i]->myConnect = true;
+				  myLasers[i]->myConnectReallySet = true;
+				  ArLog::log(myInfoLogLevel,
+					     "ArLaserConnector: Will connect %s as laser %d from parameter file",
+					     laser->getName(), i);
+				  
+				}
+				  
+				    
+			}
+		} else {
+		  ArLog::log (ArLog::Normal, "ArLaserConnector: Have robot, but robot has NULL params, so cannot configure its laser %s", i);
+		  parser->setWasReallySetOnlyTrue (wasReallySetOnlyTrue);
+		  return false;
+		}
 	}
-      }
-    }
-    else
-    {
-      ArLog::log(ArLog::Normal, "ArLaserConnector: Have robot, but robot has NULL params, so cannot configure its laser");
-    }
-  }
-
-  // now go through and parse the args for any laser that we have
-  for (it = myLasers.begin(); it != myLasers.end(); it++)
-  {
-    laserData = (*it).second;
-    if (!parseLaserArgs(parser, laserData))
-    {
-      parser->setWasReallySetOnlyTrue(wasReallySetOnlyTrue);
-      return false;
-    }
-  }
-
-  parser->setWasReallySetOnlyTrue(wasReallySetOnlyTrue);
-  return true;
+	// now go through and parse the args for any laser that we have
+	for (it = myLasers.begin(); it != myLasers.end(); it++) {
+		laserData = (*it).second;
+		if (!parseLaserArgs (parser, laserData)) {
+			parser->setWasReallySetOnlyTrue (wasReallySetOnlyTrue);
+			return false;
+		}
+	}
+	parser->setWasReallySetOnlyTrue (wasReallySetOnlyTrue);
+	return true;
 }
 
 AREXPORT bool ArLaserConnector::parseLaserArgs(ArArgumentParser *parser, 
@@ -308,9 +300,10 @@ AREXPORT bool ArLaserConnector::parseLaserArgs(ArArgumentParser *parser,
   if (laserData->myLaser == NULL)
   {
     ArLog::log(ArLog::Normal, 
-	       "ArLaserConnector: There is no laser for laser number %d but there should be", 
+	       "ArLaserConnector: There is no laser for laser number %d but there should be... this should fail in the connect, so just returning here", 
 	       laserData->myNumber);
-    return false;
+    //return false;
+    return true;
   }
 
   ArLaser *laser = laserData->myLaser;
@@ -1193,10 +1186,34 @@ AREXPORT bool ArLaserConnector::connectLaser(ArLaser *laser,
     return laser->blockingConnect();
 }
 
+/**
+   @param continueOnFailedConnect whether to continue on a failed
+   connection or not
+
+   @param addConnectedLasersToRobot whether to add connected lasers to
+   the list stored in ArRobot. Normally this should be left as true.
+
+   @param addAllLasersToRobot whether to add all the lasers to the
+   ArRobot list or not (even if connection was not made to that laser).
+   
+   @param turnOnLasers whether to attempt to turn on power to the laser (by
+   sending commands to the robot microcontroller).
+
+   @param powerCycleLaserOnFailedConnect whether to turn on the laser
+   (with the microcontroller commands)
+
+   @param failedOnLaser If this pointer is valid then the function
+   will set the index of the first laser where connection failed, or
+   -1 if there was an internal failure before attempting to connect
+   to any lasers (for example, parsing program arguments). 
+   The function will also return false. If NULL, ignored. 
+
+   @return true if successful connecting to lasers, false on any errors.
+**/
 AREXPORT bool ArLaserConnector::connectLasers(
 	bool continueOnFailedConnect, bool addConnectedLasersToRobot, 
 	bool addAllLasersToRobot, bool turnOnLasers,
-	bool powerCycleLaserOnFailedConnect)
+	bool powerCycleLaserOnFailedConnect, int *failedOnLaser)
 {
   std::map<int, LaserData *>::iterator it;
   LaserData *laserData = NULL;
@@ -1211,6 +1228,8 @@ AREXPORT bool ArLaserConnector::connectLasers(
 	       "ArLaserConnector: Auto parsing args for lasers");
     if (!parseArgs())
     {
+      if (failedOnLaser != NULL)
+	*failedOnLaser = -1;
       return false;
     }
   }
@@ -1232,6 +1251,8 @@ AREXPORT bool ArLaserConnector::connectLasers(
     else
     {
       ArLog::log(ArLog::Normal, "ArLaserConnect::connectLasers: Supposed to add all lasers to robot, but there is no robot");
+      if (failedOnLaser != NULL)
+	*failedOnLaser = -1;
       return false;
     }
   }
@@ -1247,13 +1268,57 @@ AREXPORT bool ArLaserConnector::connectLasers(
     }
     if (laserData->myConnectReallySet && laserData->myConnect)
     {
-      // if we want to turn on the lasers if we can, then see if the
-      // firwmare supports the power command for the lasers by
-      // checking the config (and only LRF and LRF5B2 are specified in
-      // firmware right now too)
+      if (laserData->myLaser == NULL)
+      {
+	ArLog::log(ArLog::Normal, 
+		   "ArLaserConnector::connectLasers: Could not connect to laser %d, no laser defined, stopping", 
+		   laserData->myNumber);
+	if (failedOnLaser != NULL)
+	  *failedOnLaser = laserData->myNumber;
+	return false;
+      }
+      // if we want to turn on the lasers if we can, first see if we
+      // have functors that'll do it, if so use them... if not then
+      // see if the firwmare supports the power command for the lasers
+      // by checking the config (and only LRF and LRF5B2 are specified
+      // in firmware right now too)
       if (turnOnLasers)
       {
-	if (laserData->myNumber == 1)
+	if (myTurnOnPowerOutputCB != NULL)
+	{
+	  if (myRobot->getRobotParams()->getLaserPowerOutput(
+		      laserData->myNumber) == NULL ||
+	      myRobot->getRobotParams()->getLaserPowerOutput(
+		      laserData->myNumber)[0] == '\0')
+	  {
+	    ArLog::log(ArLog::Normal, 
+		       "ArLaserConnector::connectLasers: Laser %s has no power output set so can't be turned on (things may still work).",
+		       laserData->myLaser->getName());
+	  }
+	  else
+	  {
+	    if (myTurnOnPowerOutputCB->invokeR(
+			myRobot->getRobotParams()->getLaserPowerOutput(
+				laserData->myNumber)))
+	    {
+	      ArLog::log(myInfoLogLevel, 
+			 "ArLaserConnector::connectLasers: Turned on power output %s for %s",
+			 myRobot->getRobotParams()->getLaserPowerOutput(
+				 laserData->myNumber),
+			 laserData->myLaser->getName());
+
+	    }
+	    else
+	    {
+	      ArLog::log(ArLog::Normal, 
+			 "ArLaserConnector::connectLasers: Could not turn on power output %s for %s (things may still work).",
+			 myRobot->getRobotParams()->getLaserPowerOutput(
+				 laserData->myNumber),
+			 laserData->myLaser->getName());
+	    }
+	  }
+	}
+	else if (laserData->myNumber == 1)
 	{
 	  // see if the firmware supports the LRF command
 	  if (myRobot->getOrigRobotConfig() != NULL && 
@@ -1322,6 +1387,66 @@ AREXPORT bool ArLaserConnector::connectLasers(
 	if (laserData->myLaser->canSetPowerControlled())
 	  laserData->myLaser->setPowerControlled(true);
 
+	if (myTurnOnPowerOutputCB != NULL)
+	{
+	  if (myTurnOffPowerOutputCB != NULL)
+	  {
+	    ArLog::log(ArLog::Normal, 
+		       "ArLaserConnector::connectLasers: Have no way to turn power off, so laser %s can't be power cycled (it's possible things will still work).",
+		       laserData->myLaser->getName());
+	  }
+	  else if (myRobot->getRobotParams()->getLaserPowerOutput(
+		      laserData->myNumber) == NULL ||
+	      myRobot->getRobotParams()->getLaserPowerOutput(
+		      laserData->myNumber)[0] == '\0')
+	  {
+	    ArLog::log(ArLog::Normal, 
+		       "ArLaserConnector::connectLasers: Laser %s has no power output set so can't be power cycled (it's possible things will still work).",
+		       laserData->myLaser->getName());
+	  }
+	  else
+	  {
+	    if (myTurnOffPowerOutputCB->invokeR(
+			myRobot->getRobotParams()->getLaserPowerOutput(
+				laserData->myNumber)))
+	    {
+	      ArLog::log(myInfoLogLevel, 
+			 "ArLaserConnector::connectLasers: Cycled off power output %s for %s",
+			 myRobot->getRobotParams()->getLaserPowerOutput(
+				 laserData->myNumber),
+			 laserData->myLaser->getName());
+	    }
+	    else
+	    {
+	      ArLog::log(ArLog::Normal, 
+			 "ArLaserConnector::connectLasers: Could not cycle off power output %s for %s",
+			 myRobot->getRobotParams()->getLaserPowerOutput(
+				 laserData->myNumber),
+			 laserData->myLaser->getName());
+	    }
+	    ArUtil::sleep(1000);
+	    if (myTurnOnPowerOutputCB->invokeR(
+			myRobot->getRobotParams()->getLaserPowerOutput(
+				laserData->myNumber)))
+	    {
+	      ArLog::log(myInfoLogLevel, 
+			 "ArLaserConnector::connectLasers: Cycled on power output %s for %s",
+			 myRobot->getRobotParams()->getLaserPowerOutput(
+				 laserData->myNumber),
+			 laserData->myLaser->getName());
+	    }
+	    else
+	    {
+	      ArLog::log(ArLog::Normal, 
+			 "ArLaserConnector::connectLasers: Could not cycle on power output %s for %s",
+			 myRobot->getRobotParams()->getLaserPowerOutput(
+				 laserData->myNumber),
+			 laserData->myLaser->getName());
+	    }
+	  }
+	  ArUtil::sleep(1000);
+	  connected = laserData->myLaser->blockingConnect();
+	}
 	if (laserData->myNumber == 1)
 	{
 	  // see if the firmware supports the LRF command
@@ -1426,14 +1551,14 @@ AREXPORT bool ArLaserConnector::connectLasers(
 	  ArLog::log(ArLog::Normal, 
 		     "ArLaserConnector::connectLasers: Could not connect %s, stopping", 
 		     laserData->myLaser->getName());
+	  if (failedOnLaser != NULL)
+	    *failedOnLaser = laserData->myNumber;
 	  return false;
 	}
 	else
 	  ArLog::log(ArLog::Normal, 
 		     "ArLaserConnector::connectLasers: Could not connect %s, continuing with remainder of lasers", 
 		     laserData->myLaser->getName());
-
-	  
       }
     }
   }

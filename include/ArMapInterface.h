@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 /*! \file ArMapInterface.h
  *  \brief Contains the set of interfaces that define the Aria maps.
@@ -83,8 +83,9 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArMapObject.h"
 #include "ArMapUtils.h"
 
-#include "ArFunctor.h"
 #include "ArArgumentBuilder.h"
+#include "ArFunctor.h"
+#include "ArHasFileName.h"
 #include "ArMutex.h"
 
 #include <vector>
@@ -325,7 +326,7 @@ public:
   /**
    * This method writes a text line for each of the scan header attributes 
    * (such as MinPose, MaxPose, NumPoints).  Depending on the scan type, a 
-   * prefix may be prepended to the keyword (e.g. HokuyuURGMinPose).
+   * prefix may be prepended to the keyword (e.g. HokuyoURGMinPose).
    * 
    * @param functor the ArFunctor1 to which to write the scan header information
    * (as text lines)
@@ -741,7 +742,7 @@ public :
     SCHED_TASK_INFO,  ///< SchedTaskInfo that define special tasks that may be scheduled
     SCHED_INFO,       ///< SchedInfo lines that are the schedules of route patrols
     CAIRN_INFO,       ///< CairnInfo lines that contain optional arguments for map objects
-    CUSTOM_INFO, 
+    CUSTOM_INFO,      ///< CustomInfo lines contain application specific data
  	  LAST_INFO = CUSTOM_INFO ///< Last value in the enumeration
   };
 
@@ -879,7 +880,8 @@ public:
  * TODO: 
  *  - Possibly make the calculation of checksums optional?
 **/
-class ArMapInterface : public ArMapInfoInterface,
+class ArMapInterface : public ArHasFileName,
+                       public ArMapInfoInterface,
                        public ArMapObjectsInterface,
                        public ArMapScanInterface,
                        public ArMapSupplementInterface
@@ -892,8 +894,10 @@ public:
 
   AREXPORT static const char *MAP_CATEGORY_2D;
   AREXPORT static const char *MAP_CATEGORY_2D_MULTI_SOURCES;
-  /// Superset of multi-sources; includes advanced Info types
+  /// Superset of multi-sources; includes advanced Info types, CairnInfo and CustomInfo
   AREXPORT static const char *MAP_CATEGORY_2D_EXTENDED;
+  /// Superset of extended; includes group objects and parent maps
+  AREXPORT static const char *MAP_CATEGORY_2D_COMPOSITE;
 
 
   /// Helper method creates a full file path name from the given components.
@@ -1010,13 +1014,33 @@ public:
    * mapChanged() callback list during the invoke method.
    * This method is not thread-safe.
    *
+   * This method is just a wrapper for compatibility, the one that
+   * takes position as an integer is the main one that should be used
+   * now.
+   * 
    * @param functor a pointer to the ArFunctor to be invoked; must be non-NULL
    * @param position the ArListPos::Pos indication at which to add the functor
    * (i.e. at the beginning or at the end of the callback list)
   **/
+  AREXPORT virtual void addMapChangedCB(ArFunctor *functor, 
+					ArListPos::Pos position);
+
+
+  /// Adds a callback that is invoked when the map has been changed.
+  /**
+   * The given functor should assume that the map has been lock()-ed when
+   * it is invoked. It should also not attempt to make changes to the 
+   * mapChanged() callback list during the invoke method.
+   * This method is not thread-safe.
+   *
+   * @param functor a pointer to the ArFunctor to be invoked; must be non-NULL
+   *
+   * @param position this indicates the order in which the functors
+   * will be called, the nominal range is 0 to 100, highest is called first
+  **/
   AREXPORT virtual void addMapChangedCB
                             (ArFunctor *functor, 
- 				                     ArListPos::Pos position = ArListPos::LAST) = 0;
+			     int position = 50) = 0;
 
   /// Removes a callback called when the map has been changed
   /**
@@ -1032,13 +1056,34 @@ public:
    * changed, but before the other "map-changed callbacks" are invoked.
    * This method is not thread-safe.
    * 
+   * This method is just a wrapper for compatibility, the one that
+   * takes position as an integer is the main one that should be used
+   * now.
+   *
    * @param functor a pointer to the ArFunctor to be invoked; must be non-NULL
    * @param position the ArListPos::Pos indication at which to add the functor
    * (i.e. at the beginning or at the end of the callback list)
+   *
+   * @swignote call as addPreMapChangedCBPos() if passing an ArListPos.Pos
+   * object for @a position rather than an int
+  **/
+  AREXPORT virtual void addPreMapChangedCB(ArFunctor *functor, ArListPos::Pos position);
+
+  /// Adds a callback called before the map changed callbacks are called
+  /**
+   * The "pre-map-changed callbacks" are invoked *after* the map has been 
+   * changed, but before the other "map-changed callbacks" are invoked.
+   * This method is not thread-safe.
+   * 
+   * @param functor a pointer to the ArFunctor to be invoked; must be non-NULL
+   *
+   * @param position this indicates the order in which the functors
+   * will be called, the nominal range is 0 to 100, highest is called
+   * first
   **/
   AREXPORT virtual void addPreMapChangedCB
                           (ArFunctor *functor,
-                           ArListPos::Pos position = ArListPos::LAST) = 0;
+                           int position = 50) = 0;
 
 
   /// Removes the specified "pre-map-changed callback".
@@ -1046,7 +1091,7 @@ public:
    * This method is not thread-safe.
    *
    * @param functor a pointer to the ArFunctor to be removed; must be non-NULL
-  **/
+   **/
   AREXPORT virtual void remPreMapChangedCB(ArFunctor *functor) = 0;
 
 
@@ -1089,6 +1134,7 @@ public:
    * header should be written; this is generally the "summary scan" and is 
    * used to maintain backwards compatibility with client applications that
    * do not expect multiple scan types in a single map.
+   * @param maxCategory if given, limit map category
   **/
   AREXPORT virtual void writeObjectsToFunctor(ArFunctor1<const char *> *functor, 
  			                                        const char *endOfLineChars,
@@ -1324,6 +1370,13 @@ public:
    * @return ArMapObjectsInterface * a pointer to the inactive map objects section
   **/
   AREXPORT virtual ArMapObjectsInterface *getInactiveObjects() = 0;
+
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // Child Objects Section
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  /// Provides direct access to the child map objects which are used to define group templates.
+  AREXPORT virtual ArMapObjectsInterface *getChildObjects() = 0;
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Miscellaneous

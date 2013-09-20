@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "Aria.h"
 
@@ -145,6 +145,18 @@ int main(int argc, char** argv)
     Aria::exit(2);
   }
 
+/* not needed, robot connector will do it by default
+  if (!sonarConnector.connectSonars(
+        false,  // continue after connection failures
+        false,  // add only connected lasers to ArRobot
+        true    // add all lasers to ArRobot
+  ))
+  {
+    printf("Could not connect to sonars... exiting\n");
+    Aria::exit(2);
+  }
+*/
+
   // Create and connect to the compass if the robot has one.
   ArTCM2 *compass = compassConnector.create(&robot);
   if(compass && !compass->blockingConnect()) {
@@ -162,19 +174,24 @@ int main(int argc, char** argv)
 
   // now add all the modes for this demo
   // these classes are defined in ArModes.cpp in ARIA's source code.
-  ArModeLaser laser(&robot, "laser", 'l', 'L');
-  ArModeTeleop teleop(&robot, "teleop", 't', 'T');
-  ArModeUnguardedTeleop unguardedTeleop(&robot, "unguarded teleop", 'u', 'U');
-  ArModeWander wander(&robot, "wander", 'w', 'W');
+  
+  if(robot.getOrigRobotConfig()->getHasGripper())
+    new ArModeGripper(&robot, "gripper", 'g', 'G');
+  else
+    ArLog::log(ArLog::Normal, "Robot does not indicate that it has a gripper.");
+  ArModeActs actsMode(&robot, "acts", 'a', 'A');
+  ArModeTCM2 tcm2(&robot, "tcm2", 'm', 'M', compass);
+  ArModeIO io(&robot, "io", 'i', 'I');
+  ArModeConfig cfg(&robot, "report robot config", 'o' , 'O');
+  ArModeCommand command(&robot, "command", 'd', 'D');
+  ArModeCamera camera(&robot, "camera", 'c', 'C');
   ArModePosition position(&robot, "position", 'p', 'P', &gyro);
   ArModeSonar sonar(&robot, "sonar", 's', 'S');
   ArModeBumps bumps(&robot, "bumps", 'b', 'B');
-  ArModeGripper gripper(&robot, "gripper", 'g', 'G');
-  ArModeCommand command(&robot, "command", 'd', 'D');
-  ArModeCamera camera(&robot, "camera", 'c', 'C');
-  ArModeIO io(&robot, "io", 'i', 'I');
-  ArModeActs actsMode(&robot, "acts", 'a', 'A');
-  ArModeTCM2 tcm2(&robot, "tcm2", 'm', 'M', compass);
+  ArModeLaser laser(&robot, "laser", 'l', 'L');
+  ArModeWander wander(&robot, "wander", 'w', 'W');
+  ArModeUnguardedTeleop unguardedTeleop(&robot, "unguarded teleop", 'u', 'U');
+  ArModeTeleop teleop(&robot, "teleop", 't', 'T');
 
 
   // activate the default mode

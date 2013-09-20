@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ariaOSDef.h"
 #include "ArExport.h"
@@ -99,6 +99,10 @@ AREXPORT bool ArRobotConfigPacketReader::packetHandler(ArRobotPacket *packet)
 
   myPacketRequested = false;
   myPacketArrived = true;
+
+  //make a copy of all the packet
+  myPacket = (*packet);
+
   // read in all the data
   packet->bufToStr(buf, sizeof(buf));
   myType = buf;
@@ -153,7 +157,7 @@ AREXPORT bool ArRobotConfigPacketReader::packetHandler(ArRobotPacket *packet)
     myHasGyro = true;
   else
     myHasGyro = false;
-  myDriftFactor = packet->bufToUByte2();
+  myDriftFactor = packet->bufToByte2();
   myAux2Baud = packet->bufToUByte();
   myAux3Baud = packet->bufToUByte();
   myTicksMM = packet->bufToUByte2();
@@ -178,6 +182,9 @@ AREXPORT bool ArRobotConfigPacketReader::packetHandler(ArRobotPacket *packet)
   else
     myHighTemperatureShutdown = -128;
   myPowerBits = packet->bufToUByte2();
+  myBatteryType = packet->bufToUByte();
+  myStateOfChargeLow = packet->bufToUByte2();
+  myStateOfChargeShutdown = packet->bufToUByte2();
 
   if (myPacketArrivedCB != NULL)
   {
@@ -291,13 +298,19 @@ AREXPORT std::string ArRobotConfigPacketReader::buildString(void) const
   ret += line;  
   sprintf(line, "Aux2Baud setting %d Aux3Baud setting %d\n", getAux2Baud(), getAux3Baud());
   ret += line;  
-  sprintf(line, "PDBPort setting %d\n", getPDBPort());
+  sprintf(line, "PDBPort setting %d BatteryType %d\n", getPDBPort(), 
+	  getBatteryType());
   ret += line;  
   sprintf(line, "TicksMM %d GyroCW %d GyroCCW %d\n", getTicksMM(),
 	  getGyroCW(), getGyroCCW());
   ret += line;  
-  sprintf(line, "ShutdownVoltage %d PowerbotChargeTreshold %d\n", 
-	  getShutdownVoltage(), getPowerbotChargeThreshold());
+  sprintf(line, 
+	  "LowBattery %d ShutdownVoltage %d PowerbotChargeThreshold %d\n", 
+	  getLowBattery(), getShutdownVoltage(), getPowerbotChargeThreshold());
+  ret += line;  
+  sprintf(line, 
+	  "LowStateOfCharge %d ShutdownStateOfCharge %d\n", 
+	  getStateOfChargeLow(), getStateOfChargeShutdown());
   ret += line;  
 
   char buf[128];

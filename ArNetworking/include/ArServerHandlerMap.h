@@ -34,17 +34,27 @@ class ArMapInterface;
  *  <li><code>goalsUpdated</code>
  * </ul>
  *
- * The <code>getMapId</code> request replies with... TODO 
+ * The <code>getMapId</code> request replies with: a map
+ * source identifier (NULL-terminated string); a filename for the map
+ * (NULL-terminated string); a checksum value preceded by a 4-byte unsigned
+ * integer providing the length (in bytes) of that checksum value; the total
+ * data size of the map contents (4-byte unsigned integer); and a timestamp
+ * for the map file (last modified, 4-byte signed integer, UNIX time).
  * 
  * The <code>getMapName</code> request replies with a packet containing a 
  * NULL-terminated string containing the filename of the map, or an empty string
  * ("") if there is no map.
  *
- * The <code>getMap</code> request replies with a packet containing the map as
- * it appears in the map file (see the documentation for ArMap for the file
- * format).
+ * The <code>getMap</code> request replies with a series of packets each
+ * containing one line from the map file (as a null-terminated string), 
+ * followed by an empty packet signifying
+ * the end of the packet. 
+ * (see the documentation for ArMap for the map file
+ * format). This data may be written (with newlines added) to a map file,
+ * or may be parsed directly by an empty ArMap object using ArMap::parseLine()
+ * and ArMap::parsingComplete(). See tests/mapClient.cpp for an example of usage.
  *
- * The <code>getGoals</code> request replies with a series of NULL-terminated
+ * The <code>getGoals</code> request replies with a packet containing a series of NULL-terminated
  * strings containing the names of the Goal objects in the map.
  *
  * The <code>getMapBinary</code> request replies with the map headers and
@@ -52,7 +62,8 @@ class ArMapInterface;
  * "DATA" and/or "LINES" as an undelimited sequence of 2-byte integers. (In
  * the case of point data, each pair of integers is a point; for lines, each
  * sequence of four integers defines a line).  This binary representation of data
- * is more compact than the ASCII text representation.
+ * is more compact than the ASCII text representation. This request results in a
+ * series of packets, with an empty packet signifying the end of the series.
  *
  * The <code>getMapMultiScans</code> request is similar to getMapBinary,
  * but it includes a list of the scan sources, along with the point and lines 

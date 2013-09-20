@@ -39,6 +39,9 @@ public:
 				    ArFunctor2<char *, ArTypes::UByte2> *> *
                      getAddStringFunctor(void) { return &myAddStringFunctor; }
 
+  /// Gets a string info holder, for internal purposes 
+  AREXPORT ArStringInfoHolder *internalGetStringInfoHolder(const char *name);
+
 protected:
   ArServerBase *myServer;
 

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ArMapComponents.h"
@@ -1443,7 +1443,7 @@ AREXPORT bool ArMapScan::unite(ArMapScan *other,
     }
     
     if (other->getLines() != NULL) {
-      myPoints.reserve(myNumLines);
+      myLines.reserve(myNumLines);
       for (std::vector<ArLineSegment>::iterator iter = other->getLines()->begin();
            iter != other->getLines()->end();
            iter++) {
@@ -1818,10 +1818,14 @@ const char *ArMapScan::getKeywordPrefix() const
 // ArMapObjects
 // ---------------------------------------------------------------------------- 
 
+
+AREXPORT const char *ArMapObjects::DEFAULT_KEYWORD = "Cairn:";
+
+
 AREXPORT ArMapObjects::ArMapObjects(const char *keyword) :
   myTimeChanged(),
   myIsSortedObjects(false),
-  myKeyword((keyword != NULL) ? keyword : "Cairn:"),
+  myKeyword((keyword != NULL) ? keyword : DEFAULT_KEYWORD),
   myMapObjects(),
   myMapObjectCB(this, &ArMapObjects::handleMapObject)
 {
@@ -3127,6 +3131,8 @@ AREXPORT ArMapSimple::ArMapSimple(const char *baseDirectory,
 
   myInactiveObjects(new ArMapObjects("_Cairn:")), 
 
+  myChildObjects(new ArMapObjects("ChildCairn:")), 
+
   myMapObjectNameToParamsMap(), 
   myRemainderList(),
 
@@ -3141,7 +3147,9 @@ AREXPORT ArMapSimple::ArMapSimple(const char *baseDirectory,
   myRemCB(this, &ArMapSimple::handleRemainder),
 
 
-  myIsQuiet(false)
+  myIsQuiet(false),
+  myIsReadInProgress(false),
+  myIsCancelRead(false)
 
 {
   if (overrideMutexName == NULL) {
@@ -3159,6 +3167,7 @@ AREXPORT ArMapSimple::ArMapSimple(const char *baseDirectory,
   myMapCategoryList.push_back(MAP_CATEGORY_2D);
   myMapCategoryList.push_back(MAP_CATEGORY_2D_MULTI_SOURCES);
   myMapCategoryList.push_back(MAP_CATEGORY_2D_EXTENDED);
+  myMapCategoryList.push_back(MAP_CATEGORY_2D_COMPOSITE);
 
   myMapCategory = MAP_CATEGORY_2D;
 
@@ -3226,6 +3235,8 @@ AREXPORT ArMapSimple::ArMapSimple(const ArMapSimple &other) :
   myInactiveInfo(new ArMapInfo(*other.myInactiveInfo)),
   myInactiveObjects(new ArMapObjects(*other.myInactiveObjects)),
 
+  myChildObjects(new ArMapObjects(*other.myChildObjects)),
+
   myMapObjectNameToParamsMap(), // since this is a cache, ok not to copy
   myRemainderList(),
 
@@ -3240,7 +3251,9 @@ AREXPORT ArMapSimple::ArMapSimple(const ArMapSimple &other) :
   myDataIntroCB(this, &ArMapSimple::handleDataIntro),
   myRemCB(this, &ArMapSimple::handleRemainder),
 
-  myIsQuiet(other.myIsQuiet)
+  myIsQuiet(false),
+  myIsReadInProgress(false),
+  myIsCancelRead(false)
 {
   myMapId.log("ArMapSimple::copy_ctor");
 
@@ -3348,7 +3361,9 @@ AREXPORT ArMapSimple &ArMapSimple::operator=(const ArMapSimple &other)
 
     *myInactiveInfo = *other.myInactiveInfo;
     *myInactiveObjects = *other.myInactiveObjects;
-  
+ 
+    *myChildObjects = *other.myChildObjects;
+
     // Since the myMapObjectNameToParamsMap is a cache, there's no
     // real need to copy the other one
     ArUtil::deleteSetPairs(myMapObjectNameToParamsMap.begin(),
@@ -3378,6 +3393,8 @@ AREXPORT ArMapSimple &ArMapSimple::operator=(const ArMapSimple &other)
     // myTimeMapSupplementChanged = other.myTimeMapSupplementChanged;
     
     myIsQuiet = other.myIsQuiet; 
+    myIsReadInProgress = other.myIsReadInProgress;
+    myIsCancelRead = other.myIsCancelRead;
 
     // Primarily to get the new base directory into the file parser
     reset(); 
@@ -3396,23 +3413,66 @@ AREXPORT ArMapSimple &ArMapSimple::operator=(const ArMapSimple &other)
 
 AREXPORT ArMapSimple::~ArMapSimple(void)
 { 
+
+  if (myIsReadInProgress) {
+
+    ArLog::log(ArLog::Normal,
+               "ArMapSimple::dtor() map file is being read");
+    myIsCancelRead = true;
+    if (myLoadingParser != NULL) {
+      myLoadingParser->cancelParsing();
+    }
+
+    // Wait a little while to see if the file read can be cancelled
+    for (int i = 0; ((i < 20) && (myIsReadInProgress)); i++) {
+      ArUtil::sleep(5);
+    }
+    if (myIsReadInProgress) {
+      ArLog::log(ArLog::Normal,
+                 "ArMapSimple::dtor() map file is still being read");
+    }
+
+  } // end if read in progress
+
+  delete myChecksumCalculator;
+  myChecksumCalculator = NULL;
+
   delete myLoadingParser;
   myLoadingParser = NULL;
 
+  delete myMapChangedHelper;
+  myMapChangedHelper = NULL;
+
   delete myMapInfo;
+  // const, so don't myMapInfo = NULL;
+
   delete myMapObjects;
+  // const, so don't myMapObjects = NULL;
+
   delete myMapSupplement;
+  // const, so don't myMapSupplement = NULL;
  
   myScanTypeList.clear();
   ArUtil::deleteSetPairs(myTypeToScanMap.begin(),
                          myTypeToScanMap.end());
   myTypeToScanMap.clear();
- 
+
+
+  delete mySummaryScan;
+  mySummaryScan = NULL;
+
+  // This is a reference to one of the scans deleted above, so just
+  // clear the pointer.
   myLoadingScan = NULL;
 
   delete myInactiveInfo;
-  delete myInactiveObjects;
+  // const, so don't myInactiveInfo = NULL;
 
+  delete myInactiveObjects;
+  // const, so don't myInactiveObjects = NULL;
+
+  delete myChildObjects;
+  // const, so don't myChildObjects = NULL;
 
   ArUtil::deleteSetPairs(myMapObjectNameToParamsMap.begin(),
                          myMapObjectNameToParamsMap.end());
@@ -3421,12 +3481,9 @@ AREXPORT ArMapSimple::~ArMapSimple(void)
   ArUtil::deleteSet(myRemainderList.begin(), myRemainderList.end());
   myRemainderList.clear();
         
-
-  delete myMapChangedHelper;
-  myMapChangedHelper = NULL;
-
 } // end dtor 
   
+
 AREXPORT ArMapInterface *ArMapSimple::clone()
 {
   return new ArMapSimple(*this);
@@ -3510,6 +3567,8 @@ AREXPORT bool ArMapSimple::set(ArMapInterface *other)
 
   setInactiveObjects(other->getInactiveObjects()->getMapObjects());
 
+  setChildObjects(other->getChildObjects()->getMapObjects());
+
   updateSummaryScan();
         
   // Since the myMapObjectNameToParamsMap is a cache, there's no
@@ -3572,6 +3631,7 @@ AREXPORT void ArMapSimple::clear()
 
   myInactiveInfo->clear();
   myInactiveObjects->clear();
+  myChildObjects->clear();
 
   ArUtil::deleteSetPairs(myMapObjectNameToParamsMap.begin(),
                          myMapObjectNameToParamsMap.end());
@@ -3618,7 +3678,9 @@ AREXPORT void ArMapSimple::reset()
     delete myLoadingParser;
     myLoadingParser = NULL;
   }
-  myLoadingParser = new ArFileParser();
+  myLoadingParser = new ArFileParser("./",  // base directory
+                                     true); // precompress quotes
+
 
   myLoadingParser->setBaseDirectory(myBaseDirectory.c_str());
 
@@ -3686,8 +3748,6 @@ AREXPORT void ArMapSimple::updateMapFileInfo(const char *realFileName)
 
 AREXPORT const char *ArMapSimple::getMapCategory()
 {
-  // TODO: Whether to override MAP_CATEGORY_2D_EXTENDED ??
-
   if (strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D_MULTI_SOURCES) == 0) {
 
     if (myScanTypeList.size() == 1) {
@@ -3727,9 +3787,33 @@ AREXPORT void ArMapSimple::updateMapCategory(const char *updatedInfoName)
   // This is the "top-most" map category.. If it's already been set, then there's
   // nothing to do
   if (!isDowngradeCategory &&
-      strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D_EXTENDED) == 0) {
+      strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D_COMPOSITE) == 0) {
     return;
   }
+
+  // If a GroupType MapInfo has been defined, then it must be the composite 
+  // category.  
+  if ((updatedInfoName == NULL) || 
+      (strcasecmp(updatedInfoName, MAP_INFO_NAME) == 0)) {
+
+    if (mapInfoContains("GroupType")) {
+      if (strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D_COMPOSITE) != 0) {
+        ArLog::log(ArLog::Normal,
+                   "ArMapSimple::updateMapCategory() changing category to %s from %s because %s found",
+                   MAP_CATEGORY_2D_COMPOSITE,
+                   myMapCategory.c_str(),
+                   "GroupType");
+        myMapCategory = MAP_CATEGORY_2D_COMPOSITE;
+      }
+      return;
+    } // end if map info contains group type
+
+  } // end if updated info name not specified or is map info
+
+
+  // TODO If a parent / child map has been defined, then it must be the composite
+  // category
+
 
   // If any CairnInfo or CustomInfo have been set, then it must be the extended
   // category
@@ -3757,36 +3841,26 @@ AREXPORT void ArMapSimple::updateMapCategory(const char *updatedInfoName)
     }
   } // end for each extended info name
 
+
   // Similarly, if any MapInfo's contain an ArgDesc, then it must be the extended
   // category.  (It seems alright to check this because there shouldn't be 
   // thousands of map info lines...)
   if ((updatedInfoName == NULL) || 
       (strcasecmp(updatedInfoName, MAP_INFO_NAME) == 0)) {
 
-    std::list<ArArgumentBuilder*> *mapInfoList = getInfo(MAP_INFO_NAME);
-    if (mapInfoList != NULL) {
-      for (std::list<ArArgumentBuilder*>::const_iterator iter = mapInfoList->begin();
-          iter != mapInfoList->end();
-          iter++) {
-        
-        ArArgumentBuilder *arg = *iter;
-        if ((arg == NULL) || (arg->getArgc() < 1) || (arg->getArg(0) == NULL)) {
-          continue;
-        }
-        if (strcasecmp(arg->getArg(0), "ArgDesc") == 0) {
-          if (strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D_EXTENDED) != 0) {
-            ArLog::log(ArLog::Normal,
-                      "ArMapSimple::updateMapCategory() changing category to %s from %s because %s found",
-                      MAP_CATEGORY_2D_EXTENDED,
-                      myMapCategory.c_str(),
-                      "ArgDesc");
-            myMapCategory = MAP_CATEGORY_2D_EXTENDED;
-          }
-          return;
-        } // end if arg desc found
-        
-      } // end for each map info line
-    } // end if non-NULL map info
+    if (mapInfoContains("ArgDesc")) {
+      if ((strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D_COMPOSITE) != 0) &&
+          (strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D_EXTENDED) != 0)) {
+        ArLog::log(ArLog::Normal,
+                  "ArMapSimple::updateMapCategory() changing category to %s from %s because %s found",
+                  MAP_CATEGORY_2D_EXTENDED,
+                  myMapCategory.c_str(),
+                  "ArgDesc");
+        myMapCategory = MAP_CATEGORY_2D_EXTENDED;
+      }
+      return;
+    }
+
   } // end if updated info name not specified or is map info
 
 
@@ -3832,6 +3906,7 @@ AREXPORT void ArMapSimple::updateMapCategory(const char *updatedInfoName)
     }
   }
   
+
   if (strcasecmp(myMapCategory.c_str(), MAP_CATEGORY_2D) != 0) {
     ArLog::log(ArLog::Normal,
                 "ArMapSimple::updateMapCategory() changing category to %s from %s because no special cases found",
@@ -3844,7 +3919,36 @@ AREXPORT void ArMapSimple::updateMapCategory(const char *updatedInfoName)
 
 } // end method updateMapCategory
 
-  
+
+AREXPORT bool ArMapSimple::mapInfoContains(const char *arg0Text) 
+{
+  if (ArUtil::isStrEmpty(arg0Text)) {
+    return false;
+  }
+
+  std::list<ArArgumentBuilder*> *mapInfoList = getInfo(MAP_INFO_NAME);
+  if (mapInfoList != NULL) {
+
+    for (std::list<ArArgumentBuilder*>::const_iterator iter = mapInfoList->begin();
+        iter != mapInfoList->end();
+        iter++) {
+      
+      ArArgumentBuilder *arg = *iter;
+      if ((arg == NULL) || (arg->getArgc() < 1) || (arg->getArg(0) == NULL)) {
+        continue;
+      }
+      if (strcasecmp(arg->getArg(0), arg0Text) == 0) {
+        return true;
+      } // end if arg desc found
+      
+    } // end for each map info line
+  } // end if non-NULL map info
+
+  return false;
+
+} // end method mapInfoContains
+
+
 AREXPORT void ArMapSimple::addPreWriteFileCB(ArFunctor *functor,
                                              ArListPos::Pos position)
 {
@@ -3878,6 +3982,12 @@ AREXPORT bool ArMapSimple::readFile(const char *fileName,
                                     size_t md5DigestBufferLen)
 {
 
+  if (ArUtil::isStrEmpty(fileName)) {
+    ArLog::log(ArLog::Normal,
+               "ArMapSimple::readFile() cannot read empty file name");
+    return false;
+  }
+
   IFDEBUG(
   ArLog::log(ArLog::Normal, 
              "ArMapSimple::readFile() reading %s",
@@ -3885,7 +3995,8 @@ AREXPORT bool ArMapSimple::readFile(const char *fileName,
   );
 
   lock();
-  
+  myIsReadInProgress = true;
+
   if (myMapInfo != NULL) {
     myMapInfo->clear();
   }
@@ -3910,6 +4021,9 @@ AREXPORT bool ArMapSimple::readFile(const char *fileName,
   }
   if (myInactiveObjects != NULL) {
     myInactiveObjects->clear();
+  }
+  if (myChildObjects != NULL) {
+    myChildObjects->clear();
   }
 
   reset();
@@ -3937,6 +4051,7 @@ AREXPORT bool ArMapSimple::readFile(const char *fileName,
                "Map invalid: cannot open file '%s'",
                fileName);
     }
+    myIsReadInProgress = false;
     unlock();
     return false;
   }
@@ -4024,11 +4139,11 @@ AREXPORT bool ArMapSimple::readFile(const char *fileName,
 
   isSuccess = (myLoadingScan != NULL);
 
-  while (isSuccess && !isEndOfFile) {
+  while (isSuccess && !isEndOfFile && !myIsCancelRead) {
     
     bool isDataTagFound = false;
 
-    while (fgets(line, sizeof(line), file) != NULL)
+    while ((fgets(line, sizeof(line), file) != NULL) && !myIsCancelRead) 
     {
       if (parseFunctor != NULL) {
         parseFunctor->invoke(line);
@@ -4084,10 +4199,8 @@ AREXPORT bool ArMapSimple::readFile(const char *fileName,
 
   }  // end while no error and not end of file
 
- 
 
   updateSummaryScan();
-
 
 
   int elapsed = parseTime.mSecSince();
@@ -4100,33 +4213,37 @@ AREXPORT bool ArMapSimple::readFile(const char *fileName,
 
   fclose(file);
 
-  updateMapFileInfo(realFileName.c_str());
+  if (!myIsCancelRead) {
+    updateMapFileInfo(realFileName.c_str());
 
-  //stat(realFileName.c_str(), &myReadFileStat);
+    //stat(realFileName.c_str(), &myReadFileStat);
 
-  if (myChecksumCalculator != NULL) {
-    
-    if (md5DigestBuffer != NULL) {
-      memset(md5DigestBuffer, 0, md5DigestBufferLen);
-      memcpy(md5DigestBuffer, myChecksumCalculator->getDigest(), 
-            ArUtil::findMin(md5DigestBufferLen, ArMD5Calculator::DIGEST_LENGTH));
+    if (myChecksumCalculator != NULL) {
+      
+      if (md5DigestBuffer != NULL) {
+        memset(md5DigestBuffer, 0, md5DigestBufferLen);
+        memcpy(md5DigestBuffer, myChecksumCalculator->getDigest(), 
+              ArUtil::findMin(md5DigestBufferLen, ArMD5Calculator::DIGEST_LENGTH));
+      }
+
+      myLoadingParser->setPreParseFunctor(NULL);
     }
 
-    myLoadingParser->setPreParseFunctor(NULL);
-  }
+    if (isSuccess) {
+      // move the stuff over from reading to new
+      myFileName = fileName;
+    
+      ArLog::log(myMapChangedHelper->getMapChangedLogLevel(), 
+                "ArMapSimple:: Calling mapChanged()");	
+      mapChanged();
+      ArLog::log(myMapChangedHelper->getMapChangedLogLevel(), 
+                "ArMapSimple:: Finished mapChanged()");
 
-  if (isSuccess) {
-    // move the stuff over from reading to new
-    myFileName = fileName;
-  
-    ArLog::log(myMapChangedHelper->getMapChangedLogLevel(), 
-              "ArMapSimple:: Calling mapChanged()");	
-    mapChanged();
-    ArLog::log(myMapChangedHelper->getMapChangedLogLevel(), 
-              "ArMapSimple:: Finished mapChanged()");
+    }
+  } // end if not cancelling
 
-  }
-  
+  myIsReadInProgress = false;
+
   unlock();
   return isSuccess;
 
@@ -4613,7 +4730,7 @@ AREXPORT ArArgumentBuilder *ArMapSimple::findMapObjectParams
       if (paramInfo != NULL) {
 
         params = new ArArgumentBuilder(*paramInfo);
-        params->compressQuoted();
+        params->compressQuoted(true);
 
         if (params->getArgc() >= 2) {
           params->removeArg(0);       // Remove the "Params" field
@@ -4624,6 +4741,11 @@ AREXPORT ArArgumentBuilder *ArMapSimple::findMapObjectParams
 
     } // end for each cairn info
   } // end if 
+  // if we already have one, juset set that
+  else
+  {
+    params = (*iter).second;
+  }
 
   return params;
 
@@ -4826,44 +4948,45 @@ AREXPORT void ArMapSimple::mapChanged(void)
 { 
   ArTime maxScanTimeChanged = findMaxMapScanTimeChanged();
 //  ArLog::log(level, "ArMap: Calling mapChanged callbacks");
-  if (abs(myTimeMapInfoChanged.mSecSince(myMapInfo->getTimeChanged()) > 0) ||
-      abs(myTimeMapObjectsChanged.mSecSince(myMapObjects->getTimeChanged()) > 0) ||
-      abs(myTimeMapSupplementChanged.mSecSince(myMapSupplement->getTimeChanged()) > 0) ||
-      abs(myTimeMapScanChanged.mSecSince(maxScanTimeChanged) > 0)) {
-
-		ArLog::log(myMapChangedHelper->getMapChangedLogLevel(),
-      "ArMapSimple::mapChanged() msecs-objects: %i, msecs-points: %i, msecs-mapInfo: %i msecs-supplement: %i",
-							 abs(myTimeMapObjectsChanged.mSecSince(myMapObjects->getTimeChanged())),
-      				 abs(myTimeMapScanChanged.mSecSince(maxScanTimeChanged)),
-      				 abs(myTimeMapInfoChanged.mSecSince(myMapInfo->getTimeChanged())),
-               abs(myTimeMapSupplementChanged.mSecSince(myMapSupplement->getTimeChanged())));
+  if (!myTimeMapInfoChanged.isAt(myMapInfo->getTimeChanged()) ||
+      !myTimeMapObjectsChanged.isAt(myMapObjects->getTimeChanged()) ||
+      !myTimeMapSupplementChanged.isAt(myMapSupplement->getTimeChanged()) ||
+      !myTimeMapScanChanged.isAt(maxScanTimeChanged)) {
     
+    ArLog::log(myMapChangedHelper->getMapChangedLogLevel(),
+	       "ArMapSimple::mapChanged() msecs-objects: %i, msecs-points: %i, msecs-mapInfo: %i msecs-supplement: %i",
+	       myTimeMapObjectsChanged.isAt(myMapObjects->getTimeChanged()),
+	       !myTimeMapScanChanged.isAt(maxScanTimeChanged),
+	       !myTimeMapInfoChanged.isAt(myMapInfo->getTimeChanged()),
+	       !myTimeMapSupplementChanged.isAt(
+		       myMapSupplement->getTimeChanged()));
+		
 
     // Since setInfo is not necessarily called, call updateMapCategory just to 
     // make sure that the category is correctly set based on the contents of the 
     // map file.
-    if (abs(myTimeMapInfoChanged.mSecSince(myMapInfo->getTimeChanged()) > 0)) {
+    if (!myTimeMapInfoChanged.isAt(myMapInfo->getTimeChanged())) {
       updateMapCategory();
     }
-
-		if (myTimeMapScanChanged.mSecSince(maxScanTimeChanged)) {
+    
+    if (!myTimeMapScanChanged.isAt(maxScanTimeChanged)) {
       updateSummaryScan();
     } // end if scan was changed
-
+    
     myMapChangedHelper->invokeMapChangedCallbacks();
- 
+    
     ArLog::log(myMapChangedHelper->getMapChangedLogLevel(),
-						   "ArMapSimple: Done calling mapChanged callbacks");
+	       "ArMapSimple: Done calling mapChanged callbacks");
   }
   else { // nothing changed
     
     ArLog::log(ArLog::Verbose,
-						   "ArMapSimple::mapChanged(): Map was not changed");
-
+	       "ArMapSimple::mapChanged(): Map was not changed");
+    
   } // end else nothing changed
-
-	myTimeMapObjectsChanged = myMapObjects->getTimeChanged();
-	myTimeMapSupplementChanged = myMapSupplement->getTimeChanged();
+  
+  myTimeMapObjectsChanged = myMapObjects->getTimeChanged();
+  myTimeMapSupplementChanged = myMapSupplement->getTimeChanged();
   myTimeMapInfoChanged    = myMapInfo->getTimeChanged();
   myTimeMapScanChanged    = findMaxMapScanTimeChanged(); 
 
@@ -4911,7 +5034,7 @@ AREXPORT ArTime ArMapSimple::findMaxMapScanTimeChanged()
 
 
 AREXPORT void ArMapSimple::addMapChangedCB(ArFunctor *functor, 
-				                                   ArListPos::Pos position)
+					   int position)
 { 
   myMapChangedHelper->addMapChangedCB(functor, position);
 
@@ -4926,10 +5049,9 @@ AREXPORT void ArMapSimple::remMapChangedCB(ArFunctor *functor)
 
 
 AREXPORT void ArMapSimple::addPreMapChangedCB(ArFunctor *functor,
-                                              ArListPos::Pos position)
+                                              int position)
 { 
   myMapChangedHelper->addPreMapChangedCB(functor, position);
-
 } // end method addPreMapChangedCB
 
 
@@ -5108,7 +5230,10 @@ AREXPORT void ArMapSimple::writeObjectsToFunctor(ArFunctor1<const char *> *funct
 {
   std::string category = getMapCategory();
   if (maxCategory != NULL) {
-    if (strcasecmp(maxCategory, MAP_CATEGORY_2D_EXTENDED) == 0) {
+    if (strcasecmp(maxCategory, MAP_CATEGORY_2D_COMPOSITE) == 0) {
+      category = MAP_CATEGORY_2D_COMPOSITE;
+    }
+    else if (strcasecmp(maxCategory, MAP_CATEGORY_2D_EXTENDED) == 0) {
       category = MAP_CATEGORY_2D_EXTENDED;
     } 
     else if (strcasecmp(maxCategory, MAP_CATEGORY_2D_MULTI_SOURCES) == 0) {
@@ -5587,6 +5712,7 @@ AREXPORT void ArMapSimple::writeToFunctor(ArFunctor1<const char *> *functor,
 
   myInactiveObjects->writeObjectListToFunctor(functor, endOfLineChars);
 
+  myChildObjects->writeObjectListToFunctor(functor, endOfLineChars);
 
   // Write out any unrecognized (remainder) lines -- just to try to prevent them
   // from being accidentally lost
@@ -5640,6 +5766,11 @@ AREXPORT ArMapObjectsInterface *ArMapSimple::getInactiveObjects()
   return myInactiveObjects;
 }
 
+AREXPORT ArMapObjectsInterface *ArMapSimple::getChildObjects()
+{
+  return myChildObjects;
+}
+
 AREXPORT bool ArMapSimple::parseLine(char *line)
 { 
   return myLoadingParser->parseLine(line);
@@ -5691,6 +5822,7 @@ bool ArMapSimple::handleMapCategory(ArArgumentBuilder *arg)
       !myMapObjects->addToFileParser(myLoadingParser) ||
       !myInactiveInfo->addToFileParser(myLoadingParser) ||
       !myInactiveObjects->addToFileParser(myLoadingParser) ||
+      !myChildObjects->addToFileParser(myLoadingParser) ||
       // Add a handler for unrecognized lines...
       !myLoadingParser->addHandler(NULL, &myRemCB)) 
   {
@@ -5960,6 +6092,7 @@ bool ArMapSimple::handleDataIntro(ArArgumentBuilder *arg)
 
   myInactiveInfo->remFromFileParser(myLoadingParser);
   myInactiveObjects->remFromFileParser(myLoadingParser);
+  myChildObjects->remFromFileParser(myLoadingParser);
 
   myLoadingParser->remHandler("Sources:");
 
@@ -5987,9 +6120,17 @@ bool ArMapSimple::handleDataIntro(ArArgumentBuilder *arg)
   // method sets the myLoadingData / myLoadingLinesAndData attributes --
   // which are also needed by ArQ
   bool isLineDataTag = false;
+
+  if (myLoadingScan != NULL) {
+    myLoadingScan->remExtraFromFileParser(myLoadingParser);
+  }
+
   myLoadingScan = findScanWithDataKeyword(myLoadingDataTag.c_str(),
                                           &isLineDataTag);
 
+  if (myLoadingScan != NULL) {
+    myLoadingScan->addExtraToFileParser(myLoadingParser, isLineDataTag);
+  }
 
   return false;
 
@@ -6023,6 +6164,17 @@ void ArMapSimple::setInactiveObjects
 
 } // end method setInactiveObjects
  
+
+void ArMapSimple::setChildObjects
+                             (const std::list<ArMapObject *> *mapObjects,
+                              bool isSortedObjects, 
+                              ArMapChangeDetails *changeDetails)
+{ 
+  myChildObjects->setMapObjects(mapObjects, isSortedObjects, changeDetails);
+
+} // end method setChildObjects
+
+
 
 AREXPORT ArMapScan *ArMapSimple::getScan(const char *scanType) const
 {

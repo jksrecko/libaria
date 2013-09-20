@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "Aria.h"
@@ -32,7 +32,17 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #ifndef ARINTERFACE
 #include "ArModuleLoader.h"
 #include "ArRobotJoyHandler.h"
+#include "ArSystemStatus.h"
 #endif // ARINTERFACE
+
+// to register PTZ types with PTZConnector:
+#include "ArPTZConnector.h"
+#include "ArRVisionPTZ.h"
+#include "ArVCC4.h"
+#include "ArDPPTU.h"
+#include "ArSonyPTZ.h"
+
+
 
 ArGlobalFunctor1<int> Aria::ourSignalHandlerCB(&Aria::signalHandlerCB);
 ArMutex Aria::ourShuttingDownMutex;
@@ -54,16 +64,36 @@ std::multimap<int, ArFunctor *> Aria::ourLogOptionsCBs;
 ArLog::LogLevel Aria::ourExitCallbacksLogLevel = ArLog::Verbose;
 std::map<std::string, ArRetFunctor3<ArDeviceConnection *, const char *, const char *, const char *> *, ArStrCaseCmpOp> Aria::ourDeviceConnectionCreatorMap;
 std::string Aria::ourDeviceConnectionTypes;
+std::string Aria::ourDeviceConnectionChoices = "Choices:";
 
 #ifndef ARINTERFACE
 std::list<ArRobot*> Aria::ourRobots;
 ArConfig Aria::ourConfig;
 ArRobotJoyHandler *Aria::ourRobotJoyHandler = NULL;
 ArStringInfoGroup Aria::ourInfoGroup;
-int Aria::ourMaxNumLasers = 9;
+int Aria::ourMaxNumLasers = 2;
+int Aria::ourMaxNumSonarBoards = 1;
+int Aria::ourMaxNumBatteries = 1;
+int Aria::ourMaxNumLCDs = 1;
 std::map<std::string, ArRetFunctor2<ArLaser *, int, const char *> *, ArStrCaseCmpOp> Aria::ourLaserCreatorMap;
 std::string Aria::ourLaserTypes;
+std::string Aria::ourLaserChoices = "Choices:";
+std::map<std::string, ArRetFunctor2<ArBatteryMTX *, int, const char *> *, ArStrCaseCmpOp> Aria::ourBatteryCreatorMap;
+std::string Aria::ourBatteryTypes;
+std::string Aria::ourBatteryChoices = "Choices:";
+std::map<std::string, ArRetFunctor2<ArLCDMTX *, int, const char *> *, ArStrCaseCmpOp> Aria::ourLCDCreatorMap;
+std::string Aria::ourLCDTypes;
+std::string Aria::ourLCDChoices = "Choices:";
+std::map<std::string, ArRetFunctor2<ArSonarMTX *, int, const char *> *, ArStrCaseCmpOp> Aria::ourSonarCreatorMap;
+std::string Aria::ourSonarTypes;
+std::string Aria::ourSonarChoices = "Choices:";
+
+size_t Aria::ourMaxNumVideoDevices = 8;
+size_t Aria::ourMaxNumPTZs = 8;
+
 #endif // ARINTERFACE
+
+std::string Aria::ourIdentifier = "generic";
 
 /**
    This must be called first before any other Aria functions.
@@ -98,6 +128,11 @@ std::string Aria::ourLaserTypes;
 AREXPORT void Aria::init(SigHandleMethod method, bool initSockets, 
 			 bool sigHandleExitNotShutdown)
 {
+#ifndef ARINTERFACE
+  // get this here so that the program update can be accurate
+  ArSystemStatus::getUptime();
+#endif
+
   std::list<ArFunctor*>::iterator iter;
   std::string str;
   char buf[1024];
@@ -200,16 +235,22 @@ AREXPORT void Aria::init(SigHandleMethod method, bool initSockets,
   Aria::laserAddCreator("urg2.0", ArLaserCreatorHelper::getCreateUrg_2_0CB());
   Aria::laserAddCreator("s3series", ArLaserCreatorHelper::getCreateS3SeriesCB());
   Aria::laserAddCreator("lms5XX", ArLaserCreatorHelper::getCreateLMS5XXCB());
+  Aria::laserAddCreator("tim3XX", ArLaserCreatorHelper::getCreateTiM3XXCB());
   Aria::laserAddCreator("sZseries", ArLaserCreatorHelper::getCreateSZSeriesCB());
-#endif // ARINTERFACE
+  Aria::batteryAddCreator("mtx", ArBatteryMTXCreatorHelper::getCreateBatteryMTXCB());
+  Aria::lcdAddCreator("mtx", ArLCDMTXCreatorHelper::getCreateLCDMTXCB());
+  Aria::sonarAddCreator("mtx", ArSonarMTXCreatorHelper::getCreateSonarMTXCB());
+  //Aria::batteryAddCreator("mtxbatteryv1", ArBatteryMTXCreatorHelper::getCreateBatteryMTXCB());
+  //Aria::lcdAddCreator("mtxlcdv1", ArLCDMTXCreatorHelper::getCreateLCDMTXCB());
+  //Aria::sonarAddCreator("mtxsonarv1", ArSonarMTXCreatorHelper::getCreateSonarMTXCB());
+	#endif // ARINTERFACE
 
   Aria::deviceConnectionAddCreator(
 	  "serial", ArDeviceConnectionCreatorHelper::getCreateSerialCB());
   Aria::deviceConnectionAddCreator(
-	  "tcp", ArDeviceConnectionCreatorHelper::getCreateTcpCB());
-  Aria::deviceConnectionAddCreator(
 	  "serial422", ArDeviceConnectionCreatorHelper::getCreateSerial422CB());
-    
+  Aria::deviceConnectionAddCreator(
+	  "tcp", ArDeviceConnectionCreatorHelper::getCreateTcpCB());
 
   ourInited = true;
 
@@ -219,6 +260,10 @@ AREXPORT void Aria::init(SigHandleMethod method, bool initSockets,
   ArArgumentParser::addDefaultArgumentFile("/etc/Aria.args");
   ArArgumentParser::addDefaultArgumentEnv("ARIAARGS");
   
+  ArVCC4::registerPTZType();
+  ArRVisionPTZ::registerPTZType();
+  ArDPPTU::registerPTZType();
+  ArSonyPTZ::registerPTZType();
 }
 
 
@@ -238,6 +283,7 @@ AREXPORT void Aria::uninit()
   ArModuleLoader::closeAll();
 #endif // ARINTERFACE
   ArSocket::shutdown();
+  ArThread::shutdown();
 }
 
 /**
@@ -270,12 +316,17 @@ AREXPORT void Aria::addUninitCallBack(ArFunctor *cb, ArListPos::Pos position)
 /**
    Use this function to clean up or uninitialize Aria, in particular,
    to stop background threads.
+   (Note: If you want to shutdown ARIA cleanly at the
+   end of your program or when exiting the program due to error, use 
+   Aria::exit() instead.)
    This calls stop() on all ArThread's and ArASyncTask's. It will
    block until all ArThread's and ArASyncTask's exit. It is expected
    that all the tasks will obey the ArThread::myRunning variable and
-   exit when it is false. (Note, this only stop Aria's background threads,
-   it does not exit the program. Use exit() to do some cleanup and
-   exit the program.)
+   exit when it is false. Note, this only stop Aria's background threads,
+   it does not exit the program. 
+   If you want to shutdown ARIA cleanly at the
+   end of your program or when exiting the program due to error, use 
+   Aria::exit() instead. 
    @sa Aria::exit()
 */
 AREXPORT void Aria::shutdown()
@@ -299,10 +350,18 @@ AREXPORT void Aria::shutdown()
 }
 
 /**
-   This will call the list of Aria exit callbacks (added by addExitCallback()) and then exit with
-   the given exit code.  Note that this could be called from anywhere,
-   mutexes may be locked when called-- the exit
-   callbacks MUST exit and cannot wait for a lock.
+   This will call the list of Aria exit callbacks (added by addExitCallback())
+   and then exit the program with
+   the given exit code.   This method may be used as a replacement for the
+   standard system ::exit() call (which is  used by this method
+   to finally exit the program with the given @a exitCode after finishing Aria
+   shutdown steps.)
+
+   Note that this could be called from anywhere,
+   mutexes may be locked when called-- all exit
+   callbacks MUST return and cannot wait for a lock, since this could result 
+   in the program hanging due to double-lock (deadlock).
+
    @sa addExitCallback()
 **/
 AREXPORT void Aria::exit(int exitCode)
@@ -632,6 +691,58 @@ AREXPORT void Aria::setMaxNumLasers(int maxNumLasers)
   ourMaxNumLasers = maxNumLasers;
 }
 
+/**
+   Gets the maximum number of sonar boards to check for and use
+**/
+AREXPORT int Aria::getMaxNumSonarBoards(void)
+{
+  return ourMaxNumSonarBoards;
+}
+
+/**
+   Sets the maximum number of sonars to check for and use, if you are
+   going to set this you should do it after the Aria::init
+**/
+AREXPORT void Aria::setMaxNumSonarBoards(int maxNumSonarBoards)
+{
+  ourMaxNumSonarBoards = maxNumSonarBoards;
+}
+
+/**
+   Gets the maximum number of batteries to check for and use
+**/
+AREXPORT int Aria::getMaxNumBatteries(void)
+{
+  return ourMaxNumBatteries;
+}
+
+/**
+   Sets the maximum number of sonars to check for and use, if you are
+   going to set this you should do it after the Aria::init
+**/
+AREXPORT void Aria::setMaxNumBatteries(int maxNumBatteries)
+{
+  ourMaxNumBatteries = maxNumBatteries;
+}
+
+/**
+   Gets the maximum number of lcds to check for and use
+**/
+AREXPORT int Aria::getMaxNumLCDs(void)
+{
+  return ourMaxNumLCDs;
+}
+
+/**
+   Sets the maximum number of sonars to check for and use, if you are
+   going to set this you should do it after the Aria::init
+**/
+AREXPORT void Aria::setMaxNumLCDs(int maxNumLCDs)
+{
+  ourMaxNumLCDs = maxNumLCDs;
+}
+
+
 #endif // ARINTERFACE
 
 /**
@@ -665,6 +776,14 @@ AREXPORT bool Aria::parseArgs(void)
 
     if (!callback->invokeR())
     {
+      if (callback->getName() != NULL && callback->getName()[0] != '\0')
+	ArLog::log(ArLog::Terse,
+		   "Aria::parseArgs: Failed, parse arg functor '%s' (%d) returned false", 
+		   callback->getName(), (*it).first);
+      else
+	ArLog::log(ArLog::Terse,
+		   "Aria::parseArgs: Failed unnamed parse arg functor (%d) returned false", 
+		   (*it).first);
       return false;
     }
   }
@@ -733,6 +852,12 @@ AREXPORT bool Aria::laserAddCreator(
   }
   else
   {
+    // if we haven't added any types add to the choices (there's an
+    // intro string in choices, so it's checking the other variable)
+    if (!ourLaserTypes.empty())
+      ourLaserChoices += ";;";
+    ourLaserChoices += laserType;
+
     if (!ourLaserTypes.empty())
       ourLaserTypes += "|";
     ourLaserTypes += laserType;
@@ -749,6 +874,15 @@ AREXPORT bool Aria::laserAddCreator(
 AREXPORT const char *Aria::laserGetTypes(void)
 {
   return ourLaserTypes.c_str();
+}
+
+/**
+   Gets a string that is the types of lasers that can be created
+   separated by ;; characters.  Mostly for internal use by the config
+**/
+AREXPORT const char *Aria::laserGetChoices(void)
+{
+  return ourLaserChoices.c_str();
 }
 
 /**
@@ -774,6 +908,251 @@ AREXPORT ArLaser *Aria::laserCreate(const char *laserType, int laserNumber,
   }
   
   return (*it).second->invokeR(laserNumber, logPrefix);
+}
+
+
+/**
+   This adds a functor which can create a battery of a given type. 
+
+   @param batteryType The battery type that the creator will make (these
+   are always checked case insensitively).  If
+   there is already a creator for this type, then the old one is
+   replaced and the new one is used.
+
+   @param creator A functor which takes an int (battery number) and a
+   const char * (logPrefix) and returns a new battery of the batteryType
+**/
+AREXPORT bool Aria::batteryAddCreator(
+	const char *batteryType, 
+	ArRetFunctor2<ArBatteryMTX *, int, const char *> *creator)
+{
+  if (ourBatteryCreatorMap.find(batteryType) != ourBatteryCreatorMap.end())
+  {
+    ArLog::log(ArLog::Normal, "Aria::batteryAddCreator: There is already a battery creator for %s, replacing it", batteryType);
+    ourBatteryCreatorMap.erase(batteryType);
+  }
+  else
+  {
+    // if we haven't added any types add to the choices (there's an
+    // intro string in choices, so it's checking the other variable)
+    if (!ourBatteryTypes.empty())
+      ourBatteryChoices += ";;";
+    ourBatteryChoices += batteryType;
+
+    if (!ourBatteryTypes.empty())
+      ourBatteryTypes += "|";
+    ourBatteryTypes += batteryType;
+  }
+
+  ourBatteryCreatorMap[batteryType] = creator;
+  return true;
+}
+
+/**
+   Gets a string that is the types of batteries that can be created
+   separated by | characters.  Mostly for internal use by ArBatteryConnector.
+**/
+AREXPORT const char *Aria::batteryGetTypes(void)
+{
+  return ourBatteryTypes.c_str();
+}
+
+/**
+   Gets a string that is the types of batteries that can be created
+   separated by ;; characters.  Mostly for internal use by the config.
+**/
+AREXPORT const char *Aria::batteryGetChoices(void)
+{
+  return ourBatteryChoices.c_str();
+}
+
+/**
+   Creates a battery of a given type, with the given batteryNumber, and
+   uses the logPrefix for logging what happens.  This is mostly for
+   internal use by ArBatteryConnector.
+
+   @param batteryType The type of battery to create
+
+   @param batteryNumber The battery number to use for the created battery
+   
+   @param logPrefix The prefix to use when logging 
+*/
+
+AREXPORT ArBatteryMTX *Aria::batteryCreate(const char *batteryType, int batteryNumber,
+				    const char *logPrefix)
+{
+  std::map<std::string, ArRetFunctor2<ArBatteryMTX *, int, const char *> *, ArStrCaseCmpOp>::iterator it;
+  if ((it = ourBatteryCreatorMap.find(batteryType)) == ourBatteryCreatorMap.end())
+  {
+    ArLog::log(ArLog::Normal, "%sCannot create a battery of type %s options are <%s>", logPrefix, batteryType, batteryGetTypes());
+    return NULL;
+  }
+  
+  return (*it).second->invokeR(batteryNumber, logPrefix);
+}
+
+
+/**
+   This adds a functor which can create a lcd of a given type. 
+
+   @param lcdType The lcd type that the creator will make (these
+   are always checked case insensitively).  If
+   there is already a creator for this type, then the old one is
+   replaced and the new one is used.
+
+   @param creator A functor which takes an int (lcd number) and a
+   const char * (logPrefix) and returns a new lcd of the lcdType
+**/
+AREXPORT bool Aria::lcdAddCreator(
+	const char *lcdType, 
+	ArRetFunctor2<ArLCDMTX *, int, const char *> *creator)
+{
+  if (ourLCDCreatorMap.find(lcdType) != ourLCDCreatorMap.end())
+  {
+    ArLog::log(ArLog::Normal, "Aria::lcdAddCreator: There is already a lcd creator for %s, replacing it", lcdType);
+    ourLCDCreatorMap.erase(lcdType);
+  }
+  else
+  {
+    // if we haven't added any types add to the choices (there's an
+    // intro string in choices, so it's checking the other variable)
+
+    if (!ourLCDTypes.empty())
+      ourLCDChoices += ";;";
+    ourLCDChoices += lcdType;
+
+    if (!ourLCDTypes.empty())
+      ourLCDTypes += "|";
+    ourLCDTypes += lcdType;
+
+  }
+
+  ourLCDCreatorMap[lcdType] = creator;
+  return true;
+}
+
+/**
+   Gets a string that is the types of batteries that can be created
+   separated by | characters.  Mostly for internal use by ArLCDConnector.
+**/
+AREXPORT const char *Aria::lcdGetTypes(void)
+{
+  return ourLCDTypes.c_str();
+}
+
+/**
+   Gets a string that is the types of batteries that can be created
+   separated by ;; characters.  Mostly for internal use by ArLCDConnector.
+**/
+AREXPORT const char *Aria::lcdGetChoices(void)
+{
+  return ourLCDChoices.c_str();
+}
+
+/**
+   Creates a lcd of a given type, with the given lcdNumber, and
+   uses the logPrefix for logging what happens.  This is mostly for
+   internal use by ArLCDConnector.
+
+   @param lcdType The type of lcd to create
+
+   @param lcdNumber The lcd number to use for the created lcd
+   
+   @param logPrefix The prefix to use when logging 
+*/
+
+AREXPORT ArLCDMTX *Aria::lcdCreate(const char *lcdType, int lcdNumber,
+				    const char *logPrefix)
+{
+  std::map<std::string, ArRetFunctor2<ArLCDMTX *, int, const char *> *, ArStrCaseCmpOp>::iterator it;
+  if ((it = ourLCDCreatorMap.find(lcdType)) == ourLCDCreatorMap.end())
+  {
+    ArLog::log(ArLog::Normal, "%sCannot create a lcd of type %s options are <%s>", logPrefix, lcdType, lcdGetTypes());
+    return NULL;
+  }
+  
+  return (*it).second->invokeR(lcdNumber, logPrefix);
+}
+
+
+/**
+   This adds a functor which can create a sonar of a given type. 
+
+   @param sonarType The sonar type that the creator will make (these
+   are always checked case insensitively).  If
+   there is already a creator for this type, then the old one is
+   replaced and the new one is used.
+
+   @param creator A functor which takes an int (sonar number) and a
+   const char * (logPrefix) and returns a new sonar of the sonarType
+**/
+AREXPORT bool Aria::sonarAddCreator(
+	const char *sonarType, 
+	ArRetFunctor2<ArSonarMTX *, int, const char *> *creator)
+{
+  if (ourSonarCreatorMap.find(sonarType) != ourSonarCreatorMap.end())
+  {
+    ArLog::log(ArLog::Normal, "Aria::sonarAddCreator: There is already a sonar creator for %s, replacing it", sonarType);
+    ourSonarCreatorMap.erase(sonarType);
+  }
+  else
+  {
+    // if we haven't added any types add to the choices (there's an
+    // intro string in choices, so it's checking the other variable)
+    if (!ourSonarTypes.empty())
+      ourSonarChoices += ";;";
+    ourSonarChoices += sonarType;
+
+    if (!ourSonarTypes.empty())
+      ourSonarTypes += "|";
+    ourSonarTypes += sonarType;
+  }
+
+  ourSonarCreatorMap[sonarType] = creator;
+  return true;
+}
+
+/**
+   Gets a string that is the types of sonars that can be created
+   separated by | characters.  Mostly for internal use by ArSonarConnector.
+**/
+AREXPORT const char *Aria::sonarGetTypes(void)
+{
+  return ourSonarTypes.c_str();
+}
+
+/**
+   Gets a string that is the types of sonars that can be created
+   separated by ;; characters.  Mostly for internal use by the config.
+**/
+AREXPORT const char *Aria::sonarGetChoices(void)
+{
+  return ourSonarChoices.c_str();
+}
+
+/**
+   Creates a sonar of a given type, with the given sonarNumber, and
+   uses the logPrefix for logging what happens.  This is mostly for
+   internal use by ArSonarConnector.
+
+   @param sonarType The type of sonar to create
+
+   @param sonarNumber The sonar number to use for the created sonar
+   
+   @param logPrefix The prefix to use when logging 
+*/
+
+AREXPORT ArSonarMTX *Aria::sonarCreate(const char *sonarType, int sonarNumber,
+				    const char *logPrefix)
+{
+  std::map<std::string, ArRetFunctor2<ArSonarMTX *, int, const char *> *, ArStrCaseCmpOp>::iterator it;
+  if ((it = ourSonarCreatorMap.find(sonarType)) == ourSonarCreatorMap.end())
+  {
+    ArLog::log(ArLog::Normal, "%sCannot create a sonar of type %s options are <%s>", logPrefix, sonarType, sonarGetTypes());
+    return NULL;
+  }
+  
+  return (*it).second->invokeR(sonarNumber, logPrefix);
 }
 
 #endif // ARINTERFACE
@@ -804,6 +1183,12 @@ AREXPORT bool Aria::deviceConnectionAddCreator(
   }
   else
   {
+    // if we haven't added any types add to the choices (there's an
+    // intro string in choices, so it's checking the other variable)
+    if (!ourDeviceConnectionTypes.empty())
+      ourDeviceConnectionChoices += ";;";
+    ourDeviceConnectionChoices += deviceConnectionType;
+
     if (!ourDeviceConnectionTypes.empty())
       ourDeviceConnectionTypes += "|";
     ourDeviceConnectionTypes += deviceConnectionType;
@@ -820,6 +1205,15 @@ AREXPORT bool Aria::deviceConnectionAddCreator(
 AREXPORT const char *Aria::deviceConnectionGetTypes(void)
 {
     return ourDeviceConnectionTypes.c_str();
+}
+
+/**
+   Gets a string that is the types of device connections that can be created
+   separated by ;; characters.  Mostly for internal use by the config.
+**/
+AREXPORT const char *Aria::deviceConnectionGetChoices(void)
+{
+    return ourDeviceConnectionChoices.c_str();
 }
 
 /** Creates a device connection of a given type, connecting to a given
@@ -853,3 +1247,18 @@ AREXPORT ArDeviceConnection *Aria::deviceConnectionCreate(
   return (*it).second->invokeR(port, defaultInfo, logPrefix);
 }
 
+
+AREXPORT  void Aria::setMaxNumVideoDevices(size_t n) { ourMaxNumVideoDevices = n; }
+AREXPORT  size_t Aria::getMaxNumVideoDevices() { return ourMaxNumVideoDevices; }
+AREXPORT  void Aria::setMaxNumPTZs(size_t n) { ourMaxNumVideoDevices = n; }
+AREXPORT  size_t Aria::getMaxNumPTZs() { return ourMaxNumVideoDevices; }
+
+AREXPORT const char *Aria::getIdentifier(void)
+{
+  return ourIdentifier.c_str();
+}
+
+AREXPORT void Aria::setIdentifier(const char *identifier)
+{
+  ourIdentifier = identifier;
+}

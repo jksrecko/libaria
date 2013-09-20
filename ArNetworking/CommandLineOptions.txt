@@ -1,5 +1,5 @@
 
-ArNetworking 2.7.5.2
+ArNetworking 2.8.0
 
 Summary of command line options
 

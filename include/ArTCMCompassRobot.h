@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARTCMCOMPASSROBOT_H
 #define ARTCMCOMPASSROBOT_H
@@ -33,9 +33,10 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArTCM2.h"
 
 /** Interface to a TCM 2/2.5/2.6 3-axis compass through the robot microcontroller.
- *  When most Pioneer robots are equipped with a TCM compass, it is connected
- *  to the robot microcontroller, which returns compass information in the SIP
- *  as well as in extra compass-specific data packets.  This class communicates
+ *  When a Pioneer robot is equipped with a TCM compass, it is typically connected
+ *  to the robot microcontroller, which returns compass information in 
+ *  compass data packets upon request (set compass mode/type to 2 or 3 in
+ *  firmware configuration; mode 1 (data in SIP) is not supported by ARIA).  This class communicates
  *  with the robot microcontroller to configure the compass and recieve data
  *  from it. 
  *

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARROBOTCONFIGPACKETREADER_H
 #define ARROBOTCONFIGPACKETREADER_H
@@ -29,9 +29,10 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaTypedefs.h"
 #include "ariaUtil.h"
 #include "ArFunctor.h"
+#include "ArRobotPacket.h"
 
 class ArRobot;
-class ArRobotPacket;
+
 
 /// This class will read a config packet from the robot
 class ArRobotConfigPacketReader
@@ -49,6 +50,8 @@ public:
   bool hasPacketBeenRequested(void) const { return myPacketRequested; }
   /// See if we've gotten the data
   bool hasPacketArrived(void) const { return myPacketArrived; }
+  /// Gets a pointer to the packet that we built the config packet from
+  const ArRobotPacket *getRobotPacket(void) const { return &myPacket; } 
   /// Log the config
   AREXPORT void log(void) const;
   /// Log the movement part of the config config
@@ -185,6 +188,15 @@ public:
   /// Gets the power bits
   int getPowerBits(void) const
     { return myPowerBits; }
+  /// Gets the battery type 
+  unsigned char getBatteryType(void) const
+    { return myBatteryType; }
+  /// Gets the warning state of charge
+  int getStateOfChargeLow(void) const
+    { return myStateOfChargeLow; }
+  /// Gets the shutdown state of charge
+  int getStateOfChargeShutdown(void) const
+    { return myStateOfChargeShutdown; }
   /// internal, packet handler
   AREXPORT bool packetHandler(ArRobotPacket *packet);
   /// internal, connection callback
@@ -252,6 +264,9 @@ protected:
   int myGyroRateLimit;
   char myHighTemperatureShutdown;
   int myPowerBits;
+  unsigned char myBatteryType;
+  int myStateOfChargeLow;
+  int myStateOfChargeShutdown;
   
   // the robot
   ArRobot *myRobot;
@@ -263,6 +278,9 @@ protected:
   bool myPacketArrived;
   // last time we requested a packet (we'll only ask every 200 ms)
   ArTime myLastPacketRequest;
+  // a copy of the packet
+  ArRobotPacket myPacket;
+  
   // the callback
   ArRetFunctor1C<bool, ArRobotConfigPacketReader, ArRobotPacket *> myPacketHandlerCB;
   // callback for connectiosn in case we need to request a config packet

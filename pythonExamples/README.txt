@@ -6,11 +6,11 @@ USING THE PYTHON WRAPPER FOR ARIA
 
 A "wrapper" library for Python has been provided in the "python" directory.
 This wrapper layer provides a Python API which simply makes calls into the 
-regular Aria C++ library (libAria.so/Aria.dll). In general, the Python API 
+regular Aria C++ library (libAria.so/AriaVC10.dll). In general, the Python API 
 mirrors the C++ API. 
 
 The Aria Python wrapper currently requires Python version 2.4.4 if on Debian 3 or Windows,
-Python 2.5 if on Debian 5, or Python 2.2 if on RedHat 7.3.  Multiple versions of
+Python 2.5 if on Debian 5, or Python 2.7 if on Ubuntu 12.  Multiple versions of
 Python may be installed on Debian Linux; if so, commands are provided such as 
 'python2.4' or 'python2.5' or 'python2' to invoke the different versions of
 Python.
@@ -22,18 +22,22 @@ Python.
 
 You can download Python 2.4.4 from:
     http://www.python.org/download/releases/2.4.4
+(Python 2.2 is also at python.org.)
 
-On Debian 5, you can install Python 2.5 by entering the following command
+On Debian, you can install Python 2.5 by entering the following command
 when connected to the Internet:
 
-    apt-get install python
+    sudo apt-get install python
 
 Or, you can download Python 2.5.5 from:
     http://www.python.org/download/releases/2.5.5
 
-(Python 2.2 is also at python.org.)
+On Ubuntu, you can install Python 2.7 with the following command:
 
-  (NOTE if using Python 2.6: Python 2.6 requires native C++ DLLs to be 
+    sudo apt-get install python2.7
+
+
+  (NOTE if using Python 2.6 or later: Python 2.6 requires native C++ DLLs to be 
   named with a ".pyd" file extension, rather than .dll/.so as was 
   allowed in previous versions.  So if Python 2.6 is unable to import the 
   AriaPy DLL  module, rename _AriaPy.dll or _AriaPy.so to _AriaPy.pyd 
@@ -126,7 +130,8 @@ Python 2.4 source code and compile the "python" project in the PCbuild subdirect
 
 Set the environment variable PYTHON_INCLUDE to the full path of Python's
 include directory.  On Linux, this is usually /usr/include/python2.4 for 
-Python 2.4 or /usr/include/python2.2 for Python 2.2.  On Windows, it depends
+Python 2.4 or /usr/include/python2.2 for Python 2.2 or /usr/include/python2.7 
+for Python 2.7.  On Windows, it depends
 on where you installed Python but a typical value is C:\Python24\include for
 Ptyhon 2.4).  
 
@@ -139,8 +144,9 @@ Set environment variables in the Advanced section of the System control panel.
 
 On Linux Run 'make python' in the Aria directory, and again run 'make python' in
 the ArNetworking subdirectory if you also want the wrapper library for
-ArNetworking.  On Windows, open the AriaPy.sln file in the 'python'
-directory and build AriaPy and, if desired, ArNetworkingPy.  The native ARIA
-library may be automatically rebuilt if neccesary.
+ArNetworking.  On Windows, open the AriaPy-vc2010.sln file in the 'python'
+directory with Visual Studio 2010 and build AriaPy and, if desired, 
+ArNetworkingPy in Release configuration.  The native ARIAlibrary may be 
+automatically rebuilt if neccesary.
 
 

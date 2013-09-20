@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -40,6 +40,9 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaUtil.h"
 
 
+#define TIOGETTIMESTAMP         0x5480
+#define TIOSTARTTIMESTAMP       0x5481
+
 AREXPORT ArSerialConnection::ArSerialConnection(bool is422)
 {
   myPort = -1;
@@ -49,6 +52,10 @@ AREXPORT ArSerialConnection::ArSerialConnection(bool is422)
   myStatus = STATUS_NEVER_OPENED;
   myTakingTimeStamps = false;
   myIs422 = is422;
+  if (myIs422)
+    setPortType("serial422");
+  else
+    setPortType("serial");
   buildStrMap();
 }
 
@@ -78,13 +85,14 @@ AREXPORT int ArSerialConnection::internalOpen(void)
 
   if (myStatus == STATUS_OPEN) 
   {
-    ArLog::log(ArLog::Terse, "ArSerialConnection::open: Serial port already open");
+    ArLog::log(ArLog::Terse, "ArSerialConnection::internalOpen: Serial port already open");
     return OPEN_ALREADY_OPEN;
   }
 
-  ArLog::log(ArLog::Verbose, "ArSerialConnection::open: Connecting to serial port '%s'", myPortName.c_str());
-
-  //ArLog::log(ArLog::Terse, "internalOpen - myIs422 = %d",myIs422);
+  if (myIs422)
+    ArLog::log(ArLog::Verbose, "ArSerialConnection::internalOpen: Connecting to serial422 port '%s'", myPortName.c_str());
+  else
+    ArLog::log(ArLog::Verbose, "ArSerialConnection::internalOpen: Connecting to serial port '%s'", myPortName.c_str());
 
   /* open the port */
   if (!myIs422)
@@ -244,6 +252,7 @@ AREXPORT void ArSerialConnection::setPort(const char *port)
     myPortName = "/dev/ttyS0";
   else
     myPortName = port;
+  setPortName(myPortName.c_str());
 }
 
 /**
@@ -369,6 +378,7 @@ int ArSerialConnection::rateToBaud(int rate)
   case 57600: return B57600;
   case 115200: return B115200;
   case 230400: return B230400;
+  case 460800: return B460800;
   default: 
     ArLog::log(ArLog::Terse, "ArSerialConnection::rateToBaud: Did not know baud for rate %d.", rate);
     return -1;
@@ -389,6 +399,7 @@ int ArSerialConnection::baudToRate(int baud)
   case B57600: return 57600;
   case B115200: return 115200;
   case B230400: return 230400;
+  case B460800: return 460800;
   default: 
     ArLog::log(ArLog::Terse, "ArSerialConnection:baudToRate: Did not know rate for baud.");
     return -1;
@@ -450,10 +461,10 @@ AREXPORT int ArSerialConnection::write(const char *data, unsigned int size)
     printf("0x%x %c", data[i], data[i]);
   printf("\n");
   */
-
-  /*
+  
+  /* 
   char buf[10000];
-  sprintf(buf, "SERIAL_WRITE(%3d bytes): ", size);
+  sprintf(buf, "SERIAL_WRITE(%3d bytes %d): ", size, myPort);
   for (int i = 0; i < size; i++)
     sprintf(buf, "%s %02x", buf, (unsigned char)data[i]);
   ArLog::log(ArLog::Normal, buf);

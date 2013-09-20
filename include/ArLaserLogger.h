@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARLASERLOGGER_H
 #define ARLASERLOGGER_H
@@ -64,8 +64,10 @@ public:
 	  const char *baseDirectory = NULL,
 	  bool useReflectorValues = false,
 	  ArRobotJoyHandler *robotJoyHandler = NULL,
-	  const std::map<std::string, ArRetFunctor2<int, ArTime, ArPose *> *, 
-	  ArStrCaseCmpOp> *extraLocationData = NULL);
+	  const std::map<std::string, 
+	  ArRetFunctor3<int, ArTime, ArPose *, ArPoseWithTime *> *, 
+	  ArStrCaseCmpOp> *extraLocationData = NULL,
+	  std::list<ArLaser *> *extraLasers = NULL);
   /// Destructor
   AREXPORT virtual ~ArLaserLogger();
 
@@ -120,9 +122,13 @@ protected:
   void internalWriteTags(void);
   // internal function that takes a reading
   void internalTakeReading(void);
+  // internal function that takes a reading from one laser
+  void internalTakeLaserReading(ArLaser *laser, int laserNumber);
   // internal function that prints the position
   void internalPrintPos(ArPose encoderPoseTaken, ArPose goalPoseTaken, 
 			ArTime timeTaken);
+  // internal function that logs the pose and conf
+  void internalPrintLaserPoseAndConf(ArLaser *laser, int laserNumber);
   // internal packet for handling the loop packets
   AREXPORT bool loopPacketHandler(ArRobotPacket *packet);
 
@@ -137,6 +143,9 @@ protected:
   std::list<std::string> myInfos;
   bool myWrote;
   ArRobot *myRobot;
+  // note that this is now in the list of lasers, but this pointer is
+  // kept to denote the primary laser (so that it can always be called
+  // number 1)
   ArLaser *myLaser;
   bool myAddGoals;
   ArJoyHandler *myJoyHandler;
@@ -168,16 +177,21 @@ protected:
   void goalKeyCallback(void);
   unsigned char myLastLoops;
   
-  bool myFlipped;
+  // the lasers all have this, so shouldn't need it anymore...
+  //bool myFlipped;
   
   bool myIncludeRawEncoderPose;
-  std::map<std::string, ArRetFunctor2<int, ArTime, ArPose *> *, 
+  std::map<std::string, ArRetFunctor3<int, ArTime, ArPose *, ArPoseWithTime *> *, 
 	   ArStrCaseCmpOp> myExtraLocationData;
+  
+  // holders for the extra lasers 
+  std::list<ArLaser *> myLasers;
 
   ArFunctorC<ArLaserLogger> myGoalKeyCB;
   ArRetFunctor1C<bool, ArLaserLogger, ArRobotPacket *> myLoopPacketHandlerCB;
 };
 
+/// @deprecated
 typedef ArLaserLogger ArSickLogger;
 
 #endif // ARLASERLOGGER_H

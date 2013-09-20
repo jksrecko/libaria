@@ -1,3 +1,4 @@
+
 #include "Aria.h"
 #include "ArExport.h"
 #include "ArClientBase.h"
@@ -37,6 +38,7 @@ AREXPORT ArClientBase::ArClientBase() :
 
   myDebugLogging = false;
   myVerboseLogLevel = ArLog::Verbose;
+  myEnforceType = ArServerCommands::TYPE_UNSPECIFIED;
 
   myNonBlockingConnectState = NON_BLOCKING_STATE_NONE;
   clear();
@@ -203,32 +205,33 @@ AREXPORT int ArClientBase::getConnectTimeoutTime(void)
 
    @param port the port to connect on
    
-   @param print whether to print out our connection information or not
-   (you'll usually want to use the default argument of true, only here
-   for some more advanced internal things), this carries over to things like
-   disconnect printing too
+   @param log whether to log our connection information using ArLog or not.
+   Keeping the default value of true is recommended (disabling logging
+   is usually only for internal and unusual uses).
+   This setting also applies to logging disconnections and some other I/O events
+   as well.
 
    @param user  user name, or NULL for none.
    @param password password (cleartext), or NULL for none.
    @param openOnIP address of the local network interface to use for the outgoing connection, or NULL for any/all.
  **/
 AREXPORT bool ArClientBase::blockingConnect(const char *host, int port, 
-					    bool print, const char *user,
+					    bool log, const char *user,
 					    const char *password,
 					    const char *openOnIP)
 {
-  return internalBlockingConnect(host, port, print, user, password, NULL, 
+  return internalBlockingConnect(host, port, log, user, password, NULL, 
 				 openOnIP);
 }
 
 AREXPORT bool ArClientBase::internalBlockingConnect(
-	const char *host, int port, bool print, const char *user,
+	const char *host, int port, bool log, const char *user,
 	const char *password, ArSocket *tcpSocket, const char *openOnIP)
 {
   NonBlockingConnectReturn ret;
 
   if ((ret = internalNonBlockingConnectStart(
-	       host, port, print, user, password, tcpSocket, openOnIP)) != 
+	       host, port, log, user, password, tcpSocket, openOnIP)) != 
       NON_BLOCKING_CONTINUE)
     return false;
   
@@ -243,7 +246,7 @@ AREXPORT bool ArClientBase::internalBlockingConnect(
 
 AREXPORT ArClientBase::NonBlockingConnectReturn 
 ArClientBase::internalNonBlockingConnectStart(
-	const char *host, int port, bool print, const char *user,
+	const char *host, int port, bool log, const char *user,
 	const char *password, ArSocket *tcpSocket, const char *openOnIP)
 {
   ArNetPacket packet;
@@ -279,7 +282,7 @@ ArClientBase::internalNonBlockingConnectStart(
   myStartedConnection.setToNow();
   
   myHost = host;
-  myQuiet = !print;
+  myQuiet = !log;
   myTcpReceiver.setQuiet(myQuiet);
   if (user != NULL)
     myUser = user;
@@ -310,7 +313,7 @@ ArClientBase::internalNonBlockingConnectStart(
     myDataMutex.lock();
     if (myDebugLogging)
       ArLog::log(ArLog::Normal, "%s1.2", myLogPrefix.c_str());
-    if (internalConnect(host, port, print, openOnIP))
+    if (internalConnect(host, port, log, openOnIP))
     {
       myDataMutex.unlock();
       if (myDebugLogging)
@@ -891,9 +894,15 @@ AREXPORT void ArClientBase::processPacket(ArNetPacket *packet, bool tcp)
 				std::list<ArFunctor1<ArNetPacket *> *>::const_iterator it;
 				ArFunctor1<ArNetPacket *> *functor = NULL;
 
-				for (it = clientData->getFunctorList()->begin(); 
-						it != clientData->getFunctorList()->end();
+				// PS (with KMC help) - make a copy so that we can remove from the list
+				std::list<ArFunctor1<ArNetPacket *> *> copiedList = *(clientData->getFunctorList());
+				
+				for (it = copiedList.begin(); 
+						it != copiedList.end();
 						it++)
+				//for (it = clientData->getFunctorList()->begin(); 
+				//		it != clientData->getFunctorList()->end();
+				//		it++)
 				{
 					packet->resetRead();
 					functor = (*it);
@@ -914,8 +923,9 @@ AREXPORT void ArClientBase::processPacket(ArNetPacket *packet, bool tcp)
            packet->getCommand() == ArServerCommands::INTRODUCTION)
   {
 
-		char buf[512];
-		char passwordKey[2048];
+    char buf[512];
+    char passwordKey[2048];
+    char enforceProtocolVersion[256];
 
     myDataMutex.lock();
     // first read the data from the packet
@@ -945,6 +955,20 @@ AREXPORT void ArClientBase::processPacket(ArNetPacket *packet, bool tcp)
     myAuthKey = packet->bufToUByte4();
     myIntroKey = packet->bufToUByte4();
     packet->bufToStr(passwordKey, sizeof(passwordKey));
+    packet->bufToStr(enforceProtocolVersion, sizeof(enforceProtocolVersion));
+    if (!myEnforceProtocolVersion.empty() && 
+	strcasecmp(enforceProtocolVersion, 
+		   myEnforceProtocolVersion.c_str()) != 0)
+    {
+      myRejected = 3;
+      strcpy(myRejectedString, "Client rejecting server, since server protocol version does not match");
+      ArLog::log(ArLog::Normal, 
+		 "%sClient rejecting server, since server protocol version does not match",
+		 myLogPrefix.c_str());
+      internalSwitchState(STATE_REJECTED);
+      return;
+    }
+
     // introduce ourself normally via tcp
     retPacket.empty();
     retPacket.setCommand(ArClientCommands::INTRODUCTION);
@@ -964,6 +988,9 @@ AREXPORT void ArClientBase::processPacket(ArNetPacket *packet, bool tcp)
     md5_finish(&md5State, md5Digest);
 
     retPacket.dataToBuf((const char *)md5Digest, 16);
+    retPacket.strToBuf(myEnforceProtocolVersion.c_str());
+    retPacket.byteToBuf(myEnforceType);
+
     sendPacketTcp(&retPacket);
 
     myPassword = "%s";
@@ -1046,6 +1073,15 @@ AREXPORT void ArClientBase::processPacket(ArNetPacket *packet, bool tcp)
 				ArLog::log(ArLog::Normal, 
 									 "%sServer rejected connection since it is using the centralserver at %s", 
 									 myLogPrefix.c_str(), myRejectedString);
+      else if (myRejected == 3)
+				ArLog::log(ArLog::Normal, 
+									 "%sServer rejected for bad reason (3 should be from client side... it reported '%s')", 
+									 myLogPrefix.c_str(), myRejectedString);
+      else if (myRejected == 4)
+				ArLog::log(ArLog::Normal, 
+									 "%sServer rejected client because client using wrong protocol version.", 
+									 myLogPrefix.c_str());
+      
       else
 				ArLog::log(ArLog::Normal, 
 									 "%sServer rejected connection for unknown reason %d '%s'", 
@@ -1105,7 +1141,7 @@ AREXPORT void ArClientBase::processPacket(ArNetPacket *packet, bool tcp)
 					 packet->getCommand() != ArServerCommands::REJECTED)
   {
     ArLog::log(ArLog::Terse, 
-							 "%sIn STATE_EXCHANGE_INTROS and received something other than connected or rejected.", myLogPrefix.c_str());
+							 "%sIn STATE_EXCHANGE_INTROS and received something other than connected or rejected (%d).", myLogPrefix.c_str(), packet->getCommand());
     return;
   }
 
@@ -1999,13 +2035,39 @@ AREXPORT const char *ArClientBase::getName(unsigned int command,
   return ret;
 }
 
-AREXPORT void ArClientBase::setServerKey(const char *serverKey, bool print)
+AREXPORT void ArClientBase::setServerKey(const char *serverKey, bool log)
 {
   myDataMutex.lock();
   myServerKey = serverKey;
   myDataMutex.unlock();
-  if (print)
+  if (log)
     ArLog::log(ArLog::Normal, "%sNew server key set", myLogPrefix.c_str());
+}
+
+
+AREXPORT void ArClientBase::enforceProtocolVersion(const char *protocolVersion,
+						   bool log)
+{
+  myDataMutex.lock();
+  if (protocolVersion != NULL)
+    myEnforceProtocolVersion = protocolVersion;
+  else
+    myEnforceProtocolVersion = "";
+  myDataMutex.unlock();
+  if (log)
+    ArLog::log(ArLog::Normal, "%sNew enforceProtocolVersionSet", myLogPrefix.c_str());
+}
+
+AREXPORT void ArClientBase::enforceType(ArServerCommands::Type type,
+    bool log)
+{
+  myDataMutex.lock();
+  myEnforceType = type;
+  myDataMutex.unlock();
+  if (log)
+    ArLog::log(ArLog::Normal, "%sNew enforce type: %s", 
+	       myLogPrefix.c_str(), ArServerCommands::toString(type));
+	     
 }
 
 /**

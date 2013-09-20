@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -41,20 +41,33 @@ char * cppstrdup(const char *str)
   return ret;
 }
 /**
-   @param argvLen the largest number of arguments we'll parse
-
-   @param extraSpaceChar if not NULL, then this character will also be 
-    used to break up arguments (in addition to whitespace)
+ * @param argvLen the largest number of arguments to parse
+ * @param extraSpaceChar if not NULL, then this character will also be 
+ * used to break up arguments (in addition to whitespace)
+ * @param ignoreNormalSpaces a bool set to true if only the extraSpaceChar
+ * should be used to separate arguments
+ * @param isPreCompressQuotes a bool set to true if strings enclosed in 
+ * double-quotes should be parsed as a single argument (such strings
+ * must be surrounded by spaces).  This is roughly equivalent to calling 
+ * ArArgumentBuilder::compressQuoted(false) on the resulting builder, but 
+ * is more efficient and handles embedded spaces better.  The default value
+ * is false and preserves the original behavior where each argument is a 
+ * space-separated alphanumeric string.
 **/
 AREXPORT ArArgumentBuilder::ArArgumentBuilder(size_t argvLen, 
-					      char extraSpaceChar)
+					                                    char extraSpaceChar,
+					                                    bool ignoreNormalSpaces,
+                                              bool isPreCompressQuotes)
 {
+
   myArgc = 0;
   myOrigArgc = 0;
   myArgvLen = argvLen;
   myArgv = new char *[myArgvLen];
   myFirstAdd = true;
   myExtraSpace = extraSpaceChar;
+  myIgnoreNormalSpaces = ignoreNormalSpaces;
+  myIsPreCompressQuotes = isPreCompressQuotes;
   myIsQuiet = false;
 }
 
@@ -71,6 +84,42 @@ AREXPORT ArArgumentBuilder::ArArgumentBuilder(const ArArgumentBuilder & builder)
     myArgv[i] = cppstrdup(builder.getArg(i));
   //myArgv[i] = strdup(builder.getArg(i));
   myIsQuiet = builder.myIsQuiet;
+  myExtraSpace = builder.myExtraSpace;
+  myIgnoreNormalSpaces = builder.myIgnoreNormalSpaces;
+  myIsPreCompressQuotes = builder.myIsPreCompressQuotes;
+}
+
+AREXPORT ArArgumentBuilder &ArArgumentBuilder::operator=(const ArArgumentBuilder & builder)
+{
+  if (this != &builder) {
+
+    size_t i = 0;
+
+    // Delete old stuff...  
+    if (myOrigArgc > 0)
+    {
+      for (i = 0; i < myOrigArgc; ++i)
+        delete[] myArgv[i];
+    }
+    delete[] myArgv;
+
+    // Then copy new stuff...
+    myFullString = builder.myFullString;
+    myExtraString = builder.myExtraString;
+    myArgc = builder.getArgc();
+    myArgvLen = builder.getArgvLen();
+
+    myOrigArgc = myArgc;
+    myArgv = new char *[myArgvLen];
+    for (i = 0; i < myArgc; i++) {
+      myArgv[i] = cppstrdup(builder.getArg(i));
+    }
+    myIsQuiet = builder.myIsQuiet;
+    myExtraSpace = builder.myExtraSpace;
+    myIgnoreNormalSpaces = builder.myIgnoreNormalSpaces;
+    myIsPreCompressQuotes = builder.myIsPreCompressQuotes;
+  }
+  return *this;
 }
 
 AREXPORT ArArgumentBuilder::~ArArgumentBuilder()
@@ -131,6 +180,90 @@ AREXPORT void ArArgumentBuilder::add(const char *str, ...)
   va_end(ptr);
 }
 
+
+bool ArArgumentBuilder::isSpace(char c)
+{
+  if ((!myIgnoreNormalSpaces) && (isspace(c))) {
+    return true;
+  }
+  else if ((myExtraSpace != '\0') && (c == myExtraSpace)) {
+    return true;
+  }
+  return false;
+
+} // end method isSpace
+
+
+bool ArArgumentBuilder::isStartArg(const char *buf, 
+                                   int len, 
+                                   int index,
+                                   int *endArgFlagsOut)
+{
+  if (index < len) {
+
+    if (!isSpace(buf[index])) {
+
+      if ((myIsPreCompressQuotes) && (buf[index] == '\"')) {
+        if (endArgFlagsOut != NULL) {
+          *endArgFlagsOut = ANY_SPACE | QUOTE;
+        }
+        
+      }
+      else { // not precompressed quote
+        if (endArgFlagsOut != NULL) {
+          // This is set to ANY_SPACE to preserve the original behavior -- i.e. space
+          // character "matches" with myExtraSpace (if set)
+          *endArgFlagsOut = ANY_SPACE; 
+        }
+      } // end else not precompressed quote
+    
+      return true;
+
+    } // end if not space
+  } // end if not end of buf
+ 
+  return false;
+ 
+} // end method isStartArg
+
+
+bool ArArgumentBuilder::isEndArg(const char *buf, 
+                                 int len, 
+                                 int &index,
+                                 int endArgFlags)
+{
+  if (index >= len) {
+    return true;
+  }
+  
+  if ((endArgFlags & QUOTE) != 0) {
+
+    if (buf[index] == '\"') {
+      if ((index + 1 >= len) || (buf[index + 1] == '\0')) {
+        // Quote is at EOL
+        index++;
+        return true;
+      }
+      else if (isSpace(buf[index + 1])) {
+
+        // Space follows quote
+        index++;
+        return true;
+      }
+    } // end if quote found
+
+  } // end if need to find quote
+  else { // just looking for a space
+    if (isSpace(buf[index])) {
+      return true;
+    }
+  } // end else just looking for a space
+
+  return false;
+
+} // end method isEndArg
+
+
 /**
    Internal function that adds a string starting at some given space
    
@@ -143,20 +276,22 @@ AREXPORT void ArArgumentBuilder::add(const char *str, ...)
 AREXPORT void ArArgumentBuilder::internalAdd(const char *str, int position)
 {
   char buf[10000];
-  int i;
-  int j;
-  size_t k;
-  bool findingSpace = true;
-  int startNonSpace;
-  int len;
-  bool addAtEnd;
+  int i = 0;
+  int j = 0;
+  size_t k = 0;
+  int len = 0;
+  bool addAtEnd = true;
   //size_t startingArgc = getArgc();
+
+  bool isArgInProgress = false;
+  int curArgStartIndex = -1;
+
 
   if (position < 0 || (size_t)position > myArgc)
     addAtEnd = true;
   else
     addAtEnd = false;
-  
+
   strncpy(buf, str, sizeof(buf));
   len = strlen(buf);
 
@@ -164,9 +299,13 @@ AREXPORT void ArArgumentBuilder::internalAdd(const char *str, int position)
   // first we advance to non-space
   for (i = 0; i < len; ++i)
   {
-    if (!isspace(buf[i]) || (myExtraSpace != '\0' && buf[i] == myExtraSpace))
+    if (!isSpace(buf[i])) {
+       //(!myIgnoreNormalSpaces && !isspace(buf[i])) || 
+       // (myExtraSpace != '\0' && buf[i] != myExtraSpace))
       break;
-  }
+    } // end if non-space found
+  } // end for each char in buffer
+
   // see if we're done
   if (i == len)
   {
@@ -176,92 +315,112 @@ AREXPORT void ArArgumentBuilder::internalAdd(const char *str, int position)
     return;
   }
 
+  int endArgFlags = ANY_SPACE;
 
   // walk through the line until we get to the end of the buffer...
   // we keep track of if we're looking for white space or non-white...
   // if we're looking for white space when we find it we have finished
   // one argument, so we toss that into argv, reset pointers and moveon
-  for (startNonSpace = i; ; ++i)
+  for (curArgStartIndex = i; ; ++i)
   {
-    // take out the slash of escaped spaces
-    if (buf[i] == '\\' && i + 1 < len && buf[i + 1] == ' ')
+
+    // Remove the slash of escaped spaces.  This is primarily done to handle command 
+    // line arguments (especially on Linux). If quotes are "pre-compressed", then
+    // the backslash is preserved.  Consecutive backslashes are also preserved 
+    // (i.e. "\\ " is not modified).
+    if (!myIsPreCompressQuotes &&
+        (buf[i] == '\\') && (i + 1 < len) && (buf[i + 1] == ' ') &&
+        ((i == 0) || (buf[i - 1] != '\\')))
     {
       for (j = i; j < len && j != '\0'; j++)
       {
-	buf[j] = buf[j + 1];
+        buf[j] = buf[j + 1];
       }
       --len;
-    }
-    // if we're not finding space and we see a non space (or the end),
-    // set us into finding space mode and denote where it started
-    else if (!findingSpace && 
-	     !(i == len || isspace(buf[i]) || buf[i] == '\0' || 
-	       (myExtraSpace != '\0' && buf[i] == myExtraSpace)))	     
+    } // end if escaped space
+  
+    // If we're not in the middle of an argument, then determine whether the 
+    // current buffer position marks the start of one.
+    else if ((!isArgInProgress) && 
+             (i < len) &&
+             (buf[i] != '\0') &&
+             (isStartArg(buf, len, i, &endArgFlags))) 
     {
-      startNonSpace = i;
-      findingSpace = true;
+      curArgStartIndex = i;
+      isArgInProgress = true;
     }
-    // if we're finding space, and we see it (or the end), we're at
-    // the end of one arg, so toss it into the list
-    else if (findingSpace && 
-	     (i == len || isspace(buf[i]) || buf[i] == '\0' || 
-	      (myExtraSpace != '\0' && buf[i] == myExtraSpace)))
+    // If we are in the middle of an argument, then determine whether the current
+    // buffer position marks the end of it.  (Note that i may be incremented by
+    // isEndArg when quotes are pre-compressed.)
+    else if (isArgInProgress && 
+             ((i == len) || 
+              (buf[i] == '\0') ||
+              (isEndArg(buf, len, i, endArgFlags)))) 
+
     {
       // see if we have room in our argvLen
       if (myArgc + 1 >= myArgvLen)
       {
-	ArLog::log(ArLog::Terse, "ArArgumentBuilder::Add: could not add argument since argc (%u) has grown beyond the argv given in the constructor (%u)", myArgc, myArgvLen);
+        ArLog::log(ArLog::Terse, "ArArgumentBuilder::Add: could not add argument since argc (%u) has grown beyond the argv given in the constructor (%u)", myArgc, myArgvLen);
       }
-      else
+      else // room in arg array
       {
-	// if we're adding at the end just put it there, also put it
-	// at the end if its too far out
-	if (addAtEnd)
-	{
-	  myArgv[myArgc] = new char[i - startNonSpace + 1];
-	  strncpy(myArgv[myArgc], &buf[startNonSpace], i - startNonSpace);
-	  myArgv[myArgc][i - startNonSpace] = '\0';
-	  // add to our full string
-	  // if its not our first add a space (or whatever our space char is)
-	  if (!myFirstAdd && myExtraSpace == '\0')
-	    myFullString += " ";
-	  else if (!myFirstAdd)
-	    myFullString += myExtraSpace;
-	  
-	  myFullString += myArgv[myArgc];
-	  myFirstAdd = false;
-	  
-	  myArgc++;
-	  myOrigArgc = myArgc;
-	}
+        // if we're adding at the end just put it there, also put it
+        // at the end if its too far out
+        if (addAtEnd)
+        {
+          myArgv[myArgc] = new char[i - curArgStartIndex + 1];
+          strncpy(myArgv[myArgc], &buf[curArgStartIndex], i - curArgStartIndex);
+          myArgv[myArgc][i - curArgStartIndex] = '\0';
+          // add to our full string
+          // if its not our first add a space (or whatever our space char is)
+          if (!myFirstAdd && myExtraSpace == '\0')
+            myFullString += " ";
+          else if (!myFirstAdd)
+            myFullString += myExtraSpace;
+
+          myFullString += myArgv[myArgc];
+          myFirstAdd = false;
+
+          myArgc++;
+          myOrigArgc = myArgc;
+        }
         // otherwise stick it where we wanted it if we can or just 
-	else
-	{
-	  // first move things down
-	  for (k = myArgc + 1; k > (size_t)position; k--)
-	  {
-	    myArgv[k] = myArgv[k - 1];
-	  }
-	  myArgc++;
-	  myOrigArgc = myArgc;
+        else // insert arg at specified position
+        {
+          // first move things down
+          for (k = myArgc + 1; k > (size_t)position; k--)
+          {
+            myArgv[k] = myArgv[k - 1];
+          }
+          myArgc++;
+          myOrigArgc = myArgc;
 
-	  myArgv[position] = new char[i - startNonSpace + 1];
-	  strncpy(myArgv[position], &buf[startNonSpace], i - startNonSpace);
-	  myArgv[position][i - startNonSpace] = '\0';
-	  position++;
+          myArgv[position] = new char[i - curArgStartIndex + 1];
+          strncpy(myArgv[position], &buf[curArgStartIndex], i - curArgStartIndex);
+          myArgv[position][i - curArgStartIndex] = '\0';
+          position++;
 
-		rebuildFullString();
-	  myFirstAdd = false;
-	}
+          rebuildFullString();
+          myFirstAdd = false;
 
-      }
-      findingSpace = false;
-    }
+        } // end else insert arg at specified position
+
+      } // end else room in arg array
+
+      isArgInProgress = false;
+      endArgFlags = ANY_SPACE;
+
+    } // end else if found end of argument
+
     // if we're at the end or its a null, we're at the end of the buf
     if (i == len || buf[i] == '\0')
       break;
-  }
-}
+
+  } // end for each char in buffer (after non-whitespace found)
+
+} // end method internalAdd
+
 
 /**
    @param str the string to add
@@ -353,23 +512,54 @@ AREXPORT void ArArgumentBuilder::addPlainAsIs(const char *str, int position)
 }
 
 AREXPORT void ArArgumentBuilder::internalAddAsIs(const char *str, int position)
-{
-  myArgv[myArgc] = new char[strlen(str) + 1];
-  strcpy(myArgv[myArgc], str);
-  myArgv[myArgc][strlen(str)] = '\0';
+{ 
+  size_t k = 0;
 
-  // add to our full string
-  // if its not our first add a space (or whatever our space char is)
-  if (!myFirstAdd && myExtraSpace == '\0')
-    myFullString += " ";
-  else if (!myFirstAdd)
-    myFullString += myExtraSpace;
-  
-  myFullString += myArgv[myArgc];
-  myFirstAdd = false;
-  
-  myArgc++;
-  myOrigArgc = myArgc;
+  bool addAtEnd;
+  if (position < 0 || (size_t)position > myArgc)
+    addAtEnd = true;
+  else
+    addAtEnd = false;
+
+
+  if (addAtEnd)
+  {
+    myArgv[myArgc] = new char[strlen(str) + 1];
+    strcpy(myArgv[myArgc], str);
+    myArgv[myArgc][strlen(str)] = '\0';
+    
+    // add to our full string
+    // if its not our first add a space (or whatever our space char is)
+    if (!myFirstAdd && myExtraSpace == '\0')
+      myFullString += " ";
+    else if (!myFirstAdd)
+      myFullString += myExtraSpace;
+    
+    myFullString += myArgv[myArgc];
+    myFirstAdd = false;
+
+    myArgc++;
+    myOrigArgc = myArgc;
+  }
+  else
+  {
+    // first move things down
+    for (k = myArgc + 1; k > (size_t)position; k--)
+    {
+      myArgv[k] = myArgv[k - 1];
+    }
+    myArgc++;
+    myOrigArgc = myArgc;
+    
+    myArgv[position] = new char[strlen(str) + 1];
+    strcpy(myArgv[position], str);
+    myArgv[position][strlen(str)] = '\0';
+    
+    rebuildFullString();
+    myFirstAdd = false;
+  }
+
+
 }
 
 AREXPORT size_t ArArgumentBuilder::getArgc(void) const
@@ -469,7 +659,7 @@ AREXPORT bool ArArgumentBuilder::getArgBool(size_t whichArg,
 } // end method getArgBool
 
 
-AREXPORT bool ArArgumentBuilder::isArgInt(size_t whichArg) const
+AREXPORT bool ArArgumentBuilder::isArgInt(size_t whichArg, bool forceHex) const
 {
   const char *str;
   int ret;
@@ -479,7 +669,10 @@ AREXPORT bool ArArgumentBuilder::isArgInt(size_t whichArg) const
 
   int base = 10;
   str = getArg(whichArg);
-  // see if its a hex number
+
+  if (forceHex)
+    base = 16;
+  // see if it has the hex prefix and strip it
   if (strlen(str) > 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X'))
   {
     str = &str[2];
@@ -494,10 +687,78 @@ AREXPORT bool ArArgumentBuilder::isArgInt(size_t whichArg) const
 }
 
 AREXPORT int ArArgumentBuilder::getArgInt(size_t whichArg,
-                                          bool *ok) const
+                                          bool *ok, bool forceHex) const
 {
   bool isSuccess = false;
   int  ret = 0;
+    
+  const char *str = getArg(whichArg);
+
+  // If the specified arg was successfully obtained...
+  if (str != NULL) {
+  
+    int base = 10;
+    if (forceHex)
+      base = 16;
+    // see if it has the hex prefix and strip it
+    if (strlen(str) > 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X'))
+    {
+      str = &str[2];
+      base = 16;
+    }
+    char *endPtr = NULL;
+    ret = strtol(str, &endPtr, base);
+ 
+    if (endPtr[0] == '\0' && endPtr != str) {
+      isSuccess = true;
+    }
+  } // end if valid arg
+
+  if (ok != NULL) {
+    *ok = isSuccess;
+  }
+  
+  if (isSuccess) 
+    return ret;
+  else 
+    return 0;
+
+} // end method getArgInt
+
+AREXPORT bool ArArgumentBuilder::isArgLongLongInt(size_t whichArg) const
+{
+  const char *str;
+  long long int ret;
+  char *endPtr;
+  if (whichArg > myArgc || getArg(whichArg) == NULL)
+    return false;
+
+  int base = 10;
+  str = getArg(whichArg);
+  // see if its a hex number
+  if (strlen(str) > 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X'))
+  {
+    str = &str[2];
+    base = 16;
+  }
+
+#ifndef _MSC_VER
+    ret = strtoll(str, &endPtr, base);
+#else
+    ret = _strtoi64(str, &endPtr, base);
+#endif
+
+  if (endPtr[0] == '\0' && endPtr != str)
+    return true;
+  else
+    return false;
+}
+
+AREXPORT int ArArgumentBuilder::getArgLongLongInt(size_t whichArg,
+						  bool *ok) const
+{
+  bool isSuccess = false;
+  long long ret = 0;
     
   const char *str = getArg(whichArg);
 
@@ -513,7 +774,11 @@ AREXPORT int ArArgumentBuilder::getArgInt(size_t whichArg,
     }
 
     char *endPtr = NULL;
-    ret = strtol(str, &endPtr, base);
+#ifndef _MSC_VER
+    ret = strtoll(str, &endPtr, base);
+#else
+    ret = _strtoi64(str, &endPtr, base);
+#endif
  
     if (endPtr[0] == '\0' && endPtr != str) {
       isSuccess = true;
@@ -685,3 +950,20 @@ AREXPORT void ArArgumentBuilder::rebuildFullString()
 
 } // end method rebuildFullString
 
+// ----------------------------------------------------------------------------
+
+bool ArArgumentBuilderCompareOp::operator()(ArArgumentBuilder* arg1, 
+                                            ArArgumentBuilder* arg2) const
+{
+  if (arg1 == NULL) {
+    return true;
+  }
+  else if (arg2 == NULL) {
+    return false;
+  }
+  std::string arg1String = arg1->getFullString();
+  std::string arg2String = arg2->getFullString();
+
+  return (arg1String.compare(arg2String) < 0);
+  
+}

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,12 +19,12 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
-
 #include "ArExport.h"
+#include "ariaInternal.h"
 #include "ariaOSDef.h"
 #include "ariaUtil.h"
 #include "ArSystemStatus.h"
@@ -34,10 +34,14 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
 double ArSystemStatus::ourCPU = -1.0;
 unsigned long ArSystemStatus::ourUptime = 0;
+unsigned long ArSystemStatus::ourFirstUptime = 0;
 unsigned long ArSystemStatus::ourLastCPUTime = 0;
 ArTime ArSystemStatus::ourLastCPURefreshTime;
 ArGlobalRetFunctor<double> ArSystemStatus::ourGetCPUPercentCallback(&ArSystemStatus::getCPUPercent);
 ArGlobalRetFunctor<double> ArSystemStatus::ourGetUptimeHoursCallback(&ArSystemStatus::getUptimeHours);
+ArGlobalRetFunctor<unsigned long> ArSystemStatus::ourGetUptimeCallback(&ArSystemStatus::getUptime);
+ArGlobalRetFunctor<unsigned long> ArSystemStatus::ourGetProgramUptimeCallback(&ArSystemStatus::getProgramUptime);
+
 int ArSystemStatus::ourLinkQuality = -1;
 int ArSystemStatus::ourLinkSignal = -1;
 int ArSystemStatus::ourLinkNoise = -1;
@@ -85,19 +89,30 @@ void ArSystemStatus::refreshCPU()
     ourCPU = -1.0;
     ourLastCPUTime = ourUptime = 0;
     ourShouldRefreshCPU = false;
+    if (statfp)
+      fclose(statfp);
+    if (uptimefp)
+      fclose(uptimefp);
     return;
   }
-  double uptime = 0, idle_uptime = 0;
   //char line[512];
   //fgets(line,  512, uptimefp);
   //printf("read uptime file: %s\n", line);
-  fscanf(uptimefp, "%lf %lf", &uptime, &idle_uptime);
+  //double uptime = 0, idle_uptime = 0;
+  //fscanf(uptimefp, "%lf %lf", &uptime, &idle_uptime);
+  //ourUptime = (unsigned long)uptime;
+  unsigned long uptime;
+  fscanf(uptimefp, "%ld", &uptime);
+  ourUptime = uptime;
   fclose(uptimefp);
+  
+  if (ourFirstUptime == 0)
+    ourFirstUptime = ourUptime;
+
   unsigned long user, nice, sys, idle, total;
   char tag[32];
   fscanf(statfp, "%s %lu %lu %lu %lu", tag, &user, &nice, &sys, &idle);
   fclose(statfp);
-  ourUptime = (unsigned long)uptime;
   total = user+nice+sys; // total non-idle cpu time in 100ths of a sec
   if(ourLastCPUTime == 0 || interval == 0) 
   {
@@ -121,7 +136,7 @@ public:
   ArSystemStatusRefreshThread(int refreshFrequency) :
     myRefreshFrequency(refreshFrequency)
   {
-
+    setThreadName("ArSystemStatusRefreshThread");
   }
   void runAsync() { create(false); }
   void setRefreshFreq(int freq) { myRefreshFrequency = freq; }
@@ -129,28 +144,33 @@ private:
   int myRefreshFrequency;
   virtual void* runThread(void* arg)
   {
-    while(getRunning())
+    threadStarted();
+    while(Aria::getRunning() && getRunning())
     {
       ArSystemStatus::invalidate();
       ArUtil::sleep(myRefreshFrequency);
     }
+    threadFinished();
     return NULL;
   }
 };
 /** @endcond INTERNAL_CLASSES */
 
 
-AREXPORT void ArSystemStatus::startPeriodicUpdate(int refreshFrequency)
+AREXPORT void ArSystemStatus::startPeriodicUpdate(int refreshFrequency, ArLog::LogLevel logLevel)
 {
   ourCPUMutex.setLogName("ArSystemStatusRefreshThread::ourCPUMutex");
   ourWirelessMutex.setLogName("ArSystemStatusRefreshThread::ourWirelessMutex");
 
   if(ourPeriodicUpdateThread) {
-    printf("***** Setting refresh freq to %d ms.\n", refreshFrequency);
+    // If we already have a thread, just change its refresh frequency
     ourPeriodicUpdateThread->setRefreshFreq(refreshFrequency);
+    ourPeriodicUpdateThread->setLogLevel(logLevel);
     return;
   }
+  // Otherwise, start a new thread, with the desired refresh frequency
   ourPeriodicUpdateThread = new ArSystemStatusRefreshThread(refreshFrequency);
+  ourPeriodicUpdateThread->setLogLevel(logLevel);
   ourPeriodicUpdateThread->runAsync();
 }
 
@@ -207,6 +227,13 @@ AREXPORT double ArSystemStatus::getUptimeHours() {
   return ourUptime / 3600.0;
 }
 
+// Get total system uptime (seconds)
+AREXPORT unsigned long ArSystemStatus::getProgramUptime() {
+  ArScopedLock lock(ourCPUMutex);
+  refreshCPU();
+  return ourUptime - ourFirstUptime;
+}
+
 // Get total system uptime in a string (hours)
 AREXPORT std::string ArSystemStatus::getUptimeHoursAsString() {
   ArScopedLock lock(ourCPUMutex);
@@ -224,6 +251,16 @@ AREXPORT ArRetFunctor<double>* ArSystemStatus::getCPUPercentFunctor() {
 // return Pointer to a functor which can be used to retrieve the current uptime (hours)
 AREXPORT ArRetFunctor<double>* ArSystemStatus::getUptimeHoursFunctor() {
   return &ourGetUptimeHoursCallback;
+}
+
+// return Pointer to a functor which can be used to retrieve the current uptime (seconds)
+AREXPORT ArRetFunctor<unsigned long>* ArSystemStatus::getUptimeFunctor() {
+  return &ourGetUptimeCallback;
+}
+
+// return Pointer to a functor which can be used to retrieve the current program uptime (seconds)
+AREXPORT ArRetFunctor<unsigned long>* ArSystemStatus::getProgramUptimeFunctor() {
+  return &ourGetProgramUptimeCallback;
 }
 
 AREXPORT ArRetFunctor<int>* ArSystemStatus::getWirelessLinkQualityFunctor() {
@@ -315,11 +352,11 @@ AREXPORT int ArSystemStatus::getWirelessDiscardedPacketsBecauseNetConflict() {
   return ourDiscardedConflict; 
 }
 
-
-
 AREXPORT void ArSystemStatus::invalidate()
 {
   ArScopedLock lockc(ourCPUMutex);
   ArScopedLock lockw(ourWirelessMutex);
-  ourShouldRefreshCPU = ourShouldRefreshWireless = true;
+  ourShouldRefreshCPU = true;
+  ourShouldRefreshWireless = true;
 }
+

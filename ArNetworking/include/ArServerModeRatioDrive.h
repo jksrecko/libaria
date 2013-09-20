@@ -107,6 +107,8 @@ protected:
   bool myUseLocationDependentDevices;
   bool myLastRobotSafeDrive;
 
+  ArTime myLastCommand;
+
   // SEEKUR
   bool mySentRecenter;
 

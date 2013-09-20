@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -44,7 +44,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
    @param maxSecondsToKeepCurrent this is the number of seconds to
    keep current readings in the current buffer. If less than 0, then
    readings are not automatically removed based on time (but can be
-   replaced or removed for other reasons).
+   replaced or removed for other reasons). If 0, readings are removed
+   immediately when a new set of readings is received and placed in the current buffer.
 
    @param maxSecondsToKeepCumulative this is the number of seconds to
    keep cumulative readings in the cumulative buffer. If less than 0
@@ -65,13 +66,6 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
    flag for other things to use when deciding what range devices to
    avoid
    
-   @param planar if the range device is planar or not... planar range
-   devices are ones like the Sick LMS200 that are only in one plane
-   and and are all measured from a single point... Where you can use
-   the beams of the current reading to filter out any cumulative
-   readings that are close to the beam... these range devices need to
-   simply build a set of raw readings and then call
-   'planarProcessReadings' for this filtering to work
 **/
 AREXPORT ArRangeDevice::ArRangeDevice(size_t currentBufferSize,
 				      size_t cumulativeBufferSize, 
@@ -91,7 +85,16 @@ AREXPORT ArRangeDevice::ArRangeDevice(size_t currentBufferSize,
   myMaxRange = maxRange;
   myRawReadings = NULL;
   myAdjustedRawReadings = NULL;
-  
+
+  // take out any spaces in the name since that'll break things
+  int i;
+  int len = myName.size();
+  for (i = 0; i < len; i++)
+  {
+    if (isspace(myName[i]))
+      myName[i] = '_';
+  }
+
   setMaxSecondsToKeepCurrent(maxSecondsToKeepCurrent);
   setMinDistBetweenCurrent(0);
   setMaxSecondsToKeepCumulative(maxSecondsToKeepCumulative);
@@ -229,6 +232,11 @@ AREXPORT void ArRangeDevice::setCurrentBufferSize(size_t size)
   myCurrentBuffer.setSize(size);
 }
 
+AREXPORT size_t ArRangeDevice::getCurrentBufferSize(void) const
+{
+  return myCurrentBuffer.getSize();
+}
+
 /**
    If the @a size is smaller than the cumulative buffer size, then 
    the oldest readings are discarded, leaving only @a size
@@ -242,10 +250,17 @@ AREXPORT void ArRangeDevice::setCumulativeBufferSize(size_t size)
   myCumulativeBuffer.setSize(size);
 }
 
-AREXPORT void ArRangeDevice::addReading(double x, double y)
+
+AREXPORT size_t ArRangeDevice::getCumulativeBufferSize(void) const
+{
+  return myCumulativeBuffer.getSize();
+}
+
+AREXPORT void ArRangeDevice::addReading(double x, double y, bool *wasAdded)
 {
   myCurrentBuffer.addReadingConditional(x, y, 
-					myMinDistBetweenCurrentSquared);
+					myMinDistBetweenCurrentSquared,
+					wasAdded);
 
   // make sure we have a cumulative buffer 
   if (myCumulativeBuffer.getSize() == 0)

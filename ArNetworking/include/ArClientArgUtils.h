@@ -23,11 +23,14 @@ class ArConfigArg;
  *    string: arg.getName()
  *    string: arg.getDescription()
  *    byte: arg.getConfigPriority()
- *    byte: arg type ('B' == BOOL | 'I' == INT | 'D' == DOUBLE | 'S' == STRING)
+ *    byte: arg type ('B' == BOOL | 'I' == INT | 'D' == DOUBLE | 'S' == STRING | 'L' == LIST)
  *    &lt;arg values&gt;
- *    string: arg.getDisplayHint() -- only if isDisplayHintParsed is set to true
+ *    string: arg.getDisplayHint()      -- only if isDisplayHintParsed is set to true
+ *    string: arg.getExtraExplanation() -- only if version >= 2
+ *    byte: arg.getRestartLevel()       -- only if version >= 2
  * 
  *    &lt;arg values&gt; varies by arg type:
+ *
  *    if BOOL, then:
  *        byte: arg.getBool()
  *    if INT, then:
@@ -38,8 +41,15 @@ class ArConfigArg;
  *	      byte4: arg.getDouble()
  *		    byte4: arg.getMinDouble()
  *		    byte4: arg.getMaxDouble()
+ *        byte4: arg.getDoublePrecision()  -- only if version >= 2
  *    if STRING, then:
  *        string: arg.getString()
+ *    if LIST, then:
+ *        byte4: arg.getArgCount()
+ *        &lt;list contents&gt;
+ *        
+ *
+ *    
  * </pre>
  * <p>
  * ArClientArg also defines methods to send an "abbreviated" ArConfigArg 
@@ -54,6 +64,9 @@ class ArConfigArg;
  *	      byte4: arg.getDouble()
  *    if STRING, then:
  *        string: arg.getString()
+ *    if LIST, then:
+ *        <TODO>
+ *        &lt;list contents&gt;
  * </pre>
  * Lastly, it defines a method to send an "abbreviated" ArConfigArg in a
  * text format.  
@@ -63,8 +76,9 @@ class ArClientArg
 public:
 
 	/// Constructor
-	AREXPORT ArClientArg(bool isDisplayHintParsed = false,
-                       ArPriority::Priority lastPriority = ArPriority::LAST_PRIORITY);
+	AREXPORT ArClientArg(bool isDisplayHintParsed = false, 
+                       ArPriority::Priority lastPriority = ArPriority::LAST_PRIORITY,
+                       int version = 1);
 	
 	/// Destructor
 	AREXPORT virtual ~ArClientArg();
@@ -72,7 +86,7 @@ public:
   /// Returns whether the given parameter can be sent in a network packet.
   /**
    * Currently, a parameter can only be sent if it is of type INT, DOUBLE,
-   * STRING, BOOL, or a SEPARATOR.
+   * STRING, BOOL, LIST, or a SEPARATOR.
   **/
   AREXPORT virtual bool isSendableParamType(const ArConfigArg &arg);
 	
@@ -133,8 +147,11 @@ public:
 	AREXPORT virtual bool argTextToBuf(const ArConfigArg &arg,
                                      ArNetPacket *packet);
 
-protected:
 
+  AREXPORT virtual bool addArgTextToPacket(const ArConfigArg &arg,
+                                           ArNetPacket *packet);
+
+protected:
 
   enum {
     BUFFER_LENGTH = 1024
@@ -142,9 +159,11 @@ protected:
 
   bool myIsDisplayHintParsed;
   ArPriority::Priority myLastPriority;
+  int myVersion;
 
   char myBuffer[BUFFER_LENGTH];
   char myDisplayBuffer[BUFFER_LENGTH];
+  char myExtraBuffer[BUFFER_LENGTH];
 
 }; // end class ArClientArgUtils
  

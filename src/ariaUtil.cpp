@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #define _GNU_SOURCE 1 // for isnormal() and other newer (non-ansi) C functions
@@ -62,6 +62,9 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArS3Series.h"
 #include "ArUrg_2_0.h"
 #include "ArSZSeries.h"
+#include "ArSonarMTX.h"
+#include "ArBatteryMTX.h"
+#include "ArLCDMTX.h"
 #endif // ARINTERFACE
 
 #include "ArSerialConnection.h"
@@ -132,6 +135,7 @@ const char  ArUtil::OTHER_SEPARATOR_CHAR = '\\';
 ArMutex ArUtil::ourLocaltimeMutex;
 #endif
 
+
 /**
   Sleep (do nothing, without continuing the program) for @arg ms miliseconds.
   Use this to add idle time to threads, or in situations such as waiting for
@@ -183,7 +187,7 @@ AREXPORT unsigned int ArUtil::getTime(void)
 #if !defined(WIN32)
   struct timeval tv;
   if (gettimeofday(&tv,NULL) == 0)
-    return tv.tv_usec/1000 + (tv.tv_sec % 1000000)*1000;//windows
+    return tv.tv_usec/1000 + (tv.tv_sec % 1000000)*1000;
   else
     return 0;
 #elif defined(WIN32)
@@ -316,6 +320,9 @@ AREXPORT bool ArUtil::findFile(const char *fileName)
     return(false);
 }
 
+
+
+
 /*
    Works for \ and /. Returns true if something was actualy done. Sets
    fileOut to be what ever the answer is.
@@ -395,6 +402,40 @@ AREXPORT bool ArUtil::stripQuotes(char *dest, const char *src, size_t destLen)
   dest[srcLen - 2] = '\0';
   return true;
 }
+
+
+/**
+ * This method behaves similarly to the char[] version, except that it modifies
+ * the given std::string.  If the first and last characters of the string are 
+ * quotation marks ("), then they are removed from the string.  Multiple nested
+ * quotation marks are not handled.
+ * @param strToStrip a pointer to the std::string to be read/modified; must be 
+ * non-NULL
+ * @return bool true if the string was successfully processed; false otherwise 
+**/  
+AREXPORT bool ArUtil::stripQuotes(std::string *strToStrip)
+{
+  if (strToStrip == NULL) {
+    ArLog::log(ArLog::Normal,
+               "ArUtil::stripQuotes() NULL string");
+    return false;
+  }
+  
+  // If there are no matching quotes to strip, just return
+  if ((strToStrip->size() < 2) || 
+      (strToStrip->at(0) != '"') || 
+      (strToStrip->at(strToStrip->size() - 1) != '"'))
+  {
+    return true;
+  }
+  
+  // Matching quotes found so chop of the first and last char
+  strToStrip->erase(strToStrip->begin());
+  strToStrip->resize(strToStrip->size() - 1);
+
+  return true;
+               
+} // end method stripQuotes
 
 /** Append a directory separator character to the given path string, depending on the
  * platform.  On Windows, a backslash ('\\') is added. On other platforms, a 
@@ -649,9 +690,51 @@ AREXPORT int ArUtil::strcasecmp(const char *str, const char *str2)
 }
 
 
-AREXPORT int ArUtil::strcasequotecmp(const std::string &str1, 
-                                     const std::string &str2)
+AREXPORT bool ArUtil::strSuffixCmp(const char *str, const char *suffix)
 {
+  if (str != NULL && str[0] != '\0' && 
+      suffix != NULL && suffix[0] != '\0' &&
+      strlen(str) > strlen(suffix) + 1 &&
+      strncmp(&str[strlen(str) - strlen(suffix)], 
+		  suffix, strlen(suffix)) == 0)
+    return true;
+  else
+    return false;
+ 
+}
+
+AREXPORT bool ArUtil::strSuffixCaseCmp(const char *str, const char *suffix)
+{
+  if (str != NULL && str[0] != '\0' && 
+      suffix != NULL && suffix[0] != '\0' &&
+      strlen(str) > strlen(suffix) + 1 &&
+      strncasecmp(&str[strlen(str) - strlen(suffix)], 
+		  suffix, strlen(suffix)) == 0)
+    return true;
+  else
+    return false;
+}
+
+
+AREXPORT int ArUtil::strcasequotecmp(const std::string &inStr1, 
+                                     const std::string &inStr2)
+{
+std::string str1 = inStr1;
+std::string str2 = inStr2;
+
+	int x = 0;
+	while (x < str1.length()) {
+		if (isalpha(str1[x]) && isupper(str1[x]))
+			str1[x] = tolower(str1[x]);
+	x++;
+	}
+
+	x = 0;
+	while (x < str2.length()) {
+		if (isalpha(str2[x]) && isupper(str2[x]))
+			str2[x] = tolower(str2[x]);
+	x++;
+	}
   
   int len1 = str1.length();
   size_t pos1 = 0;
@@ -734,7 +817,8 @@ AREXPORT bool ArUtil::isOnlyAlphaNumeric(const char *str)
     return true;
   for (ui = 0, len = strlen(str); ui < len; ui++)
   {
-    if (!isalpha(str[ui]) && !isdigit(str[ui]) && str[ui] != '\0')
+    if (!isalpha(str[ui]) && !isdigit(str[ui]) && str[ui] != '\0' && 
+	str[ui] != '+' && str[ui] != '-')
       return false;
   }
   return true;
@@ -746,7 +830,7 @@ AREXPORT bool ArUtil::isOnlyNumeric(const char *str)
     return true;
   for (unsigned i = 0, len = strlen(str); i < len; i++)
   {
-    if (!isdigit(str[i]) && str[i] != '\0')
+    if (!isdigit(str[i]) && str[i] != '\0' && str[i] != '+' && str[i] != '-')
       return false;
   }
   return true;
@@ -1008,7 +1092,9 @@ AREXPORT void ArTime::setToNow(void)
     struct timespec timeNow;
     if (clock_gettime(CLOCK_MONOTONIC, &timeNow) == 0)
     {
-      mySec = timeNow.tv_sec;
+      // start a million seconds into the future so we have some room
+      // to go backwards
+      mySec = timeNow.tv_sec + 1000000;
       myMSec = timeNow.tv_nsec / 1000000;
       return;
     }
@@ -1025,7 +1111,9 @@ AREXPORT void ArTime::setToNow(void)
   
   if (gettimeofday(&timeNow, NULL) == 0)
   {
-    mySec = timeNow.tv_sec;
+    // start a million seconds into the future so we have some room
+    // to go backwards
+    mySec = timeNow.tv_sec + 1000000;
     myMSec = timeNow.tv_usec / 1000;
   }
   else
@@ -1043,7 +1131,9 @@ AREXPORT void ArTime::setToNow(void)
       // so we're going with just their normal function, msec since boot
   long timeNow;
   timeNow = timeGetTime();
-  mySec = timeNow / 1000;
+  // start a million seconds into the future so we have some room
+  // to go backwards 
+  mySec = timeNow / 1000 + 1000000;
   myMSec = timeNow % 1000;
 // but if the good way isn't available use the old way...
 #endif
@@ -1271,6 +1361,8 @@ AREXPORT void ArDaemonizer::logOptions(void) const
 
 
 std::map<ArPriority::Priority, std::string> ArPriority::ourPriorityNames;
+std::map<std::string, ArPriority::Priority> ArPriority::ourNameToPriorityMap;
+
 std::string ArPriority::ourUnknownPriorityName;
 bool ArPriority::ourStringsInited = false;
 
@@ -1279,17 +1371,25 @@ AREXPORT const char *ArPriority::getPriorityName(Priority priority)
 
   if (!ourStringsInited)
   {
-    ourPriorityNames[IMPORTANT] = "Basic";
-    ourPriorityNames[NORMAL]    = "Intermediate";
-    ourPriorityNames[TRIVIAL]   = "Advanced";
-    ourPriorityNames[DETAILED]  = "Advanced";
+    ourPriorityNames[IMPORTANT]     = "Basic";
+    ourPriorityNames[NORMAL]        = "Intermediate";
+    ourPriorityNames[TRIVIAL]       = "Advanced";
+    ourPriorityNames[DETAILED]      = "Advanced";
 
-    ourPriorityNames[EXPERT]    = "Expert";
-    ourPriorityNames[FACTORY]   = "Factory";
+    ourPriorityNames[EXPERT]        = "Expert";
+    ourPriorityNames[FACTORY]       = "Factory";
+    ourPriorityNames[CALIBRATION]   = "Calibration";
+    
+    for (std::map<ArPriority::Priority, std::string>::iterator iter = ourPriorityNames.begin();
+         iter != ourPriorityNames.end();
+         iter++) {
+      ourNameToPriorityMap[iter->second] = iter->first;
+    }
 
-    ourUnknownPriorityName      = "Unknown";
-    ourStringsInited = true;
+    ourUnknownPriorityName  = "Unknown";
+    ourStringsInited        = true;
   }
+
   std::map<ArPriority::Priority, std::string>::iterator iter = 
                                                   ourPriorityNames.find(priority);
   if (iter != ourPriorityNames.end()) {
@@ -1300,6 +1400,34 @@ AREXPORT const char *ArPriority::getPriorityName(Priority priority)
   }
 }
 
+AREXPORT ArPriority::Priority ArPriority::getPriorityFromName(const char *text)
+{
+  // This is merely called to initialize the map
+  if (!ourStringsInited) {
+     getPriorityName(IMPORTANT);
+  }
+
+  if (ArUtil::isStrEmpty(text)) {
+    ArLog::log(ArLog::Normal,
+               "ArPriority::getPriorityFromName() error finding priority for empty text");
+    return LAST_PRIORITY;
+  }
+
+  std::map<std::string, ArPriority::Priority>::iterator iter = 
+                                                  ourNameToPriorityMap.find(text);
+  if (iter != ourNameToPriorityMap.end()) {
+    return iter->second;
+  }
+  
+  ArLog::log(ArLog::Normal,
+             "ArPriority::getPriorityFromName() error finding priority for %s",
+             text);
+
+  return LAST_PRIORITY;
+  
+} // end method getPriorityFromName
+
+
 AREXPORT void ArUtil::putCurrentYearInString(char* s, size_t len)
 {
   struct tm t;
@@ -1307,6 +1435,7 @@ AREXPORT void ArUtil::putCurrentYearInString(char* s, size_t len)
   snprintf(s, len, "%4d", 1900 + t.tm_year);
   s[len-1] = '\0';
 }
+
 AREXPORT void ArUtil::putCurrentMonthInString(char* s, size_t len)
 {
 
@@ -1471,120 +1600,6 @@ AREXPORT bool ArUtil::localtime(struct tm *result)
   return ArUtil::localtime(&now, result); 
 }
 
-AREXPORT ArCallbackList::ArCallbackList(
-	const char *name, ArLog::LogLevel logLevel, bool singleShot)
-{
-  myName = name;
-  mySingleShot = singleShot;
-  setLogLevel(logLevel);
-  std::string mutexName;
-  mutexName = "ArCallbackList::";
-  mutexName += name;
-  mutexName += "::myDataMutex";
-  myDataMutex.setLogName(mutexName.c_str());
-}
-
-AREXPORT  ArCallbackList::~ArCallbackList()
-{
-
-}
-
-AREXPORT void ArCallbackList::addCallback(
-	ArFunctor *functor, int position)
-{
-  myDataMutex.lock();
-  myList.insert(
-	  std::pair<int, ArFunctor *>(-position, 
-				      functor));
-  myDataMutex.unlock();
-}
-
-AREXPORT void ArCallbackList::remCallback(ArFunctor *functor)
-{
-  myDataMutex.lock();
-  std::multimap<int, ArFunctor *>::iterator it;
-
-  for (it = myList.begin(); it != myList.end(); it++)
-  {
-    if ((*it).second == functor)
-    {
-      myList.erase(it);
-      myDataMutex.unlock();
-      remCallback(functor);
-      return;
-    }
-  }
-  myDataMutex.unlock();
-}
-
-
-AREXPORT void ArCallbackList::setName(const char *name)
-{
-  myDataMutex.lock();
-  myName = name;
-  myDataMutex.unlock();
-}
-
-AREXPORT void ArCallbackList::setNameVar(const char *name, ...)
-{
-  char arg[2048];
-  va_list ptr;
-  va_start(ptr, name);
-  vsnprintf(arg, sizeof(arg), name, ptr);
-  arg[sizeof(arg) - 1] = '\0';
-  va_end(ptr);
-  return setName(arg);
-}
-
-AREXPORT void ArCallbackList::setSingleShot(bool singleShot)
-{
-  myDataMutex.lock();
-  mySingleShot = singleShot;
-  myDataMutex.unlock();
-}
-
-AREXPORT void ArCallbackList::setLogLevel(ArLog::LogLevel logLevel)
-{
-  myDataMutex.lock();
-  myLogLevel = logLevel;
-  myDataMutex.unlock();
-}
-
-AREXPORT void ArCallbackList::invoke(void)
-{
-  myDataMutex.lock();
-
-  std::multimap<int, ArFunctor *>::iterator it;
-  ArFunctor *functor;
-
-  ArLog::log(myLogLevel, "%s: Starting calls", myName.c_str());
-
-  for (it = myList.begin(); 
-       it != myList.end(); 
-       it++)
-  {
-    functor = (*it).second;
-    if (functor == NULL) 
-      continue;
-
-    if (functor->getName() != NULL && functor->getName()[0] != '\0')
-        ArLog::log(myLogLevel, "%s: Calling functor '%s' at %d",
-		 myName.c_str(), functor->getName(), -(*it).first);
-    else
-      ArLog::log(myLogLevel, "%s: Calling unnamed functor at %d", 
-		 myName.c_str(), -(*it).first);
-    functor->invoke();
-  }
-
-  ArLog::log(myLogLevel, "%s: Ended calls", myName.c_str());
-
-  if (mySingleShot)
-  {
-    ArLog::log(myLogLevel, "%s: Clearing callbacks", myName.c_str());
-    myList.clear();
-  }
-  myDataMutex.unlock();
-}
 
 #ifndef WIN32
 /**
@@ -2044,6 +2059,7 @@ AREXPORT FILE *ArUtil::popen(const char *command, const char *type,
   return file;
 }
 
+
 AREXPORT bool ArUtil::floatIsNormal(double f)
 {
 #ifdef WIN32
@@ -2080,7 +2096,19 @@ ArLaserCreatorHelper::ourUrg_2_0CB(&ArLaserCreatorHelper::createUrg_2_0);
 ArGlobalRetFunctor2<ArLaser *, int, const char *>
 ArLaserCreatorHelper::ourLMS5XXCB(&ArLaserCreatorHelper::createLMS5XX);
 ArGlobalRetFunctor2<ArLaser *, int, const char *>
+ArLaserCreatorHelper::ourTiM3XXCB(&ArLaserCreatorHelper::createTiM3XX);
+ArGlobalRetFunctor2<ArLaser *, int, const char *>
 ArLaserCreatorHelper::ourSZSeriesCB(&ArLaserCreatorHelper::createSZSeries);
+
+ArGlobalRetFunctor2<ArBatteryMTX *, int, const char *>
+ArBatteryMTXCreatorHelper::ourBatteryMTXCB(&ArBatteryMTXCreatorHelper::createBatteryMTX);
+
+ArGlobalRetFunctor2<ArLCDMTX *, int, const char *>
+ArLCDMTXCreatorHelper::ourLCDMTXCB(&ArLCDMTXCreatorHelper::createLCDMTX);
+
+ArGlobalRetFunctor2<ArSonarMTX *, int, const char *>
+ArSonarMTXCreatorHelper::ourSonarMTXCB(&ArSonarMTXCreatorHelper::createSonarMTX);
+
 
 ArLaser *ArLaserCreatorHelper::createLMS2xx(int laserNumber, 
 					    const char *logPrefix)
@@ -2108,7 +2136,7 @@ ArLaser *ArLaserCreatorHelper::createLMS1XX(int laserNumber,
 		const char *logPrefix)
 {
 	// PS 8/22/11 - added "lms1xx" and flag specifying laser is NOT an lms5xx
-	return new ArLMS1XX(laserNumber,"lms1xx",false);
+	return new ArLMS1XX(laserNumber,"lms1xx", ArLMS1XX::LMS1XX);
 }
 
 ArRetFunctor2<ArLaser *, int, const char *> *ArLaserCreatorHelper::getCreateLMS1XXCB(void)
@@ -2145,13 +2173,27 @@ ArLaser *ArLaserCreatorHelper::createLMS5XX(int laserNumber,
 {
 
 	// PS 8/22/11 - added "lms5xx" and flag specifying laser is an lms5xx
-	return new ArLMS1XX(laserNumber, "lms5XX", true);
+	return new ArLMS1XX(laserNumber, "lms5XX", ArLMS1XX::LMS5XX);
 }
 
 ArRetFunctor2<ArLaser *, int, const char *> *ArLaserCreatorHelper::getCreateLMS5XXCB(void)
 {
   return &ourLMS5XXCB;
 }
+
+ArLaser *ArLaserCreatorHelper::createTiM3XX(int laserNumber,
+		const char *logPrefix)
+{
+
+	// PS 8/22/11 - added "lms5xx" and flag specifying laser is an lms5xx
+	return new ArLMS1XX(laserNumber, "tim3XX", ArLMS1XX::TiM3XX);
+}
+
+ArRetFunctor2<ArLaser *, int, const char *> *ArLaserCreatorHelper::getCreateTiM3XXCB(void)
+{
+  return &ourTiM3XXCB;
+}
+
 
 ArLaser *ArLaserCreatorHelper::createSZSeries(int laserNumber,
 					    const char *logPrefix)
@@ -2162,6 +2204,39 @@ ArLaser *ArLaserCreatorHelper::createSZSeries(int laserNumber,
 ArRetFunctor2<ArLaser *, int, const char *> *ArLaserCreatorHelper::getCreateSZSeriesCB(void)
 {
   return &ourSZSeriesCB;
+}
+
+ArBatteryMTX *ArBatteryMTXCreatorHelper::createBatteryMTX(int batteryNumber,
+					    const char *logPrefix)
+{
+  return new ArBatteryMTX(batteryNumber);
+}
+
+ArRetFunctor2<ArBatteryMTX *, int, const char *> *ArBatteryMTXCreatorHelper::getCreateBatteryMTXCB(void)
+{
+  return &ourBatteryMTXCB;
+}
+
+ArLCDMTX *ArLCDMTXCreatorHelper::createLCDMTX(int lcdNumber,
+					    const char *logPrefix)
+{
+  return new ArLCDMTX(lcdNumber);
+}
+
+ArRetFunctor2<ArLCDMTX *, int, const char *> *ArLCDMTXCreatorHelper::getCreateLCDMTXCB(void)
+{
+  return &ourLCDMTXCB;
+}
+
+ArSonarMTX *ArSonarMTXCreatorHelper::createSonarMTX(int sonarNumber,
+					    const char *logPrefix)
+{
+  return new ArSonarMTX(sonarNumber);
+}
+
+ArRetFunctor2<ArSonarMTX *, int, const char *> *ArSonarMTXCreatorHelper::getCreateSonarMTXCB(void)
+{
+  return &ourSonarMTXCB;
 }
 
 #endif // ARINTERFACE
@@ -2239,7 +2314,7 @@ ArDeviceConnection *ArDeviceConnectionCreatorHelper::internalCreateSerialConnect
   else if (port != NULL)
     serPort = port;
   
-  ArLog::log(ourSuccessLogLevel, "%Set serial port to open %s", 
+  ArLog::log(ourSuccessLogLevel, "%sSet serial port to open %s", 
 	     logPrefix, serPort.c_str());
   serConn->setPort(serPort.c_str());
   return serConn;
@@ -2330,4 +2405,265 @@ void ArDeviceConnectionCreatorHelper::setSuccessLogLevel(
 ArLog::LogLevel ArDeviceConnectionCreatorHelper::setSuccessLogLevel(void)
 {
   return ourSuccessLogLevel;
+}
+
+AREXPORT std::list<ArPose> ArPoseUtil::findCornersFromRobotBounds(
+	double radius, double widthLeft, double widthRight, 
+	double lengthFront, double lengthRear, bool fastButUnsafe)
+{
+
+  std::list<ArPose> ret;
+
+  if (fastButUnsafe)
+  {
+    ArPose frontLeft;   
+    if (lengthFront >= radius && widthLeft >= radius)
+      frontLeft.setPose(lengthFront,
+			widthLeft);
+    else if (lengthFront >= radius)
+      frontLeft.setPose(lengthFront,
+			0);
+    else
+      frontLeft.setPose(lengthFront,
+			sqrt(radius * radius - lengthFront * lengthFront));
+    
+    ArPose leftFront;
+    if (widthLeft >= radius && lengthFront >= radius)
+      leftFront.setPose(lengthFront, 
+			widthLeft);
+    else if (widthLeft >= radius)
+      leftFront.setPose(0, 
+			widthLeft);
+    else
+      leftFront.setPose(sqrt(radius * radius - widthLeft * widthLeft),
+			widthLeft);
+
+    ArPose leftRear;
+    if (widthLeft >= radius && lengthRear >= radius)
+      leftRear.setPose(-lengthRear, 
+		       widthLeft);
+    else if (widthLeft >= radius)
+      leftRear.setPose(0, 
+		       widthLeft);
+    else
+      leftRear.setPose(-sqrt(radius * radius - widthLeft * widthLeft),
+		       widthLeft);
+
+    ArPose rearLeft;
+    if (lengthRear >= radius && widthLeft >= radius)
+      rearLeft.setPose(-lengthRear, 
+		       widthLeft);
+    else if (lengthRear >= radius)
+      rearLeft.setPose(-lengthRear, 
+		       0);
+    else
+      rearLeft.setPose(-lengthRear,
+		       sqrt(radius * radius - lengthRear * lengthRear ));
+
+
+    ArPose rearRight;
+    if (lengthRear >= radius && widthRight >= radius)
+      rearRight.setPose(-lengthRear, 
+			-widthRight);
+    else if (lengthRear >= radius)
+      rearRight.setPose(-lengthRear, 
+		       0);
+    else
+      rearRight.setPose(-lengthRear,
+			-sqrt(radius * radius - lengthRear * lengthRear));
+
+
+    ArPose rightRear;
+    if (widthRight >= radius && lengthRear >= radius)      
+      rightRear.setPose(-lengthRear, 
+			-widthRight);
+    else if (widthRight >= radius)
+      rightRear.setPose(0, 
+			-widthRight);
+    else
+      rightRear.setPose(-sqrt(radius * radius - widthRight * widthRight),
+			-widthRight);
+
+    ArPose rightFront;
+    if (widthRight >= radius && lengthFront >= radius)
+      rightFront.setPose(lengthFront, 
+			 -widthRight);
+    else if (widthRight >= radius)
+      rightFront.setPose(0, 
+			-widthRight);
+    else
+      rightFront.setPose(sqrt(radius * radius - widthRight * widthRight),
+			 -widthRight);
+
+    ArPose frontRight;
+    if (lengthFront >= radius && widthRight >= radius)
+      frontRight.setPose(lengthFront,
+			 -widthRight);
+    else if (lengthFront >= radius)
+      frontRight.setPose(lengthFront,
+			0);
+    else
+      frontRight.setPose(lengthFront,
+			 -sqrt(radius * radius - lengthFront * lengthFront));
+
+    if (frontRight.squaredFindDistanceTo(frontLeft) > 1)
+      ret.push_back(frontLeft);
+
+    if (frontLeft.squaredFindDistanceTo(leftFront) > 1)
+      ret.push_back(leftFront);
+    if (leftFront.squaredFindDistanceTo(leftRear) > 1)
+      ret.push_back(leftRear);
+
+    if (leftRear.squaredFindDistanceTo(rearLeft) > 1) 
+      ret.push_back(rearLeft);
+    if (rearLeft.squaredFindDistanceTo(rearRight) > 1) 
+      ret.push_back(rearRight);
+
+    if (rearRight.squaredFindDistanceTo(rightRear) > 1)
+      ret.push_back(rightRear);
+    if (rightRear.squaredFindDistanceTo(rightFront) > 1)
+      ret.push_back(rightFront);
+
+    if (rightFront.squaredFindDistanceTo(frontRight) > 1)
+      ret.push_back(frontRight);
+    return ret;
+  }
+
+  return ret;
+
+  /// MPL this code worked, but didn't give us good corners when the width/length got nuts
+#if 0
+  if (fastButUnsafe)
+  {
+
+    ArPose frontLeft;
+    if (lengthFront >= radius)
+      frontLeft.setPose(lengthFront,
+			0);
+    else
+      frontLeft.setPose(lengthFront,
+			sqrt(radius * radius - lengthFront * lengthFront));
+    
+    ArPose leftFront;
+    if (widthLeft >= radius)
+      leftFront.setPose(0, 
+			widthLeft);
+    else
+      leftFront.setPose(sqrt(radius * radius - widthLeft * widthLeft),
+			widthLeft);
+
+    ArPose leftRear(-leftFront.getX(), 
+		    leftFront.getY());
+    /*
+    ArPose leftRear;
+    if (widthLefth >= radius)
+      leftRear.setPose(0, widthLeft);
+    else
+      leftRear.setPose(-sqrt(radius * radius - widthLeft * widthLeft),
+		       widthLeft);
+    */
+
+    ArPose rearLeft;
+    if (lengthRear >= radius)
+      rearLeft.setPose(-lengthRear, 
+		       0);
+    else
+      rearLeft.setPose(-lengthRear,
+		       sqrt(radius * radius - lengthRear * lengthRear ));
+
+    ArPose rearRight(rearLeft.getX(), 
+		     -rearLeft.getY());
+    /*
+    ArPose rearRight;
+    if (lengthRear >= radius)
+      rightRear.setPose(lengthRear, 
+		       0);
+    else
+      rightRear.setPose(lengthRear,
+			-sqrt(radius * radius - lengthRear * lengthRear));
+    */
+
+    ArPose rightRear;
+    if (widthRight >= radius)
+      rightRear.setPose(0, 
+			-widthRight);
+    else
+      rightRear.setPose(-sqrt(radius * radius - widthRight * widthRight),
+			-widthRight);
+
+    ArPose rightFront(-rightRear.getX(),
+		      rightRear.getY());
+    /*
+    ArPose rightFront;
+    if (widthRight >= radius)
+      rightFront.setPose(0, 
+			-widthRight);
+    else
+      rightFront.setPose(sqrt(radius * radius - widthRight * widthRight),
+			 -widthRight);
+    */
+
+    ArPose frontRight(frontLeft.getX(),
+		      -frontLeft.getY());
+    /*
+    ArPose frontRight;
+    if (lengthFront >= radius)
+      rightFront.setPose(lengthFront,
+			0);
+    else
+      rightFront.setPose(lengthFront,
+			 -sqrt(radius * radius - lengthFront * lengthFront));
+    */
+
+    std::list<ArPose> ret;
+    ret.push_back(frontLeft);
+
+    ret.push_back(leftFront);
+    ret.push_back(leftRear);
+
+    ret.push_back(rearLeft);
+    ret.push_back(rearRight);
+
+    ret.push_back(rightRear);
+    ret.push_back(rightFront);
+
+    ret.push_back(frontRight);
+    return ret;
+  }
+#endif	    
+}
+
+
+AREXPORT std::list<ArPose> ArPoseUtil::breakUpDistanceEvenly(
+	ArPose start, ArPose end, int resolution)
+{
+  std::list<ArPose> ret;
+
+  ret.push_back(start);
+
+  double dist = start.findDistanceTo(end);
+  double angle = start.findAngleTo(end);
+  double cos = ArMath::cos(angle);
+  double sin = ArMath::sin(angle);
+
+  if (dist > resolution)
+  {
+    // we're using integer truncation here
+    int steps = dist / resolution + 1;
+    double increment = dist / steps;
+
+    double atX = start.getX();
+    double atY = start.getY();
+    
+    // now walk the length of the line and see if we should put the points in
+    for (int ii = 1; ii <= steps; ii++)
+    {
+      atX += increment * cos;
+      atY += increment * sin;
+      ret.push_back(ArPose(atX, atY));
+    }
+  }
+
+  ret.push_back(end);
+  return ret;
 }

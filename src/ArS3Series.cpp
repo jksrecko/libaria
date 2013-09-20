@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -63,6 +63,11 @@ AREXPORT void ArS3SeriesPacket::duplicatePacket(ArS3SeriesPacket *packet) {
 	myTelegramNumByte2 = packet->myTelegramNumByte2;
 	myCrcByte1 = packet->myCrcByte1;
 	myCrcByte2 = packet->myCrcByte2;
+	myMonitoringDataByte1 = packet->myMonitoringDataByte1;
+	myMonitoringDataByte2 = packet->myMonitoringDataByte2;
+	myMonitoringDataAvailable = packet->myMonitoringDataAvailable;
+	myProtocolVersionByte1 = packet->myProtocolVersionByte1;
+	myProtocolVersionByte2 = packet->myProtocolVersionByte2;
 
 	memcpy(myBuf, packet->getBuf(), myLength);
 }
@@ -113,6 +118,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 	msWait = 10;
 
 	do {
+		myConn->debugStartPacket();
 		timeToRunFor = timeDone.mSecTo();
 		if (timeToRunFor < 0)
 			timeToRunFor = 0;
@@ -135,32 +141,39 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 
 		// look for initial sequence 0x00 0x00 0x00 0x00
 		for (i = 0; i < 4; i++) {
-			if ((myConn->read((char *) &c, 1, msWait)) > 0) {
+			if ((myConn->read((char *) &c, 1, 200)) > 0) {
 				if (c != 0x00) {
 					//ArLog::log(ArLog::Terse,
 					//                 "ArS3Series::receivePacket() error reading first 4 bytes of header");
 					break;
 				}
 				if (i == 0) {
+
 					packetReceived = myConn->getTimeRead(0);
 					myPacket.setTimeReceived(packetReceived);
 				}
+				myConn->debugBytesRead(1);
 			} else {
 				/* don't log this if we are in starting mode, means laser is not connecting */
 				if (startMode)
 					ArLog::log(ArLog::Terse,
 							"%s::receivePacket() myConn->read error (header)",
 							myName);
+				myConn->debugEndPacket(false, -10);
 				return NULL;
 			}
 		} // end for
 
 		if (c != 0x00)
+		{
+			myConn->debugEndPacket(false, -11);
 			continue;
+		}
 
 		// next 2 bytes = 0x00 0x00 - data block number
 		for (i = 0; i < 2; i++) {
 			if ((myConn->read((char *) &c, 1, msWait)) > 0) {
+			        myConn->debugBytesRead(1);
 				if (c != 0x00) {
 					//ArLog::log(ArLog::Terse,
 					//                 "ArS3Series::receivePacket() error data block number in header");
@@ -171,12 +184,16 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 						ArLog::Terse,
 						"%s::receivePacket() myConn->read error (data block number)",
 						myName);
+				myConn->debugEndPacket(false, -20);
 				return NULL;
 			}
 		} // end for
 
 		if (c != 0x00)
+		{
+			myConn->debugEndPacket(false, -21);
 			continue;
+		}
 
 		crcbuf[n++] = 0;
 		crcbuf[n++] = 0;
@@ -185,12 +202,14 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 
 		for (i = 0; i < 2; i++) {
 			if ((myConn->read((char *) &c, 1, msWait)) > 0) {
+			        myConn->debugBytesRead(1);
 				temp[i] = c;
 				crcbuf[n++] = c;
 			} else {
 				ArLog::log(ArLog::Terse,
 						"%s::receivePacket() myConn->read error (length)",
 						myName);
+				myConn->debugEndPacket(false, -30);
 				return NULL;
 			}
 		} // end for
@@ -202,7 +221,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		int datalen = secondbytelen | (firstbytelen << 8);
 
 		// double it as this is 2 byte pairs of readings
-		// and take of the header of 17 bytes
+		// and take off the header of 17 bytes
 		myPacket.setDataLength((datalen * 2) - 17);
 		//printf("datalength = %d \n",myPacket.getDataLength());
 
@@ -211,14 +230,24 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		// for measured values from angular range 1
 		myPacket.setNumReadings(((myPacket.getDataLength() - 5) / 2) - 1);
 
+		if (myPacket.getNumReadings() < 0) {
+			ArLog::log(ArLog::Terse,
+								"%s::receivePacket() myConn->read error (header - bad number of readings) %d %d",
+								myName, firstbytelen, secondbytelen);
+			myConn->debugEndPacket(false, -40);
+			return NULL;
+		}
+
 		/*
-		ArLog::Terse,
-		"%s::receivePacket() Number of readings = %d", myName, myPacket.getNumReadings());
+		//ArLog::Terse,
+			ArLog::log(ArLog::Normal,
+		"%s::receivePacket() Number of readings = %d %d %d", myName, myPacket.getNumReadings(), firstbytelen, secondbytelen);
 		*/
 
 		// next 2 bytes need to be 0xff & 0x07
 		for (i = 0; i < 2; i++) {
 			if ((myConn->read((char *) &c, 1, msWait)) > 0) {
+			        myConn->debugBytesRead(1);
 				temp[i] = c;
 				crcbuf[n++] = c;
 			} else {
@@ -226,6 +255,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 						ArLog::Terse,
 						"%s::receivePacket() myConn->read error (coordination flag and device code)",
 						myName);
+				myConn->debugEndPacket(false, -50);
 				return NULL;
 			}
 		} // end for
@@ -233,9 +263,11 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		if (temp[0] != 0xff || temp[1] != 0x07)
 		{
 			/*
-			ArLog::log(ArLog::Terse,
+		  ArLog::Terse,
+			ArLog::log(ArLog::Normal,
 			     "ArS3Series::receivePacket() co-oridination flag and device code error");
 			 */
+			myConn->debugEndPacket(false, -51);
 			continue;
 		}
 
@@ -244,6 +276,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		for (i = 0; i < 2; i++) {
 			if ((myConn->read((char *) &c, 1, msWait)) > 0)
 			{
+				myConn->debugBytesRead(1);
 				temp[i] = c;
 				crcbuf[n++] = c;
 			}
@@ -253,20 +286,26 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 						ArLog::Terse,
 						"%s::receivePacket() myConn->read error (protocol version?)",
 						myName);
+				myConn->debugEndPacket(false, -55);
 				return NULL;
 			}
 		} // end for
 
 		// we have an old S3000 who's protocol is 00 01, later versions are 02 01
+		// PS 6/11/13 - for Expert CMS protocol version is 03 01
 		if ((temp[0] == 0x00 || temp[1] == 0x01) ||
-				(temp[0] == 0x02 || temp[1] == 0x01))
+				(temp[0] == 0x02 || temp[1] == 0x01) ||
+				(temp[0] == 0x03 || temp[1] == 0x01))
 		{
+			myPacket.setProtocolVersionByte1(temp[0]);
+			myPacket.setProtocolVersionByte2(temp[1]);
 		}
 		else
 		{
 			ArLog::log(ArLog::Terse,
-					"%s::receivePacket() protocol version error (0x%x 0x%x)",
+					"%s::receivePacket() protocol version error (0x%02x 0x%02x)",
 					myName, temp[0], temp[1]);
+			myConn->debugEndPacket(false, -56);
 			continue;
 		}
 
@@ -276,6 +315,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		{
 			if ((myConn->read((char *) &c, 1, msWait)) > 0)
 			{
+				myConn->debugBytesRead(1);
 				temp[i] = c;
 				crcbuf[n++] = c;
 			}
@@ -284,6 +324,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 				ArLog::log(ArLog::Terse,
 						"%s::receivePacket() myConn->read error (status flag?)",
 						myName);
+				myConn->debugEndPacket(false, -60);
 				return NULL;
 			}
 		} // end for
@@ -296,6 +337,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		{
 			if ((myConn->read((char *) &c, 1, msWait)) > 0)
 			{
+				myConn->debugBytesRead(1);
 				temp[i] = c;
 				crcbuf[n++] = c;
 			}
@@ -304,6 +346,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 				ArLog::log(ArLog::Terse,
 						"%s::receivePacket() myConn->read error (time stamp)",
 						myName);
+				myConn->debugEndPacket(false, -70);
 				return NULL;
 			}
 		} // end for
@@ -326,6 +369,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		{
 			if ((myConn->read((char *) &c, 1, msWait)) > 0)
 			{
+				myConn->debugBytesRead(1);
 				temp[i] = c;
 				crcbuf[n++] = c;
 			}
@@ -334,6 +378,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 				ArLog::log(ArLog::Terse,
 						"%s::receivePacket() myConn->read error (telegram number)",
 						myName);
+				myConn->debugEndPacket(false, -80);
 				return NULL;
 			}
 		} // end for
@@ -347,22 +392,39 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 				"%s::receivePacket() Telegram number =  %d  ",
 				myName,  myPacket.getTelegramNumByte2());
 		 */
-
+		/// MPL this timeout was 5000, but I've made it 200
+		/// since the number of readings could be bogus and we
+		/// don't want to go 5 seconds with no readings
 		int numRead = myConn->read((char *) &myReadBuf[0],
-				myPacket.getDataLength(), 5000);
+						// PS 12/10/12 - change to 400
+					   myPacket.getDataLength(), 400);
+					   //myPacket.getDataLength(), 200);
 
 		// trap if we failed the read
 		if (numRead < 0) {
 			ArLog::log(ArLog::Terse, "%s::receivePacket() Failed read (%d)",
 					myName, numRead);
+			myConn->debugEndPacket(false, -90);
 			return NULL;
 		}
-
+		myConn->debugBytesRead(numRead);
 		/*
 		ArLog::log(ArLog::Terse,
 				"%s::receivePacket() Number of bytes read = %d", myName,
 				numRead);
 		 */
+
+#if 0 // for raw trace
+				char obuf[10000];
+				obuf[0] = '\0';
+				int j = 0;
+				for (int i = 0; i < myPacket.getDataLength() - 2; i++) {
+					sprintf (&obuf[j], "_%02x", myReadBuf[i]);
+					j= j+3;
+				}
+				ArLog::log (ArLog::Normal,
+				            "%s::receivePacket() packet = %s ",myName, obuf);
+#endif
 
 		//printf("\nhere's the data from packetrecieve\n ");
 		//for (i = 0; i < myPacket.getDataLength(); i++) {
@@ -390,12 +452,14 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 		{
 			if ((myConn->read((char *) &c, 1, msWait)) > 0)
 			{
+				myConn->debugBytesRead(1);
 				temp[i] = c;
 			}
 			else
 			{
 				ArLog::log(ArLog::Terse,
 						"%s::receivePacket() myConn->read error (crc)", myName);
+				myConn->debugEndPacket(false, -100);
 				return NULL;
 			}
 		} // end for
@@ -416,12 +480,27 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 						ArLog::Terse,
 						"%s::receivePacket() myConn->read error (got 4 zeros in data)",
 						myName);
+				myConn->debugEndPacket(false, -110);
 				return NULL;
 			}
 		}
 #endif
 
 		memcpy(&crcbuf[n], &myReadBuf[0], myPacket.getDataLength());
+
+#if 0 // for raw trace
+				char obuf[10000];
+				obuf[0] = '\0';
+				int j = 0;
+				for (int i = 0; i < myPacket.getDataLength() + n; i++) {
+// to show header + data uncomment out below
+//					sprintf (&obuf[j], "_%02x", myReadBuf[i]);
+					sprintf (&obuf[j], "_%02x", crcbuf[i]);
+					j= j+3;
+				}
+				ArLog::log (ArLog::Normal,
+				            "%s::receivePacket() packet = %s ",myName, obuf);
+#endif
 
 		// now go validate the crc
 
@@ -434,17 +513,38 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 			ArLog::log(ArLog::Terse,
 					"%s::receivePacket() CRC error (in = 0x%02x calculated = 0x%02x) ",
 					myName, incrc, crc);
+			myConn->debugEndPacket(false, -120);
 			return NULL;
 		}
 
 		// PS 7/5/11 - there are 5 bytes of 00 bb bb 11 11 at the start of
-		// the buffer - so skip over those so that we have the begining of
-		// the readings
-		myPacket.dataToBuf(&myReadBuf[5], myPacket.getNumReadings() * 2);
+		// the buffer - which is the ID for measured data from measuring 
+		// range 1, so skip over those so that we have the begining of
+		// the readings - note if Range 2-5 are configured, then the id's 
+		// for those would be 22 22, 33 33, etc - we only support range 1 (ie 11 11)
+
+		myPacket.setMonitoringDataAvailable(false);
+		if ((myReadBuf[1] == 0xaa) && (myReadBuf[2] == 0xaa)) {
+
+			//ArLog::log(ArLog::Normal, "%s::receivePacket() measured data = %02x %02x",
+			//		myName, myReadBuf[3], myReadBuf[4]);
+
+			myPacket.setDataLength((datalen * 2) - 21);
+			myPacket.setNumReadings(((myPacket.getDataLength() - 5) / 2) - 1);
+
+			myPacket.setMonitoringDataAvailable(true);
+			myPacket.setMonitoringDataByte1(myReadBuf[3]);
+			myPacket.setMonitoringDataByte2(myReadBuf[4]);
+
+			myPacket.dataToBuf(&myReadBuf[9], myPacket.getNumReadings() * 2);
+		}
+		else
+			myPacket.dataToBuf(&myReadBuf[5], myPacket.getNumReadings() * 2);
+
 		myPacket.resetRead();
 		packet = new ArS3SeriesPacket;
 		packet->duplicatePacket(&myPacket);
-
+		myConn->debugEndPacket(true, 1);
 		/*
 		ArLog::log(ArLog::Normal,
 		           "%s::receivePacket() returning packet %d %d", myName, packet->getNumReadings(), myPacket.getNumReadings());
@@ -457,6 +557,7 @@ ArS3SeriesPacket *ArS3SeriesPacketReceiver::receivePacket(unsigned int msWait,
 	} while (timeDone.mSecTo() >= 0); // || !myStarting)
 
 	ArLog::log(ArLog::Terse, "%s::receivePacket() Timeout on read", myName);
+	myConn->debugEndPacket(false, -130);
 	return NULL;
 }
 
@@ -469,6 +570,8 @@ AREXPORT ArS3Series::ArS3Series(int laserNumber, const char *name) :
 
 	clear();
 	myRawReadings = new std::list<ArSensorReading *>;
+
+	myIsMonitoringDataAvailable = false;
 
 	Aria::addExitCallback(&myAriaExitCB, -10);
 
@@ -491,6 +594,11 @@ AREXPORT ArS3Series::ArS3Series(int laserNumber, const char *name) :
 	 laserSetDefaultTcpPort(2111);
 
 	 */
+  // rh adding back in ...
+  laserAllowSetDegrees(-135, -135, -135, 135, 135, 135);
+  std::map<std::string, double> incrementChoices;
+  incrementChoices["half"] = 0.5;
+  laserAllowIncrementChoices("half", incrementChoices);
 
 	// PS 6/29/11 - changing to serial laserSetDefaultPortType("tcp");
 	laserSetDefaultPortType("serial422");
@@ -505,7 +613,7 @@ AREXPORT ArS3Series::ArS3Series(int laserNumber, const char *name) :
 	baudChoices.push_back("115200");
 	//baudChoices.push_back("125000");
 	baudChoices.push_back("230400");
-	//baudChoices.push_back("460800");
+	baudChoices.push_back("460800");
 
 	laserAllowStartingBaudChoices("38400", baudChoices);
 
@@ -632,23 +740,41 @@ void ArS3Series::failedToConnect(void) {
 void ArS3Series::sensorInterp(void) {
 	ArS3SeriesPacket *packet;
 
+	/// MPL 2013_07_24 testing (added)
+	lockDevice();
+
+	/// MPL 2013_07_24 testing (added)
+	adjustRawReadings(false);
+
 	while (1) {
 		myPacketsMutex.lock();
 		if (myPackets.empty()) {
 			myPacketsMutex.unlock();
+			/// MPL 2013_07_24 testing (added)
+			unlockDevice();
 			return;
 		}
 		packet = myPackets.front();
 		myPackets.pop_front();
+		// MPL this was some code to only use the latest laser
+		// packet, but that leaked memory because the
+		// deleteSet wasn't there, just reverting to the old
+		// way (the two lines above this comment)
+		//packet = myPackets.back();
+		//myPackets.clear();
+		//ArUtil::deleteSet(myPackets.begin(), myPackets.end());
 		myPacketsMutex.unlock();
 
 		//set up the times and poses
 
 		ArTime time = packet->getTimeReceived();
+		ArTime timeEnd = packet->getTimeReceived();
 		ArPose pose;
+		ArPose poseEnd;
 		int ret;
 		int retEncoder;
 		ArPose encoderPose;
+		ArPose encoderPoseEnd;
 		int dist;
 		int j;
 
@@ -657,14 +783,73 @@ void ArS3Series::sensorInterp(void) {
 		// for S300 541 readings (270 degrees)
 		unsigned char *buf = (unsigned char *) packet->getBuf();
 
+#if 0 // tracing code
+				char obuf[10000];
+				obuf[0] = '\0';
+				int z = 0;
+				for (int i = 0; i < packet->getDataLength(); i++) {
+					sprintf (&obuf[z], "_%02x", buf[i]);
+					z= z+3;
+				}
+				ArLog::log (ArLog::Normal,
+				            "%s::sensorInterp() packet = %s ", getName(), obuf);
+#endif
+
+				/* MPL 2013_07_19 moving this into the part that gets a packet so that it's not subjected to the normal cycle time
+		// if the monitoring data is available - send it down the firmware
+
+		if (packet->getMonitoringDataAvailable()) {
+
+			myIsMonitoringDataAvailable = true;
+			myMonitoringData = packet->getMonitoringDataByte1();
+
+			myRobot->comInt(217, packet->getMonitoringDataByte1());  
+
+		}
+		else {
+			myIsMonitoringDataAvailable = false;
+		}
+				*/
+
 		// this value should be found more empirically... but we used 1/75
 		// hz for the lms2xx and it was fine, so here we'll use 1/50 hz for now
 		// PS 7/9/11 - not sure what this is doing????
-		if (!time.addMSec(-30)) {
-			ArLog::log(ArLog::Verbose,
-					"%s::sensorInterp() error adding msecs (-30)", getName());
+
+		// MPL 2013_06_03 - the S300 and the S3000 work
+		// differently for timing...  on the S300 the data is
+		// supposed to be real time (SICK seems to disagree
+		// with themselves on this point), so assume no delay
+		// (don't change the receive time)... but on the S3000
+		// there's a delay of one scan (30ms) so add that if
+		// the number of readings means it's an S3000
+
+		bool interpolateReadings = false;
+		if (packet->getNumReadings() == 381) /// S3000
+		{
+		  interpolateReadings = false;
+		  if (!time.addMSec(-30)) {
+		    ArLog::log(ArLog::Normal,
+			       "%s::sensorInterp() error adding msecs (-30)", getName());
+		  }
+		}
+		else if (packet->getNumReadings() == 540) // S300
+		{
+		  // for the S300 we're going to try and compensate
+		  //for the robot's movement while it's turning
+		  // just not right now
+		  //interpolateReadings = true; 
+		  // don't touch time
+		  if (!timeEnd.addMSec(30))
+		  {
+		    ArLog::log(ArLog::Normal,
+			       "%s::sensorInterp() error adding end msecs (30)", getName());
+		  }
 		}
 
+		// MPL this was from debugging the intermittent lost
+		// issue thatl ooked like a timing problem
+		//ArLog::log(ArLog::Normal, "%s packet %lld mSec old", getName(), time.mSecSince());
+		
 		if (myRobot == NULL || !myRobot->isConnected())
 		{
 			pose.setPose(0, 0, 0);
@@ -680,6 +865,18 @@ void ArS3Series::sensorInterp(void) {
 			continue;
 		}
 
+		if (interpolateReadings && 
+		    ((ret = myRobot->getPoseInterpPosition(timeEnd, 
+							   &poseEnd)) < 0
+		     || (retEncoder = myRobot->getEncoderPoseInterpPosition(
+				 timeEnd, &encoderPoseEnd)) < 0))
+		{
+		  ArLog::log(ArLog::Normal,
+			     "%s::sensorInterp(): Warning: reading too old to process end", getName());
+		  delete packet;
+		  continue;
+		}
+
 		ArTransform transform;
 		transform.setTransform(pose);
 
@@ -687,7 +884,8 @@ void ArS3Series::sensorInterp(void) {
 		if (myRobot != NULL)
 			counter = myRobot->getCounter();
 
-		lockDevice();
+		/// MPL 2013_07_24 testing (commented out)
+		//lockDevice();
 		myDataMutex.lock();
 
 		//std::list<ArSensorReading *>::reverse_iterator it;
@@ -699,8 +897,8 @@ void ArS3Series::sensorInterp(void) {
 		int eachNumberData;
 
 		// PS - test for both S3000 (190 degrees) and S300 (270 degrees)
-		if ((packet->getNumReadings() == 381) || (packet->getNumReadings()
-				== 540))
+		if ((packet->getNumReadings() == 381) || 
+					(packet->getNumReadings() == 540))
 		{
 			// PS 7/5/11 - grab the number of raw readings from the receive packet
 			eachNumberData = packet->getNumReadings();
@@ -710,6 +908,12 @@ void ArS3Series::sensorInterp(void) {
 			ArLog::log(ArLog::Normal,
 					"%s::sensorInterp(): Warning: The number of readings is not correct = %d",
 					getName(), myNumChans);
+
+			// PS 12/6/12 - need to unlock
+			myDataMutex.unlock();
+			/// MPL 2013_07_24 testing (commented out)
+			//unlockDevice();
+
 			delete packet;
 			continue;
 		}
@@ -724,6 +928,13 @@ void ArS3Series::sensorInterp(void) {
 			ArLog::log(ArLog::Terse,
 					"%s::sensorInterp() Bad data, in theory have %d readings but can only have 541... skipping this packet",
 					getName(), eachNumberData);
+
+			// PS 12/6/12 - need to unlock and delete packet
+			myDataMutex.unlock();
+			/// MPL 2013_07_24 testing (commented out)
+			//unlockDevice();
+			delete packet;
+
 			continue;
 		}
 
@@ -752,6 +963,86 @@ void ArS3Series::sensorInterp(void) {
 		int readingIndex;
 		bool ignore = false;
 
+
+		// The MonitoringData - 2 bytes
+
+		// bits 0-3 Active Monitoring Case
+		// bits 4-7 - not used
+		// bits 8-10 Monitoring Area
+		// bits 11-15 - not used
+
+		// ???? - so we need to grab bits 0-3, but i'm not sure if they are in 
+		// byte 1 or byte 2 and then pass them to something
+
+		// On page 41 of the S300 telegram manual it defines the scan data block.
+		// There is a 4-bit field within RI_SCAN_STATUS called “monitoring case”.  
+		// We will need to relay this 4-bit value back to the C2K periodically (say with the normal motion commands every XXms).  
+		// This will be used by the C2K as part of the diagnostic checks of the safety system hardware.  
+		// The C2K will need to check that the SICK reported state matches the safety HW state. 
+		// 
+		
+		if (packet->getMonitoringDataAvailable()) {
+
+			// I'm not sure if theses are swapped ie lsb first, but i think they are
+			// as the distances are that way
+
+			unsigned char activeMonitoringCase = packet->getMonitoringDataByte2() & 0x0f;
+			//unsigned char activeMonitoringCase = packet->getMonitoringDataByte1() & 0x0f;
+
+			//myRobot->processActiveMonitoringCase(activeMonitoringCase);
+		}
+
+		double incrX = 0;
+		double incrY = 0;
+		double incrTh = 0;
+		ArPose interpolateDelta(0, 0, 0);
+		if (interpolateReadings)
+		{
+		  incrX = ((encoderPoseEnd.getX() - encoderPose.getX()) / 
+			   packet->getNumReadings());
+		  incrY = ((encoderPoseEnd.getY() - encoderPose.getY()) / 
+			   packet->getNumReadings());
+		  incrTh = (ArMath::subAngle(encoderPoseEnd.getTh(), 
+					     encoderPose.getTh()) / 
+			    packet->getNumReadings());
+		  
+		  /*
+		  incrX = ((encoderPose.getX() - encoderPoseEnd.getX()) / 
+			   packet->getNumReadings());
+		  incrY = ((encoderPose.getY() - encoderPoseEnd.getY()) / 
+			   packet->getNumReadings());
+		  incrTh = (ArMath::subAngle(encoderPose.getTh(), 
+					     encoderPoseEnd.getTh()) / 
+			    packet->getNumReadings());
+		  */
+
+		  ArLog::log(ArLog::Normal, 
+   "%s:InterpolateReadings: diffAll of %d mSec, x %g y %g th %g (incr x %g y %g th %g) start x %g y %g th %g end x %g y %g th %g",
+			     getName(), 
+			     timeEnd.mSecSince(time), 
+			     encoderPoseEnd.getX() - encoderPose.getX(), 
+			     encoderPoseEnd.getY() - encoderPose.getY(), 
+			     ArMath::subAngle(encoderPoseEnd.getTh(),
+					      encoderPose.getTh()),
+			     incrX, incrY, incrTh,
+			     encoderPose.getX(), encoderPose.getY(), 
+			     encoderPose.getTh(),
+			     encoderPoseEnd.getX(), encoderPoseEnd.getY(), 
+			     encoderPoseEnd.getTh());
+
+		  
+		  ArLog::log(ArLog::Normal, 
+   "%s:InterpolateReadings: diffTh of %d mSec, th %g (%g) start th %g end th %g",
+			     getName(), 
+			     timeEnd.mSecSince(time), 
+			     ArMath::subAngle(encoderPoseEnd.getTh(),
+					      encoderPose.getTh()),
+			     incrTh,
+			     encoderPose.getTh(),
+			     encoderPoseEnd.getTh());
+
+		}
+
 		for (atDeg = start,
 				it = myRawReadings->begin(),
 				readingIndex = 0,
@@ -772,9 +1063,39 @@ void ArS3Series::sensorInterp(void) {
 							| buf[readingIndex * 2];
 			dist = dist * 10; // convert to mm
 
+			if (interpolateReadings)
+			{
+			  interpolateDelta.setX(
+				  interpolateDelta.getX() + incrX);
+			  interpolateDelta.setY(
+				  interpolateDelta.getY() + incrY);
+			  interpolateDelta.setTh(
+				  ArMath::addAngle(interpolateDelta.getTh(),
+						   incrTh));
 
-			reading->resetSensorPosition(ArMath::roundInt(mySensorPose.getX()),
-					ArMath::roundInt(mySensorPose.getY()), atDeg);
+			  /*
+			  ArLog::log(ArLog::Normal, "%d %g %g %g",
+				     onReading, 
+				     interpolateDelta.getX(), 
+				     interpolateDelta.getY(), 
+				     interpolateDelta.getTh());
+			  */
+
+			  reading->resetSensorPosition(
+				  ArMath::roundInt(mySensorPose.getX() + 
+						   interpolateDelta.getX()),
+				  ArMath::roundInt(mySensorPose.getY() + 
+						   interpolateDelta.getY()),
+				  ArMath::addAngle(atDeg,
+						   interpolateDelta.getTh()));
+			}
+			else
+			{
+			  reading->resetSensorPosition(
+				  ArMath::roundInt(mySensorPose.getX()),
+				  ArMath::roundInt(mySensorPose.getY()), 
+				  atDeg);
+			}
 			reading->newData(dist, pose, encoderPose, transform, counter, time,
 					ignore, 0); // no reflector yet
 
@@ -799,9 +1120,12 @@ void ArS3Series::sensorInterp(void) {
 		 */
 
 		laserProcessReadings();
-		unlockDevice();
+		/// MPL 2013_07_24 testing (commented out)
+		//unlockDevice();
 		delete packet;
 	}
+	/// MPL 2013_07_24 testing (added)
+	unlockDevice();
 }
 
 AREXPORT bool ArS3Series::blockingConnect(void) {
@@ -842,8 +1166,8 @@ AREXPORT bool ArS3Series::blockingConnect(void) {
 	}
 
 	// PS - set logging level and laser type in packet receiver class
-	myReceiver.setmyInfoLogLevel(myInfoLogLevel);
-	myReceiver.setmyName(getName());
+	myReceiver.setInfoLogLevel(myInfoLogLevel);
+	myReceiver.setName(getName());
 
 	myReceiver.setDeviceConnection(myConn);
 	myConnMutex.unlock();
@@ -865,7 +1189,9 @@ AREXPORT bool ArS3Series::blockingConnect(void) {
 	ArTime timeDone;
 	if (myPowerControlled)
 	{
-		if (!timeDone.addMSec(60 * 1000))
+	        // MPL 11/28/2012 making this timeout shorter
+	        //if (!timeDone.addMSec(60 * 1000))
+		if (!timeDone.addMSec(5 * 1000))
 		{
 			ArLog::log(ArLog::Verbose,
 					"%s::blockingConnect() error adding msecs (60 * 1000)",
@@ -874,7 +1200,9 @@ AREXPORT bool ArS3Series::blockingConnect(void) {
 	}
 	else
 	{
-		if (!timeDone.addMSec(30 * 1000))
+	        // MPL 11/28/2012 making this timeout shorter 
+	        //if (!timeDone.addMSec(30 * 1000))
+		if (!timeDone.addMSec(5 * 1000))
 		{
 			ArLog::log(ArLog::Verbose,
 					"%s::blockingConnect() error adding msecs (30 * 1000)",
@@ -894,6 +1222,30 @@ AREXPORT bool ArS3Series::blockingConnect(void) {
 		if ((packet = myReceiver.receivePacket(1000, startMode)) != NULL)
 		{
 			ArLog::log(ArLog::Verbose, "%s: got packet", getName());
+			// PS 10/17/12 - verify number of readings
+			// PS - test for both S3000 (190 degrees) and S300 (270 degrees)
+			if (packet->getNumReadings() != 381) {
+				if (packet->getNumReadings() != 540) {
+					ArLog::log(ArLog::Normal, "%s:blockingConnect - number of readings is invalid %d", getName(), packet->getNumReadings());
+					delete packet;
+					packet = NULL;
+					continue;
+				}
+			}
+
+			if (packet->getMonitoringDataAvailable()) {
+				ArLog::log(ArLog::Normal, "%s: Monitoring data is available (0x%02x 0x%02x)", getName(), 
+										packet->getMonitoringDataByte1(), packet->getMonitoringDataByte2());
+			}
+			else {
+				ArLog::log(ArLog::Normal, "%s: Monitoring data is not available", getName());
+
+			}
+
+			ArLog::log(ArLog::Normal, "%s: Protocol version (0x%02x 0x%02x)", getName(), 
+										packet->getProtocolVersionByte1(), packet->getProtocolVersionByte2());
+
+
 			delete packet;
 			packet = NULL;
 
@@ -953,6 +1305,37 @@ while (getRunning() )
 	
 	while (getRunning() && myIsConnected &&
 	       (packet = myReceiver.receivePacket (500, false) ) != NULL) {
+
+	        // MPL 2013_07_09 moved this from the process packet
+	        // so that we don't trigger a safety warning if the
+	        // cycle takes too long...  it's possible there should
+	        // be some mutex around this monitoring data but it's
+	        // chars/bools so hopefully it'll be OK TODO verify
+
+	        // if the monitoring data is available - send it down to
+	        // the firmware
+
+	        if (packet->getMonitoringDataAvailable()) {
+	    
+		  myIsMonitoringDataAvailable = true;
+		  myMonitoringData = packet->getMonitoringDataByte1();
+		  myRobot->lock();
+		  myRobot->comInt(217, packet->getMonitoringDataByte1());  
+
+		  /*
+			ArLog::log(ArLog::Normal, "%s monitoring case of = %d seq = %d %d time = %d %d %d %d",
+					getName(), packet->getMonitoringDataByte1(), packet->getTelegramNumByte1(), packet->getTelegramNumByte2(),
+					packet->getTimeStampByte1(), packet->getTimeStampByte2(), packet->getTimeStampByte3(),
+					packet->getTimeStampByte4());
+		  ArLog::log(ArLog::Normal, "%s: Sent monitoring case of %d", 
+			     getName(), packet->getMonitoringDataByte1());
+		  */
+		  myRobot->unlock();
+		}
+		else {
+		  myIsMonitoringDataAvailable = false;
+		}
+
 		myPacketsMutex.lock();
 		myPackets.push_back (packet);
 		myPacketsMutex.unlock();

@@ -9,6 +9,7 @@ AREXPORT ArServerHandlerCommands::ArServerHandlerCommands(
 			    &ArServerHandlerCommands::netListStringCommands)
 {
   myServer = server;
+	myTextServer = NULL;
   if (myServer != NULL)
   {
     myServer->addData("listCommands", 
@@ -20,6 +21,7 @@ AREXPORT ArServerHandlerCommands::ArServerHandlerCommands(
 			 "Gets a list of commands that can be sent to the server with string arguments",
 			 &myNetListStringCommandsCB, "none", "byte2: numberOfCommands, <repeats numberOfCommands> string: name, string: description", "CustomCommands", "RETURN_SINGLE");
   }
+
 }
 
 AREXPORT ArServerHandlerCommands::~ArServerHandlerCommands()
@@ -72,6 +74,25 @@ AREXPORT bool ArServerHandlerCommands::addCommand(
     myCommandDescriptions.push_back(description);
     myFunctors.push_back(fun);
     ArLog::log(ArLog::Verbose, "Added simple command %s", realName.c_str());
+
+		if (myTextServer != NULL) {
+			std::string temp = "CustCmd";
+			std::string custCmd = temp + name;
+
+			ArFunctor4<char **, int, ArSocket *, ArFunctor *> *custFun = 
+			new ArFunctor4C<ArServerHandlerCommands, char **, int, ArSocket *, ArFunctor *>(this,
+								&ArServerHandlerCommands::textParseCommand,
+								NULL, 0, NULL, functor);
+
+			std::string desc = description;
+			std::string trimmedDesc = desc.substr(0, desc.find("\n",0));
+			
+			myTextServer->addCommand (custCmd.c_str(), custFun,
+	                          trimmedDesc.c_str());
+
+		}
+
+		
     return true;
   }
   else
@@ -81,6 +102,7 @@ AREXPORT bool ArServerHandlerCommands::addCommand(
 	       "Could not add simple command %s", realName.c_str());
     return false;
   }
+ 
 }
 
 /**
@@ -129,6 +151,25 @@ AREXPORT bool ArServerHandlerCommands::addStringCommand(
     myStringFunctors.push_back(fun);
     ArLog::log(ArLog::Verbose, "Added simple command with string %s", 
 	       realName.c_str());
+
+
+		if (myTextServer != NULL) {
+			std::string temp = "CustCmd";
+			std::string custCmd = temp + name;
+
+			ArFunctor4<char **, int, ArSocket *, ArFunctor1<ArArgumentBuilder *> *> *custFun = 
+			new ArFunctor4C<ArServerHandlerCommands, char **, int, ArSocket *, ArFunctor1<ArArgumentBuilder *> *>(this,
+								&ArServerHandlerCommands::textParseStringCommand,
+								NULL, 0, NULL, functor);
+
+			std::string desc = description;
+			std::string trimmedDesc = desc.substr(0, desc.find("\n",0));
+
+			myTextServer->addCommand (custCmd.c_str(), custFun,
+	                          trimmedDesc.c_str());
+
+		}
+
     return true;
   }
   else
@@ -172,6 +213,39 @@ void ArServerHandlerCommands::netParseStringCommand(
   ArArgumentBuilder arg;
   arg.add(buf);
   arg.setFullString(buf);
+  functor->invoke(&arg);
+}
+
+
+void ArServerHandlerCommands::textParseCommand(
+								char **argv, int argc,
+						    ArSocket *socket,
+								ArFunctor *functor)
+{
+
+  if (functor == NULL)
+  {
+    ArLog::log(ArLog::Terse, "Command has NULL functor");
+    return;
+  }
+  functor->invoke();
+
+}
+
+
+void ArServerHandlerCommands::textParseStringCommand(
+								char **argv, int argc,
+						    ArSocket *socket,
+								ArFunctor1<ArArgumentBuilder *> *functor)
+{
+
+  if (functor == NULL)
+  {
+    ArLog::log(ArLog::Terse, "String command has NULL functor");
+    return;
+  }
+  ArArgumentBuilder arg;
+  arg.addStrings(argc - 1, &argv[1]);
   functor->invoke(&arg);
 }
 

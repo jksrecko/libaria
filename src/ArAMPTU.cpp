@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -115,6 +115,7 @@ AREXPORT ArAMPTU::ArAMPTU(ArRobot *robot, int unitNumber) :
   myPan = 0;
   myTilt = 0;
   myUnitNumber = unitNumber;
+  ArPTZ::setLimits(150, -150, 90, -90);
 }
 
 AREXPORT ArAMPTU::~ArAMPTU()
@@ -145,28 +146,28 @@ AREXPORT bool ArAMPTU::init(void)
   return true;
 }
 
-AREXPORT bool ArAMPTU::pan(double deg)
+AREXPORT bool ArAMPTU::pan_i(double deg)
 {
-  if (deg > getMaxPosPan())
-    deg = getMaxPosPan();
-  if (deg < getMaxNegPan())
-    deg = getMaxNegPan();
+  if (deg > getMaxPosPan_i())
+    deg = getMaxPosPan_i();
+  if (deg < getMaxNegPan_i())
+    deg = getMaxNegPan_i();
 
   myPacket.empty();
   myPacket.byteToBuf(ArAMPTUCommands::ABSPAN);
   myPacket.byte2ToBuf(ArMath::roundInt(deg + 
-				       (getMaxPosPan() - getMaxNegPan())/2));
+				       (getMaxPosPan_i() - getMaxNegPan_i())/2));
   
   myPan = deg;
   return sendPacket(&myPacket);
 }
 
-AREXPORT bool ArAMPTU::panRel(double deg)
+AREXPORT bool ArAMPTU::panRel_i(double deg)
 {
-  if (deg + myPan > getMaxPosPan())
-    deg = getMaxPosPan() - myPan;
-  if (deg + myPan < getMaxNegPan())
-    deg = getMaxNegPan() - myPan;
+  if (deg + myPan > getMaxPosPan_i())
+    deg = getMaxPosPan_i() - myPan;
+  if (deg + myPan < getMaxNegPan_i())
+    deg = getMaxNegPan_i() - myPan;
 
   myPan += deg;
   myPacket.empty();
@@ -181,28 +182,28 @@ AREXPORT bool ArAMPTU::panRel(double deg)
   return sendPacket(&myPacket);
 }
 
-AREXPORT bool ArAMPTU::tilt(double deg)
+AREXPORT bool ArAMPTU::tilt_i(double deg)
 {
-  if (deg > getMaxPosTilt())
-    deg = getMaxPosTilt();
-  if (deg < getMaxNegTilt())
-    deg = getMaxNegTilt();
+  if (deg > getMaxPosTilt_i())
+    deg = getMaxPosTilt_i();
+  if (deg < getMaxNegTilt_i())
+    deg = getMaxNegTilt_i();
 
   myPacket.empty();
   myPacket.byteToBuf(ArAMPTUCommands::ABSTILT);
   myPacket.byteToBuf(ArMath::roundInt(deg + 
-				      (getMaxPosTilt() - getMaxNegTilt())/2));
+				      (getMaxPosTilt_i() - getMaxNegTilt_i())/2));
   
   myTilt = deg;
   return sendPacket(&myPacket);
 }
 
-AREXPORT bool ArAMPTU::tiltRel(double deg)
+AREXPORT bool ArAMPTU::tiltRel_i(double deg)
 {
-  if (deg + myTilt > getMaxPosTilt())
-    deg = getMaxPosTilt() - myTilt;
-  if (deg + myTilt < getMaxNegTilt())
-    deg = getMaxNegTilt() - myTilt;
+  if (deg + myTilt > getMaxPosTilt_i())
+    deg = getMaxPosTilt_i() - myTilt;
+  if (deg + myTilt < getMaxNegTilt_i())
+    deg = getMaxNegTilt_i() - myTilt;
 
   myTilt += deg;
   myPacket.empty();
@@ -217,17 +218,17 @@ AREXPORT bool ArAMPTU::tiltRel(double deg)
   return sendPacket(&myPacket);
 }
 
-AREXPORT bool ArAMPTU::panTilt(double panDeg, double tiltDeg)
+AREXPORT bool ArAMPTU::panTilt_i(double panDeg, double tiltDeg)
 {
-  if (panDeg > getMaxPosPan())
-    panDeg = getMaxPosPan();
-  if (panDeg < getMaxNegPan())
-    panDeg = getMaxNegPan();
+  if (panDeg > getMaxPosPan_i())
+    panDeg = getMaxPosPan_i();
+  if (panDeg < getMaxNegPan_i())
+    panDeg = getMaxNegPan_i();
 
-  if (tiltDeg > getMaxPosTilt())
-    tiltDeg = getMaxPosTilt();
-  if (tiltDeg < getMaxNegTilt())
-    tiltDeg = getMaxNegTilt();
+  if (tiltDeg > getMaxPosTilt_i())
+    tiltDeg = getMaxPosTilt_i();
+  if (tiltDeg < getMaxNegTilt_i())
+    tiltDeg = getMaxNegTilt_i();
 
   if (myPan - panDeg == 0 && myTilt - tiltDeg == 0)
     return true;
@@ -243,23 +244,23 @@ AREXPORT bool ArAMPTU::panTilt(double panDeg, double tiltDeg)
   myPacket.empty();
   myPacket.byteToBuf(ArAMPTUCommands::PANTILT);
   myPacket.byte2ToBuf(ArMath::roundInt(myPan + 
-				       (getMaxPosPan() - getMaxNegPan())/2));
-  myPacket.byteToBuf(ArMath::roundInt(myTilt + (getMaxPosTilt() - 
-						getMaxNegTilt())/2));
+				       (getMaxPosPan_i() - getMaxNegPan_i())/2));
+  myPacket.byteToBuf(ArMath::roundInt(myTilt + (getMaxPosTilt_i() - 
+						getMaxNegTilt_i())/2));
   return sendPacket(&myPacket);
 }
 
-AREXPORT bool ArAMPTU::panTiltRel(double panDeg, double tiltDeg)
+AREXPORT bool ArAMPTU::panTiltRel_i(double panDeg, double tiltDeg)
 {
-  if (panDeg + myPan > getMaxPosPan())
-    panDeg = getMaxPosPan() - myPan;
-  if (panDeg + myPan < getMaxNegPan())
-    panDeg = getMaxNegPan() - myPan;
+  if (panDeg + myPan > getMaxPosPan_i())
+    panDeg = getMaxPosPan_i() - myPan;
+  if (panDeg + myPan < getMaxNegPan_i())
+    panDeg = getMaxNegPan_i() - myPan;
 
-  if (tiltDeg + myTilt > getMaxPosTilt())
-    tiltDeg = getMaxPosTilt() - myTilt;
-  if (tiltDeg + myTilt < getMaxNegTilt())
-    tiltDeg = getMaxNegTilt() - myTilt;
+  if (tiltDeg + myTilt > getMaxPosTilt_i())
+    tiltDeg = getMaxPosTilt_i() - myTilt;
+  if (tiltDeg + myTilt < getMaxNegTilt_i())
+    tiltDeg = getMaxNegTilt_i() - myTilt;
 
   myPan += panDeg;
   myTilt += tiltDeg;

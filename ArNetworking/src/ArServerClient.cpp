@@ -42,9 +42,12 @@
    ArLog::Verbose
    level, if false, log them at ArLog::Normal level.
 
-   
    @param userInfo the pointer to the item that holds our usernames
    and passwords
+   
+   @param rejecting 
+
+   @param rejectingString string to reject with
  **/
 
 AREXPORT ArServerClient::ArServerClient(
@@ -56,8 +59,15 @@ AREXPORT ArServerClient::ArServerClient(
 	const ArServerUserInfo *userInfo, int rejecting, 
 	const char *rejectingString, bool debugLogging,
 	const char *serverClientName, bool logPasswordFailureVerbosely,
-	bool allowSlowPackets, bool allowIdlePackets) :
-  myProcessPacketCB(this, &ArServerClient::processPacket, NULL, true)
+	bool allowSlowPackets, bool allowIdlePackets,
+	const char *enforceProtocolVersion,
+	ArServerCommands::Type enforceType) :
+
+    myProcessPacketCB(this, &ArServerClient::processPacket, NULL, true),
+ 
+    myRequestTransactionCount(0),
+    myRequestTransactionMutex()
+
 {
   ArNetPacket packet;
 
@@ -103,11 +113,19 @@ AREXPORT ArServerClient::ArServerClient(
 
   myLogPasswordFailureVerbosely = logPasswordFailureVerbosely;
 
+  if (enforceProtocolVersion != NULL)
+    myEnforceProtocolVersion = enforceProtocolVersion;
+  else
+    myEnforceProtocolVersion = "";
+  myEnforceType = enforceType;
+
   mySlowPacketsMutex.setLogName("ArServerClient::mySlowPacketsMutex");
   myIdlePacketsMutex.setLogName("ArServerClient::myIdlePacketsMutex");
 
   myAllowSlowPackets = allowSlowPackets;
   myAllowIdlePackets = allowIdlePackets;
+    
+  myRequestTransactionMutex.setLogName("ArServerClient::myRequestTransactionMutex");
 
   setIdentifier(ArServerClientIdentifier());
   internalSwitchState(STATE_SENT_INTRO);
@@ -119,6 +137,7 @@ AREXPORT ArServerClient::ArServerClient(
   packet.uByte4ToBuf(myAuthKey);
   packet.uByte4ToBuf(myIntroKey);
   packet.strToBuf(myPasswordKey.c_str());
+  packet.strToBuf(myEnforceProtocolVersion.c_str());
   sendPacketTcp(&packet);
 
   mySlowIdleThread = NULL;
@@ -389,9 +408,12 @@ AREXPORT void ArServerClient::processPacket(ArNetPacket *packet, bool tcp)
   {
     char user[512];
     unsigned char password[16];
+    char enforceProtocolVersion[256];
     clientUdpPort = packet->bufToUByte2();
     packet->bufToStr(user, sizeof(user));
     packet->bufToData((char *)password, 16);
+    packet->bufToStr(enforceProtocolVersion, sizeof(enforceProtocolVersion));
+    ArServerCommands::Type clientType = (ArServerCommands::Type)packet->bufToByte();
 
     if (myRejecting != 0)
     {
@@ -400,13 +422,37 @@ AREXPORT void ArServerClient::processPacket(ArNetPacket *packet, bool tcp)
       retPacket.byte2ToBuf(myRejecting);
       retPacket.strToBuf(myRejectingString.c_str());
       sendPacketTcp(&retPacket);
-      if (myRejecting == 2)
-	ArLog::log(ArLog::Normal, 
-   "%sRejected connection from %s since we're using a central server at %s",
-		   myLogPrefix.c_str(), getIPString(), 
-		   myRejectingString.c_str());
+      ArLog::log(ArLog::Normal, 
+		 "%sRejected connection from %s (%d, %s)",
+		 myLogPrefix.c_str(), getIPString(), myRejecting,
+		 myRejectingString.c_str());
       internalSwitchState(STATE_REJECTED);
       return;
+    }
+
+    if (!myEnforceProtocolVersion.empty() && 
+	strcmp(enforceProtocolVersion, myEnforceProtocolVersion.c_str()) != 0)
+    {
+      retPacket.empty();
+      retPacket.setCommand(ArServerCommands::REJECTED);
+      retPacket.byte2ToBuf(4);
+      retPacket.strToBuf("Server rejecting client connection since protocol version does not match");
+      sendPacketTcp(&retPacket);
+      ArLog::log(ArLog::Normal, "%sServer rejecting client connection since protocol version does not match", myLogPrefix.c_str());
+      internalSwitchState(STATE_REJECTED);
+    }
+
+    if (myEnforceType != ArServerCommands::TYPE_UNSPECIFIED &&
+	(myEnforceType != clientType ||
+	 myEnforceType == ArServerCommands::TYPE_NONE))
+    {
+      retPacket.empty();
+      retPacket.setCommand(ArServerCommands::REJECTED);
+      retPacket.byte2ToBuf(6);
+      retPacket.strToBuf("Server rejecting client connection since type (real or sim) does not match (but is specified)");
+      sendPacketTcp(&retPacket);
+      ArLog::log(ArLog::Normal, "%sServer rejecting client connection since type (real or sim) does not match (but is specified)", myLogPrefix.c_str());
+      internalSwitchState(STATE_REJECTED);
     }
 
     // if user info is NULL we're not checking passwords
@@ -733,7 +779,7 @@ AREXPORT void ArServerClient::processPacket(ArNetPacket *packet, bool tcp)
     if (serverData->getFunctor() != NULL)
       serverData->getFunctor()->invoke(this, packet);
     if (serverData->getRequestOnceFunctor() != NULL)
-      serverData->getRequestOnceFunctor()->invoke(this, packet);
+      serverData->getRequestOnceFunctor()->invokeR(this, packet);
     popCommand();
     popForceTcpFlag();
     return;
@@ -1342,6 +1388,45 @@ AREXPORT long ArServerClient::getFrequency(ArTypes::UByte2 command)
   }
   return -2;
 }
+  
+
+AREXPORT void ArServerClient::startRequestTransaction()
+{
+  myRequestTransactionMutex.lock();
+  myRequestTransactionCount++;
+  myRequestTransactionMutex.unlock();
+
+} // end method startRequestTransaction
+
+
+AREXPORT bool ArServerClient::endRequestTransaction()
+{
+  bool isSuccess = false;
+  myRequestTransactionMutex.lock();
+  if (myRequestTransactionCount > 0) {
+    myRequestTransactionCount--;
+    isSuccess = true;
+  }
+  else {
+    ArLog::log(ArLog::Normal,
+               "ArServerClient::endRequestTransaction() transaction not in progress");
+  }
+  myRequestTransactionMutex.unlock();
+
+  return isSuccess;
+
+} // end method endRequestTransaction
+
+
+AREXPORT int ArServerClient::getRequestTransactionCount()
+{
+  myRequestTransactionMutex.lock();
+  int c = myRequestTransactionCount;
+  myRequestTransactionMutex.unlock();
+
+  return c;
+
+} // end method getRequestTransactionCount
 
 /**
  *  Note that this method is not very efficient; it performs a linear search
@@ -1413,7 +1498,7 @@ AREXPORT bool ArServerClient::slowPacketCallback(void)
     if (serverData->getFunctor() != NULL)
       serverData->getFunctor()->invoke(this, slowPacket);
     if (serverData->getRequestOnceFunctor() != NULL)
-      serverData->getRequestOnceFunctor()->invoke(this, slowPacket);
+      serverData->getRequestOnceFunctor()->invokeR(this, slowPacket);
 
     popSlowIdleCommand();
     popSlowIdleForceTcpFlag();
@@ -1463,7 +1548,7 @@ AREXPORT bool ArServerClient::idlePacketCallback(void)
     if (serverData->getFunctor() != NULL)
       serverData->getFunctor()->invoke(this, idlePacket);
     if (serverData->getRequestOnceFunctor() != NULL)
-      serverData->getRequestOnceFunctor()->invoke(this, idlePacket);
+      serverData->getRequestOnceFunctor()->invokeR(this, idlePacket);
 
     popSlowIdleCommand();
     popSlowIdleForceTcpFlag();

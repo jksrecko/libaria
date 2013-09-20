@@ -39,7 +39,10 @@ actionExample - Defines a couple of custom ArAction classes, and uses them.
 actionGroup - Program that uses action groups to switch back and forth 
 between wander and teleop mode
 
-dpptuDemo - A program to control the Directed Perception PTU with the keyboard.
+cameraPTZExample - Connect to PTZ camera or PTU (depending on robot parameter
+file configuration or command line arguments).
+
+dpptuExample - A program to control the Directed Perception PTU with the keyboard.
 
 functor - An example program on the basic use of functors.
 
@@ -80,11 +83,6 @@ sickLineFinderSimple - An example of using the laser sensor line finding
 class and lets you save the lines
 
 threadExample - Demonstrates ARIA's threading tools
-
-vcc4Demo - A program to control the Canon VC-C4 PTZ camera with the keyboard.
-
-rvisionCameraExample - A program to control the RVision PTZ camera (used on
-Seekur and Seekur Jr.) with the keyboard
 
 soundsQueueExamples - Demonstrates use of the ArSoundsQueue sound/speech queue
 

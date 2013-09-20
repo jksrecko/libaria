@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARGPSCOORDS_H
 #define ARGPSCOORDS_H
@@ -36,7 +36,9 @@ class ArECEFCoords;
 class ArENUCoords;
 class ArWGS84;
 
-/** Base class for points in 3 dimensional cartesian space. */
+/** Base class for points in 3 dimensional cartesian space. 
+  @ingroup UtilityClasses
+*/
 class Ar3DPoint 
 {
   public:
@@ -89,6 +91,9 @@ class Ar3DPoint
   double getX() const {return myX;}
   double getY() const {return myY;}
   double getZ() const {return myZ;}
+  void setX(double x) { myX = x; }
+  void setY(double y) { myY = y; }
+  void setZ(double z) { myZ = z; }
 
 protected:
 
@@ -106,8 +111,9 @@ protected:
 #endif
 
 
-/*!
+/**
  * All the constants defined by the World Geodetic System 1984.
+ * @ingroup UtilityClasses
  */
 class ArWGS84
 {
@@ -137,8 +143,9 @@ private:
 };
 
 
-/*!
+/**
  * Earth Centered Earth Fixed Coordinates.
+   @ingroup UtilityClasses
  */
 class ArECEFCoords : public Ar3DPoint
 {
@@ -147,8 +154,10 @@ class ArECEFCoords : public Ar3DPoint
   AREXPORT ArLLACoords ECEF2LLA(void);
   AREXPORT ArENUCoords ECEF2ENU(ArECEFCoords ref);
 };
-/*!
+
+/**
  * Latitude, Longitude and Altitude Coordinates.
+ * @ingroup UtilityClasses
  */
 class ArLLACoords : public Ar3DPoint
 {
@@ -159,9 +168,14 @@ class ArLLACoords : public Ar3DPoint
   double getLatitude(void) const {return getX();}
   double getLongitude(void) const {return getY();}
   double getAltitude(void) const {return getZ();}
+  void setLatitude(double l) { setX(l); }
+  void setLongitude(double l) { setY(l); }
+  void setAltitude(double a) { setZ(a); }
 };
-/*!
+
+/**
  * East North Up coordinates.
+   @ingroup UtilityClasses
  */
 class ArENUCoords : public Ar3DPoint
 {
@@ -171,20 +185,25 @@ class ArENUCoords : public Ar3DPoint
   double getEast(void) const {return getX();}
   double getNorth(void) const {return getY();}
   double getUp(void) const {return getZ();}
+  void setEast(double e) { setX(e); }
+  void setNorth(double n) { setY(n); }
+  void setUp(double u) { setZ(u); }
 };
 
-/*!
+/**
  * Coordinates based on a map with origin in LLA coords with conversion
  * methods from LLA to ENU and from ENU to LLA coordinates.
+ * @ingroup UtilityClasses
  */
 class ArMapGPSCoords : public ArENUCoords
 {
   public:
-  ArMapGPSCoords(ArLLACoords org) : ArENUCoords(0.0, 0.0, 0.0) 
+  ArMapGPSCoords(ArLLACoords org) : ArENUCoords(0.0, 0.0, 0.0), myOriginECEF(0), myOriginLLA(0), myOriginSet(false) 
   {
-    myOriginSet = true;
-    myOriginLLA = new ArLLACoords(org);
-    myOriginECEF = new ArECEFCoords(myOriginLLA->LLA2ECEF());
+    setOrigin(org);
+  }
+  ArMapGPSCoords() : ArENUCoords(0, 0, 0), myOriginECEF(0), myOriginLLA(0), myOriginSet(false)
+  {
   }
   AREXPORT bool convertMap2LLACoords(const double ea, const double no, const double up,
 			    double& lat, double& lon, double& alt) const;
@@ -193,6 +212,15 @@ class ArMapGPSCoords : public ArENUCoords
   bool convertLLA2MapCoords(const ArLLACoords& lla, double& ea, double& no, double& up)
 {
     return convertLLA2MapCoords(lla.getLatitude(), lla.getLongitude(), lla.getAltitude(), ea, no, up);
+  }
+  void setOrigin(ArLLACoords org) {
+    if(myOriginLLA)
+      delete myOriginLLA;
+    if(myOriginECEF)
+      delete myOriginECEF;
+    myOriginSet = true;
+    myOriginLLA = new ArLLACoords(org);
+    myOriginECEF = new ArECEFCoords(myOriginLLA->LLA2ECEF());
   }
      
   ArECEFCoords* myOriginECEF;

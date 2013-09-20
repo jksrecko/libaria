@@ -11,7 +11,9 @@
 #include <ArMutex.h>
 
 #include "ArNetPacket.h"
+#include "ArCentralForwarder.h"
 #include "ArClientBase.h"
+#include "ArClientSwitchManager.h"
 #include "ArServerBase.h"
 #include "ArServerClient.h"
 #include "ArMapChanger.h"
@@ -30,11 +32,24 @@
 class ArMapChanger 
 {
 public:
+  
+  /// Reply status for a map change request
+  enum MapChangeReplyType {
+    CHANGE_FAILED = 0,
+    CHANGE_SUCCESS = 10
+  };
 
   /// Name of the network packet that contains the incremental map changes.
   static const char *PROCESS_CHANGES_PACKET_NAME;
+
+  /// Name of the network packet that contains incremental map changes originated by the robot.
+  static const char *PROCESS_ROBOT_CHANGES_PACKET_NAME;
+
   /// Name of a network packet that is broadcast when the map is being changed.
   static const char *CHANGES_IN_PROGRESS_PACKET_NAME;
+
+  /// Name of the network packet that is broadcast when map changes originated by the robot are complete.
+  static const char *ROBOT_CHANGES_COMPLETE_PACKET_NAME;
 
   // ---------------------------------------------------------------------------
   // Constructors, Destructor
@@ -51,6 +66,20 @@ public:
   AREXPORT ArMapChanger(ArServerBase *server, 
 						            ArMapInterface *map);
 
+  /// Constructs a server map changer that can also originate changes (to the EM).
+  /**
+   * The map changer will automatically apply the received map change details 
+   * to the given map.
+   * 
+   * @param clientSwitch the ArClientSwitchManager * that communicates to the EM
+   * @param server the ArServerBase * that receives the network packets
+   * @param map the ArMapInterface * to which to apply the map changes
+  **/
+  AREXPORT ArMapChanger(ArClientSwitchManager *clientSwitch,
+                        ArServerBase *server, 
+						            ArMapInterface *map);
+
+
   /// Constructs a client map changer.
   /**
    * The map changer will send map change details to the server.  The application
@@ -61,7 +90,7 @@ public:
   **/
   AREXPORT ArMapChanger(ArClientBase *client, 
                         const std::list<std::string> &infoNames);
-
+  
   /// Constructs a stand-alone map changer that will apply changes to the given map.
   /**
    * This method is primarily used for debugging.
@@ -79,12 +108,18 @@ public:
 
   /// Sends the given map changes from the client to the server.
   AREXPORT virtual bool sendMapChanges(ArMapChangeDetails *changeDetails);
+  
+  /// Sends the given map changes from the robot to the central server.
+  AREXPORT virtual bool sendRobotMapChanges(ArMapChangeDetails *changeDetails);
 
   /// Applies the given map changes received from the client to the associated Aria map.
   AREXPORT virtual bool applyMapChanges(ArMapChangeDetails *changeDetails);
 
   /// Transmits the given map change packet list from the client to the server.
   AREXPORT virtual bool sendPacketList(const std::list<ArNetPacket *> &packetList);
+ 
+  /// Transmit the given map change packet list from the robot to the central server. 
+  AREXPORT virtual bool sendRobotPacketList(const std::list<ArNetPacket *> &packetList);
 
   // ---------------------------------------------------------------------------
   // Callback Methods
@@ -104,6 +139,19 @@ public:
   AREXPORT virtual bool remChangeCB
                           (ArFunctor2<ArServerClient *, 
                                       std::list<ArNetPacket *> *> *functor);
+  
+  /// Adds a callback to be invoked after the remote reply has been received.
+  /**
+   * This method is primarily used on the robot.  After the ARCL originated 
+   * changes have been applied by the Enterprise Manager, this callback list
+   * is invoked for other interested parties.
+  **/
+  AREXPORT virtual bool addRobotChangeReplyCB
+                          (ArFunctor2<ArServerClient *, ArNetPacket *>  *functor);
+
+  /// Removes a callback from the remote reply list.
+  AREXPORT virtual bool remRobotChangeReplyCB
+                          (ArFunctor2<ArServerClient *, ArNetPacket *>  *functor);
 
   /// Adds a callback to be invoked before the map file is written.
   /**
@@ -160,11 +208,6 @@ protected:
     MAX_LINES_IN_PACKET = 500
   };
 
-  /// Reply status for a map change request
-  enum MapChangeReplyType {
-    CHANGE_FAILED = 0,
-    CHANGE_SUCCESS = 10
-  };
 
   // ---------------------------------------------------------------------------
   // Packet Handlers
@@ -173,6 +216,9 @@ protected:
   /// Server handler for packets that contain map change details.
   AREXPORT virtual void handleChangePacket(ArServerClient *client, 
                                            ArNetPacket *packet);
+  
+  AREXPORT virtual void handleRobotChangeReplyPacket(ArServerClient *client, 
+                                                     ArNetPacket *packet);
 
   /// Client handler for the results of applying the map changes on the server. 
   AREXPORT virtual void handleChangeReplyPacket(ArNetPacket *packet);
@@ -380,6 +426,8 @@ protected:
    * @return bool true if the reply was received; false otherwise
   **/
   bool waitForReply(ArTime &started);
+  
+  bool waitForCentralServerReply(ArTime &started);
 
   /// Determines whether idle processing is pending on the server.
   bool isIdleProcessingPending();
@@ -406,15 +454,24 @@ protected:
   struct ClientChangeInfo
   {
   public:
-    /// Constructor
+    /// Constructor for changes received from a client
     ClientChangeInfo(ArServerClient *client);
+   
+    /// Constructor for changes received from a robot on the CS 
+    ClientChangeInfo(ArCentralForwarder *forwarder);
+
     /// Destructor
     ~ClientChangeInfo();
+
     /// Adds the given packet to the list
     void addPacket(ArNetPacket *packet);
 
-    /// Server client which sent the map changes
+    /// Server client which sent the map changes...
     ArServerClient *myClient;
+
+    /// Or the forwarder that sent the map changes    
+    ArCentralForwarder *myForwarder;
+
     /// Time at which the first packet in this list was received
     ArTime myStartTime;
     /// Time at which the most recent packet in this list was received
@@ -439,6 +496,13 @@ protected:
 
   /// Associated server base; non-NULL only when changer instantiated on the server
   ArServerBase *myServer;
+
+  /// Associated client switch manager; non-NULL when changer instantiated on robot with EM
+  ArClientSwitchManager *myClientSwitch;
+
+  /// Whether the client switch manager's serverClient has been initialized with a handler (for EM)
+  bool myIsServerClientInit;
+
 
   /// Mutex that protects access to the myClient member
   ArMutex myClientMutex;
@@ -470,9 +534,14 @@ protected:
   /// List of server client callbacks to be invoked after the map has been changed
   std::list< ArFunctor2<ArServerClient *, std::list<ArNetPacket *> *> *> 
                                                              myChangeCBList;
+  
+  /// List of server client callbacks to be invoked after the map has been changed
+  std::list< ArFunctor2<ArServerClient *, ArNetPacket *> *>  myRobotChangeReplyCBList;
 
-  /// Server handler for the network packets that describe map chagnes.
+  /// Server handler for the network packets that describe map changes.
   ArFunctor2C<ArMapChanger, ArServerClient *, ArNetPacket *> myHandleChangePacketCB;
+  
+  ArFunctor2C<ArMapChanger, ArServerClient *, ArNetPacket *> myHandleRobotReplyPacketCB;
   
   /// Client handler for the map-changes-in-progress packet
   ArFunctor1C<ArMapChanger, ArNetPacket *>  myHandleChangesInProgressPacketCB;

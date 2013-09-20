@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -348,14 +348,14 @@ bool ArUrg_2_0::writeLine(const char *str)
    @param buf the buffer to put the data into
    @param size the size of the buffer
    @param msWait how long to wait for the data
-
-   @param noCheckSum whether there is a checksum on this data or not
+   @param noChecksum whether there is a checksum on this data or not
    (there isn't on command echos)
-
    @param stripLastSemicolon Some responses (to VV and PP) have a
    semicolon to separate the string from the checksum... but that
    semicolon is NOT included in the checksum, and shouldn't be
    included in the string...   
+   @param firstByte if given record time at which first byte was received to
+this ArTime objects.
 **/
 bool ArUrg_2_0::readLine(char *buf, unsigned int size, 
 			 unsigned int msWait, bool noChecksum, 
@@ -748,6 +748,7 @@ bool ArUrg_2_0::internalConnect(void)
     ArLog::log(ArLog::Normal, 
 	       "%s::blockingConnect: Missing information in parameter info response",
 	       getName());
+    //log();
     return false;
   }
 

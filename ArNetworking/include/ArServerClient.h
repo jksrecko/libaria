@@ -2,6 +2,7 @@
 #define NLSERVERCLIENT_H
 
 #include "ArNetPacket.h"
+#include "ArServerCommands.h"
 #include "ArNetPacketReceiverTcp.h"
 #include "ArNetPacketSenderTcp.h"
 
@@ -41,7 +42,9 @@ public:
 	  bool debugLogging = false, 
 	  const char *serverClientName = "ArServerBase_unknown",
 	  bool logPasswordFailureVerbosely = false,
-	  bool allowSlowPackets = true, bool allowIdlePackets = true);
+	  bool allowSlowPackets = true, bool allowIdlePackets = true,
+	  const char *enforceProtocolVersion = "",
+	  ArServerCommands::Type enforceType = ArServerCommands::TYPE_UNSPECIFIED);
   /// Destructor
   AREXPORT virtual ~ArServerClient();
   
@@ -63,11 +66,11 @@ public:
   /// Send a packet over TCP. 
   /// The command ID of the outgoing packet will be set to the current command ID 
   /// (from the incoming packet).
-  AREXPORT bool sendPacketTcp(ArNetPacket *packet);
+  AREXPORT virtual bool sendPacketTcp(ArNetPacket *packet);
   /// Send a packet over UDP (unless client only wants TCP; then sends over TCP).
   /// The command ID of the outgoing packet will be set to the current command ID 
   /// (from the incoming packet).
-  AREXPORT bool sendPacketUdp(ArNetPacket *packet);
+  AREXPORT virtual bool sendPacketUdp(ArNetPacket *packet);
 
   /// Sees if this client has access to a given group
   AREXPORT bool hasGroupAccess(const char *group);
@@ -132,6 +135,34 @@ public:
   AREXPORT bool hasSlowPackets(void) { return myHaveSlowPackets; }
   /// Gets if we have any idle packets to process
   AREXPORT bool hasIdlePackets(void) { return myHaveIdlePackets; }
+
+
+  /// Starts a new request transaction, incrementing the count. 
+  /**
+   *  This method is intended to be called solely by the ArServerBase.
+   *  It MUST be followed by a call to endRequestTransaction().
+   *
+   *  Request transactions are used under certain circumstances to 
+   *  indicate that a number of related request/reply packets must
+   *  be completely processed before background idle processing can 
+   *  proceed. See ArServerBase for more information.
+  **/
+  AREXPORT void startRequestTransaction();
+
+  /// Ends the most recent request transaction, decrementing the count.
+  /**
+   *  This method is intended to be called solely by the ArServerBase.
+   *  @see startRequestTransaction().
+  **/
+  AREXPORT bool endRequestTransaction();
+
+  /// Returns the number of request transactions that are currently in progress.
+  /**
+   *  This method is intended to be called solely by the ArServerBase.
+   *  @see startRequestTransaction().
+  **/
+  AREXPORT int getRequestTransactionCount();
+
 
   /// Returns the command ID for the specified name, or 0 if it is not found
   AREXPORT unsigned int findCommandFromName(const char *commandName) const;
@@ -204,7 +235,9 @@ protected:
 
   int myRejecting;
   std::string myRejectingString;
-
+  
+  std::string myEnforceProtocolVersion;
+  ArServerCommands::Type myEnforceType;
 
   ArTime myTrackingStarted;
   class Tracker
@@ -237,6 +270,11 @@ protected:
   std::list<ArNetPacket *> mySlowPackets;
   ArMutex myIdlePacketsMutex;
   std::list<ArNetPacket *> myIdlePackets;
+  
+  /// Number of "request transactions" that are currently in progress for this client.
+  int myRequestTransactionCount;
+  /// Mutex for multi-threaded access to the request transaction count.
+  ArMutex myRequestTransactionMutex;
 
   ArTime myCreationTime;
 };

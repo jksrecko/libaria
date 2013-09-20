@@ -8,7 +8,8 @@
    @param parser the parser to use for information
  **/
 AREXPORT ArServerSimpleOpener::ArServerSimpleOpener(
-	ArArgumentParser *parser, const char *prefix) :
+	ArArgumentParser *parser, const char *prefix, 
+	bool addAriaCallbacks) :
   myParseArgsCB(this, &ArServerSimpleOpener::parseArgs),
   myLogOptionsCB(this, &ArServerSimpleOpener::logOptions),
   myFileServerKeyCB(this, &ArServerSimpleOpener::fileServerKeyCallback)
@@ -31,11 +32,15 @@ AREXPORT ArServerSimpleOpener::ArServerSimpleOpener(
   std::string functorName;
   functorName = prefix;
   functorName += "ArServerSimpleOpener";
-  myParseArgsCB.setName(functorName.c_str());
-  Aria::addParseArgsCB(&myParseArgsCB, 60);
-  myLogOptionsCB.setName(functorName.c_str());
-  Aria::addLogOptionsCB(&myLogOptionsCB, 60);
 
+  if (addAriaCallbacks)
+  {
+    myParseArgsCB.setName(functorName.c_str());
+    Aria::addParseArgsCB(&myParseArgsCB, 60);
+    myLogOptionsCB.setName(functorName.c_str());
+    Aria::addLogOptionsCB(&myLogOptionsCB, 60);
+  }
+    
   myFileServerKeyCB.setName("ArServerSimpleOpener::serverKey");
   myFileParser.addHandler("serverKey", &myFileServerKeyCB);
 }

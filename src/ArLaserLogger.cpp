@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include <stdarg.h>
 
@@ -87,7 +87,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
  *  the file.)
  *
  *  If you are generating a laser scan log file with software other than
- *  ArSickLogger, then you may replace the message in the comment 
+ *  ArLaserLogger, then you may replace the message in the comment 
  *  in the second line, for example: <code>\#Created by my custom laser scan
  *  logger</code>.  This comment is for informational purposes only.
  *
@@ -154,14 +154,23 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
  */
 
 /**
- * see @ref LaserLogFileFormat
-   Make sure you have called ArSick::configure() or
-   ArSick::configureShort() on the ArSick object used when creating an instance of this class.
+   @note The @a laser must be
+   configured, connected and have read at least one set of data from
+   the laser already (the data received is used to calculate FOV information
+   saved in the .2d)
+
+   @note A packet handler will be added for a packet with ID 0x96, but will
+   will not indicate the packet was handled.  This will result in warnings
+   printed to the log unless another packet handler handles this packet.
+   ArServerHandlerMapping does this, but standalone use, such as in
+   sickLogger.cpp, does not.  This is done so that multiple packet handlers
+   may receive 0x96.  (This packet is used for an advanced feature of
+   mapping with some MobileRobots products but which isn't usually needed
+   for must robot maps.)
 
    @param robot The robot to attach to
 
-   @param laser the laser to log readings from. It must be
-   initialized/configured/connected already.
+   @param laser the laser to log readings from. 
 
    @param distDiff the distance traveled at which to take a new reading
 
@@ -169,11 +178,23 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
    @param fileName the file name in which to put the log 
 
-   @param addGoals whether to add goals automatically or... if true
-   then the sick logger puts hooks into places it needs this to
-   happen, into any keyhandler thats around (for a keypress of G), it
-   pays attention to the flag bit of the robot, and it puts in a
-   button press callback for the joyhandler passed in (if any)
+   @param addGoals whether to add goals automatically. if true
+   then ArLaserLogger adds a handler for the 'g' key to any ArKeyHandler 
+   that has been previously created, and will also monitor the robot
+   joystick for the goal button pressed, and register a handler to
+   @a joyHandler if provided as well.
+
+   @param joyHandler joystick interface to allow control from a computer
+joystick, including placing goals with the second joystick button
+   @param baseDirectory directory to place the output file @a fileName in
+   @param useReflectorValues if true, include laser special-reflectance
+information
+   @param robotJoyHandler if given, use this as the interface to the robot's own
+joystick
+  @param extraLocationData if given, place this additional information in the
+output log file 
+  @param extraLasers if given, include data from these lasers in the laser log in addition
+to the primary laser @a laser.
 **/
 AREXPORT ArLaserLogger::ArLaserLogger(
 	ArRobot *robot, ArLaser *laser, 
@@ -181,15 +202,16 @@ AREXPORT ArLaserLogger::ArLaserLogger(
 	const char *fileName, bool addGoals, ArJoyHandler *joyHandler,
 	const char *baseDirectory, bool useReflectorValues,
 	ArRobotJoyHandler *robotJoyHandler,
-	const std::map<std::string, ArRetFunctor2<int, ArTime, ArPose *> *, 
-	ArStrCaseCmpOp> *extraLocationData) :
+	const std::map<std::string, 
+		       ArRetFunctor3<int, ArTime, ArPose *, ArPoseWithTime *> *, 
+		       ArStrCaseCmpOp> *extraLocationData,
+	std::list<ArLaser *> *extraLasers) :
   mySectors(18), 
   myTaskCB(this, &ArLaserLogger::robotTask),
   myGoalKeyCB(this, &ArLaserLogger::goalKeyCallback), 
   myLoopPacketHandlerCB(this, &ArLaserLogger::loopPacketHandler)
 {
   ArKeyHandler *keyHandler;
-  
 
   myOldReadings = false;
   myNewReadings = true;
@@ -221,88 +243,49 @@ AREXPORT ArLaserLogger::ArLaserLogger(
   if (extraLocationData != NULL)
     myExtraLocationData = *extraLocationData;
 
+
+
   myFile = ArUtil::fopen(realFileName.c_str(), "w+");
 
-  /*
-  double deg, incr;
-
-  ArSick::Degrees degrees;
-  ArSick::Increment increment;
-  degrees = myLaser->getDegrees();
-  increment = myLaser->getIncrement();
-
-  if (degrees == ArSick::DEGREES180)
-    deg = 180;
-  else 
-    deg = 100;
-  if (increment == ArSick::INCREMENT_ONE)
-    incr = 1;
-  else
-    incr = .5;
-  */
-
-  const std::list<ArSensorReading *> *readings;
-
-  readings = myLaser->getRawReadings();
-
-  double minAngle = HUGE_VAL;
-  double maxAngle = -HUGE_VAL;
-  double firstAngle = HUGE_VAL;
-  double lastAngle = HUGE_VAL;
-
-  if (!readings->empty())
+  if (laser->getLaserNumber() != 1 && 
+      extraLasers != NULL && !extraLasers->empty())
   {
-    firstAngle = readings->front()->getSensorTh();
-    lastAngle = readings->back()->getSensorTh();
-
-    if (firstAngle < lastAngle)
-      myFlipped = true;
-    else
-      myFlipped = false;
-
-    minAngle = ArUtil::findMin(minAngle, firstAngle);
-    minAngle = ArUtil::findMin(minAngle, lastAngle);
-
-    maxAngle = ArUtil::findMax(maxAngle, firstAngle);
-    maxAngle = ArUtil::findMax(maxAngle, lastAngle);
+    ArLog::log(ArLog::Terse, "ArLaserLogger cannot work because the primary laser has a number other than 1 and there are extra lasers");
+    return;
   }
-  else
-  {
-    ArLog::log(ArLog::Normal, "ArLaserLogger: Apparently there are no readings...");
-  }
+
+  myLasers.push_back(laser);
+  std::list<ArLaser *>::iterator laserIt;
+  for (laserIt = extraLasers->begin(); 
+       laserIt != extraLasers->end(); 
+       laserIt++)
+    myLasers.push_back((*laserIt));
       
   if (myFile != NULL)
   {
     //const ArRobotParams *params;
     //params = robot->getRobotParams();
     fprintf(myFile, "LaserOdometryLog\n");
-    fprintf(myFile, "#Created by ARIA's ArLaserLogger\n");
-    fprintf(myFile, "version: 3\n");
-    //fprintf(myFile, "sick1pose: %d %d %.2f\n", params->getLaserX(), 
-    //params->getLaserY(), params->getLaserTh());
-    /*
-    fprintf(myFile, "sick1pose: %.0f %.0f %.2f\n", 
-	    myLaser->getSensorPositionX(),
-	    myLaser->getSensorPositionY(),
-	    myLaser->getSensorPositionTh());
-    fprintf(myFile, "sick1conf: %d %d %d\n", 
-	    ArMath::roundInt(0.0 - deg / 2.0),
-	    ArMath::roundInt(deg / 2.0), ArMath::roundInt(deg / incr + 1.0));
-    */
-    fprintf(myFile, "sick1pose: %.0f %.0f %.2f\n", 
-	    myLaser->getSensorPositionX(),
-	    myLaser->getSensorPositionY(),
-	    myLaser->getSensorPositionTh());
-    fprintf(myFile, "sick1conf: %d %d %d\n", 
-	    ArMath::roundInt(minAngle),
-	    ArMath::roundInt(maxAngle), 
-	    readings->size());
+    fprintf(myFile, "#Created by ArLaserLogger\n");
+    fprintf(myFile, "version: 4\n");
+
+    std::list<ArLaser *>::iterator laserIt;
+    for (laserIt = myLasers.begin(); laserIt != myLasers.end(); laserIt++)
+    {
+      if ((*laserIt) == myLaser)
+	internalPrintLaserPoseAndConf((*laserIt), 1);
+      else
+	internalPrintLaserPoseAndConf((*laserIt), 
+				      (*laserIt)->getLaserNumber());	
+    }
+
     std::string available;
     available = "robot robotGlobal";
     if (myIncludeRawEncoderPose)
       available += " robotRaw";
 
-    std::map<std::string, ArRetFunctor2<int, ArTime, ArPose *> *, ArStrCaseCmpOp>::iterator it;
+    std::map<std::string, ArRetFunctor3<int, ArTime, ArPose *, 
+    ArPoseWithTime *> *, ArStrCaseCmpOp>::iterator it;
     for (it = myExtraLocationData.begin(); 
 	 it != myExtraLocationData.end(); 
 	 it++)
@@ -368,6 +351,64 @@ AREXPORT ArLaserLogger::~ArLaserLogger()
     fprintf(myFile, "# End of log\n");
     fclose(myFile);
   }
+}
+
+void ArLaserLogger::internalPrintLaserPoseAndConf(ArLaser *laser, int laserNumber)
+{
+  if (myFile == NULL)
+    return;
+
+
+  const std::list<ArSensorReading *> *readings;
+
+  readings = laser->getRawReadings();
+
+  double firstAngle = 0;
+  double lastAngle = 0;
+
+  if (!readings->empty())
+  {
+    firstAngle = ArMath::subAngle(readings->front()->getSensorTh(),
+				  laser->getSensorPositionTh());
+    lastAngle = ArMath::subAngle(readings->back()->getSensorTh(),
+				 laser->getSensorPositionTh());
+  }
+  else
+  {
+    ArLog::log(ArLog::Normal, "ArLaserLogger: Apparently there are no readings for %s...", laser->getName());
+  }
+
+  // probably shouldn't have sick1pose and scan1pose, but it's a lot
+  // easier for now before the other lasers are really supported by
+  // the map processing software
+  fprintf(myFile, "sick%dpose: %.0f %.0f %.2f\n", 
+	  laserNumber,
+	  laser->getSensorPositionX(),
+	  laser->getSensorPositionY(),
+	  laser->getSensorPositionTh());
+  fprintf(myFile, "sick%dconf: %.2f %.2f %d\n", 
+	  laserNumber,
+	  firstAngle, 
+	  lastAngle,
+	  readings->size());
+  fprintf(myFile, "sick%dname: %s\n", 
+	  laserNumber,
+	  laser->getName());  
+
+  fprintf(myFile, "scan%dpose: %.0f %.0f %.0f %.2f\n", 
+	  laserNumber,
+	  laser->getSensorPositionX(),
+	  laser->getSensorPositionY(),
+	  laser->getSensorPositionZ(),
+	  laser->getSensorPositionTh());
+  fprintf(myFile, "scan%dconf: %.2f %.2f %d\n", 
+	  laserNumber,
+	  firstAngle, 
+	  lastAngle,
+	  readings->size());
+  fprintf(myFile, "scan%dname: %s\n", 
+	  laserNumber,
+	  laser->getName());  
 }
   
 AREXPORT bool ArLaserLogger::loopPacketHandler(ArRobotPacket *packet)
@@ -547,7 +588,7 @@ void ArLaserLogger::internalWriteTags(void)
     {
       myWrote = true;
       msec = myStartTime.mSecSince();
-      fprintf(myFile, "time: %ld.%ld\n", msec / 1000, msec % 1000);
+      fprintf(myFile, "time: %ld.%03ld\n", msec / 1000, msec % 1000);
       internalPrintPos(myRobot->getEncoderPose(), myRobot->getPose(), 
 		       myStartTime);
       fprintf(myFile, "%s\n", (*myTags.begin()).c_str());
@@ -558,15 +599,7 @@ void ArLaserLogger::internalWriteTags(void)
 
 void ArLaserLogger::internalTakeReading(void)
 {
-  const std::list<ArSensorReading *> *readings;
-  std::list<ArSensorReading *>::const_iterator it;
-  std::list<ArSensorReading *>::const_reverse_iterator rit;
-  ArPose encoderPoseTaken;
-  ArPose globalPoseTaken;
-  ArTime timeTaken;
   time_t msec;
-  ArSensorReading *reading;
-  bool usingAdjustedReadings;
 
   // we take readings in any of the following cases if we haven't
   // taken one yet or if we've been explicitly told to take one or if
@@ -574,148 +607,179 @@ void ArLaserLogger::internalTakeReading(void)
   // myDegDiff if we've switched sign on velocity and gone more than
   // 50 mm (so it doesn't oscilate and cause us to trigger)
 
-  if (myRobot->isConnected() && (!myFirstTaken || myTakeReadingExplicit || 
-      myLast.findDistanceTo(myRobot->getEncoderPose()) > myDistDiff ||
-      fabs(ArMath::subAngle(myLast.getTh(), 
-			    myRobot->getEncoderPose().getTh())) > myDegDiff ||
-      ((myLastVel < 0 && myRobot->getVel() > 0 ||
-	myLastVel > 0 && myRobot->getVel() < 0) && 
-       myLast.findDistanceTo(myRobot->getEncoderPose()) > 50)))
+  if (myRobot->isConnected() && 
+      (!myFirstTaken || myTakeReadingExplicit || 
+       myLast.findDistanceTo(myRobot->getEncoderPose()) > myDistDiff ||
+       fabs(ArMath::subAngle(myLast.getTh(), 
+			     myRobot->getEncoderPose().getTh())) > myDegDiff ||
+       (((myLastVel < 0 && myRobot->getVel() > 0) ||
+	 (myLastVel > 0 && myRobot->getVel() < 0)) && 
+	myLast.findDistanceTo(myRobot->getEncoderPose()) > 50)))
   {
     myWrote = true;
-    myLaser->lockDevice();
-    /// use the adjusted raw readings if we can, otherwise just use
-    /// the raw readings like before
-    if ((readings = myLaser->getAdjustedRawReadings()) != NULL)
-    {
-      usingAdjustedReadings = true;
-    }
-    else
-    {
-      usingAdjustedReadings = false;
-      readings = myLaser->getRawReadings();
-    }
-    if (readings == NULL || (it = readings->begin()) == readings->end() ||
-	myFile == NULL)
-    {
-      myLaser->unlockDevice();
-      return;
-    }
     myTakeReadingExplicit = false;
-    myScanNumber++;
-    if (usingAdjustedReadings)
-      ArLog::log(ArLog::Normal, 
-		 "Taking adjusted readings from the %d laser values", 
-		 readings->size());
-    else
-      ArLog::log(ArLog::Normal, 
-		 "Taking readings from the %d laser values", 
-		 readings->size());
     myFirstTaken = true;
     myLast = myRobot->getEncoderPose();
-    encoderPoseTaken = (*readings->begin())->getEncoderPoseTaken();
-    globalPoseTaken = (*readings->begin())->getPoseTaken();
-    timeTaken = (*readings->begin())->getTimeTaken();
-    myLastVel = myRobot->getVel();
     msec = myStartTime.mSecSince();
-    fprintf(myFile, "scan1Id: %d\n", myScanNumber);
-    fprintf(myFile, "time: %ld.%ld\n", msec / 1000, msec % 1000);
+    fprintf(myFile, "logTime: %ld.%03ld\n", msec / 1000, msec % 1000);
     fprintf(myFile, "velocities: %.2f %.2f %.2f\n", 
 	    myRobot->getVel(), myRobot->getRotVel(), myRobot->getLatVel());
-    internalPrintPos(encoderPoseTaken, globalPoseTaken, timeTaken);
 
-    if (myUseReflectorValues)
+    std::list<ArLaser *>::iterator laserIt;
+    std::multimap<ArTime, ArLaser *> lasersToLog;
+    std::multimap<ArTime, ArLaser *>::reverse_iterator lasersToLogIt;
+    ArLaser * laser;
+    
+    for (laserIt = myLasers.begin(); laserIt != myLasers.end(); laserIt++)
     {
-      fprintf(myFile, "reflector1: ");
-      
-      if (!myFlipped) //myLaser->isLaserFlipped())
-      {
-	// make sure that the list is in increasing order
-	for (it = readings->begin(); it != readings->end(); it++)
-	{
-	  reading = (*it);
-	  if (!reading->getIgnoreThisReading())
-	    fprintf(myFile, "%d ", reading->getExtraInt());
-	  else
-	    fprintf(myFile, "0 ");
-	}
-      }
-      else
-      {
-	for (rit = readings->rbegin(); rit != readings->rend(); rit++)
-	{
-	  reading = (*rit);
-	  if (!reading->getIgnoreThisReading())
-	    fprintf(myFile, "%d ", reading->getExtraInt());
-	  else
-	    fprintf(myFile, "0 ");
-	}
-      }
-      fprintf(myFile, "\n");
+      laser = (*laserIt);
+      laser->lockDevice();
+      if (laser->getRawReadings() != NULL && 
+	  !laser->getRawReadings()->empty())
+	lasersToLog.insert(
+		std::pair<ArTime, ArLaser *>(
+			laser->getRawReadings()->front()->getTimeTaken(),
+			laser));
     }
-    /**
-       Note that the the sick1: or scan1: must be the last thing in
-       that timestamp, ie that you should put any other data before
-       it.
-     **/
-    if (myOldReadings)
+
+    // have to go in reverse for the times to be increasing
+    for (lasersToLogIt = lasersToLog.rbegin();
+	 lasersToLogIt != lasersToLog.rend();
+	 lasersToLogIt++)
     {
-      fprintf(myFile, "sick1: ");
-      
-      if (!myFlipped) //myLaser->isLaserFlipped())
-      {
-	// make sure that the list is in increasing order
-	for (it = readings->begin(); it != readings->end(); it++)
-	{
-	  reading = (*it);
-	  fprintf(myFile, "%d ", reading->getRange());
-	}
-      }
+      laser = (*lasersToLogIt).second;
+      if (laser == myLaser)
+	internalTakeLaserReading(laser, 1);
       else
-      {
-	for (rit = readings->rbegin(); rit != readings->rend(); rit++)
-	{
-	  reading = (*rit);
-	  fprintf(myFile, "%d ", reading->getRange());
-	}
-      }
-      fprintf(myFile, "\n");
+	internalTakeLaserReading(laser, laser->getLaserNumber());
     }
-    if (myNewReadings)
+
+    for (laserIt = myLasers.begin(); laserIt != myLasers.end(); laserIt++)
     {
-      fprintf(myFile, "scan1: ");
-      
-      if (!myFlipped) //myLaser->isLaserFlipped())
-      {
-	// make sure that the list is in increasing order
-	for (it = readings->begin(); it != readings->end(); it++)
-	{
-	  reading = (*it);
-	  if (!reading->getIgnoreThisReading())
-	    fprintf(myFile, "%.0f %.0f  ", 
-		    reading->getLocalX() - myLaser->getSensorPositionX(), 
-		    reading->getLocalY() - myLaser->getSensorPositionY());
-	  else
-	    fprintf(myFile, "0 0  ");
-	}
-      }
-      else
-      {
-	for (rit = readings->rbegin(); rit != readings->rend(); rit++)
-	{
-	  reading = (*rit);
-	  if (!reading->getIgnoreThisReading())
-	    fprintf(myFile, "%.0f %.0f  ", 
-		    reading->getLocalX() - myLaser->getSensorPositionX(), 
-		    reading->getLocalY() - myLaser->getSensorPositionY());
-	  else
-	    fprintf(myFile, "0 0  ");
-	}
-      }
-      fprintf(myFile, "\n");
+      laser = (*laserIt);
+      laser->unlockDevice();
     }
-    myLaser->unlockDevice();
+
   }
+}
+
+void ArLaserLogger::internalTakeLaserReading(ArLaser *laser, int laserNumber)
+{
+  const std::list<ArSensorReading *> *readings;
+  std::list<ArSensorReading *>::const_iterator it;
+  std::list<ArSensorReading *>::const_reverse_iterator rit;
+  ArPose encoderPoseTaken;
+  ArPose globalPoseTaken;
+  ArTime timeTaken;
+  ArSensorReading *reading;
+  bool usingAdjustedReadings;
+
+  //laser->lockDevice();
+  /// use the adjusted raw readings if we can, otherwise just use
+  /// the raw readings like before
+  if ((readings = laser->getAdjustedRawReadings()) != NULL)
+  {
+    usingAdjustedReadings = true;
+  }
+  else
+  {
+    usingAdjustedReadings = false;
+    readings = laser->getRawReadings();
+  }
+  if (readings == NULL || (it = readings->begin()) == readings->end() ||
+      myFile == NULL)
+  {
+    //laser->unlockDevice();
+    return;
+  }
+  if (usingAdjustedReadings)
+    ArLog::log(ArLog::Normal, 
+	       "Taking adjusted readings from the %d laser values", 
+	       readings->size());
+  else
+    ArLog::log(ArLog::Normal, 
+	       "Taking readings from the %d laser values", 
+	       readings->size());
+  encoderPoseTaken = (*readings->begin())->getEncoderPoseTaken();
+  globalPoseTaken = (*readings->begin())->getPoseTaken();
+  timeTaken = (*readings->begin())->getTimeTaken();
+  myLastVel = myRobot->getVel();
+  fprintf(myFile, "scanId: %d\n", myScanNumber);
+  myScanNumber++;
+  internalPrintPos(encoderPoseTaken, globalPoseTaken, timeTaken);
+
+  if (myUseReflectorValues)
+  {
+    fprintf(myFile, "reflector%d: ", laserNumber);
+    
+    // make sure that the list is in increasing order
+    for (it = readings->begin(); it != readings->end(); it++)
+    {
+      reading = (*it);
+      if (!reading->getIgnoreThisReading())
+	fprintf(myFile, "%d ", reading->getExtraInt());
+      else
+	fprintf(myFile, "0 ");
+    }
+    fprintf(myFile, "\n");
+  }
+
+  /**
+     Note that the the sick1: or scan1: must be the last thing in
+     that timestamp, ie that you should put any other data before
+     it.
+  **/
+  if (myOldReadings && laserNumber == 1)
+  {
+    fprintf(myFile, "sick1: ");
+    
+    // 8/21/11 MPL it was this
+    //if (!myFlipped) //myLaser->isLaserFlipped())
+    // but I don't know why, and this should work or the underlying
+    // reason should be fix
+    if (!laser->getFlipped())
+    {
+      // make sure that the list is in increasing order
+      for (it = readings->begin(); it != readings->end(); it++)
+      {
+	reading = (*it);
+	fprintf(myFile, "%d ", reading->getRange());
+      }
+    }
+    else
+    {
+      for (rit = readings->rbegin(); rit != readings->rend(); rit++)
+      {
+	reading = (*rit);
+	fprintf(myFile, "%d ", reading->getRange());
+      }
+    }
+    fprintf(myFile, "\n");
+  }
+
+  if (myNewReadings || laserNumber != 1)
+  {
+    fprintf(myFile, "scan%d: ", laserNumber);
+    
+    ArTransform sensorTransform;
+    sensorTransform.setTransform(laser->getSensorPosition(),
+				 ArPose(0, 0, 0));
+    ArPose pose;
+    
+    for (it = readings->begin(); it != readings->end(); it++)
+    {
+      reading = (*it);
+      if (!reading->getIgnoreThisReading())
+      {
+	pose = sensorTransform.doTransform(reading->getLocalPose());
+	fprintf(myFile, "%.0f %.0f  ", pose.getX(), pose.getY());
+      }
+      else
+	fprintf(myFile, "0 0  ");
+    }
+    fprintf(myFile, "\n");
+  }
+
 }
 
 void ArLaserLogger::internalPrintPos(ArPose encoderPoseTaken, 
@@ -723,6 +787,14 @@ void ArLaserLogger::internalPrintPos(ArPose encoderPoseTaken,
 {
   if (myFile == NULL)
     return;
+
+  /*
+  long long msec = myStartTime.mSecSinceLL(timeTaken);
+  if (msec > 0)
+    fprintf(myFile, "time: %lld.%03lld\n", msec / 1000, msec % 1000);
+  else
+    fprintf(myFile, "time: 0.0\n");
+  */
 
   fprintf(myFile, "robot: %.0f %.0f %.2f\n", 
 	  encoderPoseTaken.getX(), 
@@ -748,13 +820,14 @@ void ArLaserLogger::internalPrintPos(ArPose encoderPoseTaken,
 	    rawPose.getTh());
   }
   
-  std::map<std::string, ArRetFunctor2<int, ArTime, ArPose *> *, 
+  std::map<std::string, ArRetFunctor3<int, ArTime, ArPose *, ArPoseWithTime *> *, 
 	   ArStrCaseCmpOp>::iterator it;
   for (it = myExtraLocationData.begin(); it != myExtraLocationData.end(); it++)
   {
     ArPose pose;
     int ret;
-    if ((ret = (*it).second->invokeR(timeTaken, &pose)) >= 0)
+    ArPoseWithTime mostRecent;
+    if ((ret = (*it).second->invokeR(timeTaken, &pose, &mostRecent)) >= 0)
     {
       fprintf(myFile, "%s: %.0f %.0f %.2f\n", 
 	      (*it).first.c_str(),
@@ -785,6 +858,7 @@ AREXPORT void ArLaserLogger::robotTask(void)
   internalTakeReading();
 
   // now make sure the files all out to disk
+  /* actually don't do this, since this can cause things to take long enough to mess up timing
   if (myWrote)
   {
     fflush(myFile);
@@ -792,6 +866,7 @@ AREXPORT void ArLaserLogger::robotTask(void)
     fsync(fileno(myFile));
 #endif
   }
+  */
   myWrote = false;
 }
 

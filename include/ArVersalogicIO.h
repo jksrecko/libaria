@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARVERSALOGICIO_H
 #define ARVERSALOGICIO_H
@@ -31,7 +31,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaTypedefs.h"
 #include "ArRobot.h"
 
-/** @brief Interface to integrated digital and analog I/O interfaces on Versalogic motherboards.
+/** @brief Interface to integrated digital and analog I/O interfaces on Versalogic VSBC8 and EBX-12 Cobra computers (digital IO on 2nd * gen.  PatrolBot)
  
   This class is a basic set of calls to use the Linux device driver, <code>amrio</code>,
   which reads and writes data to VersaLogic's Opto22 and analog interfaces.
@@ -61,6 +61,9 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
   The destructor closes the device, so just delete the ArVersalogicIO instance
   to close the device.
+
+  @ingroup OptionalClasses
+   @ingroup DeviceClasses
 
   @notwindows
 */

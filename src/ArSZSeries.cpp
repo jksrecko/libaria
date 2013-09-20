@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -358,8 +358,9 @@ ArSZSeriesPacket *ArSZSeriesPacketReceiver::receivePacket(unsigned int msWait,
 	     crcbuf[n++] = c;
 
 		// now read all the readings
+		// PS 12/6/12 - change timeout from 5000 to 200
 		int numRead = myConn->read((char *) &myReadBuf[0],
-				myPacket.getDataLength(), 5000);
+				myPacket.getDataLength(), 200);
 
 		// trap if we failed the read
 		if (numRead < 0) {
@@ -517,13 +518,16 @@ AREXPORT ArSZSeries::ArSZSeries(int laserNumber, const char *name) :
 	baudChoices.push_back("115200");
 	//baudChoices.push_back("125000");
 	baudChoices.push_back("230400");
-	//baudChoices.push_back("460800");
+	baudChoices.push_back("460800");
 
 	//laserAllowStartingBaudChoices("9600", baudChoices);
 	laserAllowStartingBaudChoices("38400", baudChoices);
 
     // PS 9/9/11 - don't allow auto baud for his laser
 	//laserAllowAutoBaudChoices("57600", baudChoices);
+
+  laserAllowSetDegrees(-135, -135, -135, 135, 135, 135);
+  laserAllowSetIncrement(0.5, 0.5, 0.5);
 
 	//myLogLevel = ArLog::Verbose;
 	//myLogLevel = ArLog::Terse;
@@ -703,20 +707,33 @@ void ArSZSeries::sensorInterp(void) {
 			ArLog::log(ArLog::Normal,
 					"%s::sensorInterp() The number of readings is not correct = %d",
 					getName(), myNumChans);
+
+			// PS 12/6/12 - unlock before continuing
+
 			delete packet;
+			myDataMutex.unlock();
+			unlockDevice();
 			continue;
 		}
 
 		// If we don't have any sensor readings created at all, make 'em all
-		if (myRawReadings->size() == 0)
-			for (j = 0; j < eachNumberData; j++)
+		if (myRawReadings->size() == 0) {
+			for (j = 0; j < eachNumberData; j++) {
 				myRawReadings->push_back(new ArSensorReading);
+			}
+		}
 
 		if (eachNumberData > myRawReadings->size())
 		{
 			ArLog::log(ArLog::Terse,
 					"%s::sensorInterp() Bad data, in theory have %d readings but can only have 751... skipping this packet",
 					getName(), eachNumberData);
+
+			// PS 12/6/12 - unlock and delete before continuing
+
+			delete packet;
+			myDataMutex.unlock();
+			unlockDevice();
 			continue;
 		}
 

@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARARGUMENTBUILDER_H
 #define ARARGUMENTBUILDER_H
@@ -29,13 +29,20 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ariaTypedefs.h"
 
 /// This class is to build arguments for things that require argc and argv
+/// @ingroup ImportantClasses
 class ArArgumentBuilder
 {
 public:
   /// Constructor
-  AREXPORT ArArgumentBuilder(size_t argvLen = 512, char extraSpaceChar = '\0');
-      /// Copy Constructor
+  AREXPORT ArArgumentBuilder(size_t argvLen = 512, 
+                             char extraSpaceChar = '\0',
+			                       bool ignoreNormalSpaces = false,
+                             bool isPreCompressQuotes = false);
+  /// Copy Constructor
   AREXPORT ArArgumentBuilder(const ArArgumentBuilder &builder);
+
+  AREXPORT ArArgumentBuilder &operator=(const ArArgumentBuilder &builder);
+
   /// Destructor
   AREXPORT virtual ~ArArgumentBuilder();
 #ifndef SWIG
@@ -93,9 +100,35 @@ public:
                            bool *ok = NULL) const;
 
   /// Sees if an argument is an int
-  AREXPORT bool isArgInt(size_t whichArg) const;
+  /**
+   * @param whichArg the size_t index of the arg to retrieve; must be >= 0
+   * and less than getArgc()
+   * @param forceHex if true this makes it find the int in base 16 instead of 10
+   */
+  AREXPORT bool isArgInt(size_t whichArg, bool forceHex = false) const;
 
   /// Gets the value of an argument as an integer
+  /**
+   * There are two ways to to verify that the specified argument is an integer.
+   * Either call isArgInt() before calling this method, or specify a non-NULL
+   * ok parameter value. The latter is somewhat more efficient because the 
+   * digit status of each character is checked only once.
+   * 
+   * @param whichArg the size_t index of the arg to retrieve; must be >= 0
+   * and less than getArgc()
+   * @param ok an optional pointer to a bool that will be set to true if the 
+   * arg was successfully retrieved or to false if an error occurred
+   * @param forceHex if true this makes it find the int in base 16 instead of 10
+   * @return int the retrieved argument value; valid only if ok or isArgInt 
+   * is true
+  **/
+  AREXPORT int getArgInt(size_t whichArg,
+                         bool *ok = NULL, bool forceHex = false) const;
+
+  /// Sees if an argument is a long long int
+  AREXPORT bool isArgLongLongInt(size_t whichArg) const;
+
+  /// Gets the value of an argument as a long long integer
   /**
    * There are two ways to to verify that the specified argument is an integer.
    * Either call isArgInt() before calling this method, or specify a non-NULL
@@ -109,8 +142,8 @@ public:
    * @return int the retrieved argument value; valid only if ok or isArgInt 
    * is true
   **/
-  AREXPORT int getArgInt(size_t whichArg,
-                         bool *ok = NULL) const;
+  AREXPORT int getArgLongLongInt(size_t whichArg,
+				 bool *ok = NULL) const;
 
   /// Sees if an argument is a double
   AREXPORT bool isArgDouble(size_t whichArg) const;
@@ -146,6 +179,51 @@ protected:
   AREXPORT void internalAddAsIs(const char *str, int position = -1);
 	AREXPORT void rebuildFullString();
 
+  /// Characters that may be used to separate arguments; bitwise flags so QUOTE can be combined with spaces
+  enum ArgSeparatorType {
+    SPACE              = 1,               // Normal space character
+    SPECIAL            = SPACE << 1,      // The special "extra" space character, if any
+    ANY_SPACE          = SPACE | SPECIAL, // Either normal space or special extra space
+    QUOTE              = SPECIAL << 1,    // Double-quote, must be used in combination with spaces 
+ };
+
+  /// Determines whether the current buffer position marks the start of an argument
+  /**
+   * This method should only be called when an argument is not currently being 
+   * parsed (i.e. the previous character was a space).  
+   * @param buf the char * buffer that is being parsed; must be non-NULL
+   * @param len the maximum number of characters in the buffer
+   * @param index the int buffer position of the character to be tested
+   * @param endArgFlagsOut a pointer to an output int that will indicate which separators
+   * will mark the end of the argument.  If quotes are being pre-processed, and the
+   * current argument starts with space-quote, then the argument must end with a quote-space.
+  **/
+  bool isStartArg(const char *buf, 
+                  int len, 
+                  int index,
+                  int *endArgFlagsOut);
+
+  /// Determines whether the current buffer position marks the end of an argument
+  /**
+   * This method should only be called when an argument is currently being 
+   * parsed (i.e. isStartArg returned true).  
+   * @param buf the char * buffer that is being parsed; must be non-NULL
+   * @param len the maximum number of characters in the buffer
+   * @param indexInOut the input/output int buffer position of the character to be tested; 
+   * if the argument ends with a quote-space, then the index will be incremented to mark
+   * the space; otherwise, it will remain unchanged
+   * @param endArgFlags an int that indicates which separators mark the end of the 
+   * argument.  If quotes are being pre-processed, and the current argument started
+   * with space-quote, then the argument must end with a quote-space.
+  **/
+  bool isEndArg(const char *buf, 
+                int len, 
+                int &indexInOut,
+                int endArgFlags);
+
+  /// Determines whether the specified character is an acceptable space (either normal or extra)
+  bool isSpace(char c);
+
   size_t getArgvLen(void) const { return myArgvLen; }
   // how many arguments we had originally (so we can delete 'em)
   size_t myOrigArgc;
@@ -163,8 +241,26 @@ protected:
   bool myFirstAdd;
   // a character to alternately treat as a space
   char myExtraSpace;
+  // if we should ignore normal spaces
+  bool myIgnoreNormalSpaces;
+  /// Whether to treat double-quotes as arg delimiters (preserving spaces within)
+  bool myIsPreCompressQuotes;
 
   bool myIsQuiet;
 };
+
+// ----------------------------------------------------------------------------
+
+/// Comparator that returns true if arg1's full string is less than arg2's.
+struct ArArgumentBuilderCompareOp
+{
+public:
+
+  /// Compares arg1's full string to arg2's.
+  bool operator() (ArArgumentBuilder* arg1, ArArgumentBuilder* arg2) const;
+
+}; // end struct ArArgumentBuilderCompareOp
+
+
 
 #endif // ARARGUMENTBUILDER_H

@@ -37,8 +37,8 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="AriaStaticDebug.lib ArNetworkingStaticDebug.lib winmm.lib ws2_32.lib advapi32.lib"
-				OutputFile="$(OutDir)\$(ProjectName).exe"
-				LinkIncremental="2"
+				OutputFile="$(OutDir)\serverDemoStaticDebug.exe"
+				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
 				AdditionalLibraryDirectories="..\..\lib"
 				IgnoreDefaultLibraryNames=""

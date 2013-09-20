@@ -240,3 +240,26 @@ AREXPORT void ArServerInfoDrawings::netRangeDeviceCumulative(
   client->sendPacketUdp(&sendPacket);
 
 }
+
+
+AREXPORT ArDrawingData *ArServerInfoDrawings::internalGetDrawingData(
+	const char *name)
+{
+  if (myDrawingDatas.find(name) == myDrawingDatas.end())
+  {
+    ArLog::log(ArLog::Normal, "ArServerInfoDrawings::internalGetDrawingData: No drawing of name '%s'", name);
+    return NULL;
+  }
+  return myDrawingDatas[name];  
+}
+
+AREXPORT ArFunctor2<ArServerClient *, ArNetPacket *> *ArServerInfoDrawings::internalGetDrawingCallback(const char *name)
+{
+  if (myDrawingCallbacks.find(name) == myDrawingCallbacks.end())
+  {
+    ArLog::log(ArLog::Normal, "ArServerInfoDrawings::internalGetDrawingCallback: No drawing of name '%s'", name);
+    return NULL;
+  }
+  return myDrawingCallbacks[name];  
+}
+

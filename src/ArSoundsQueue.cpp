@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ArLog.h"
@@ -495,6 +495,14 @@ AREXPORT void *ArSoundsQueue::runThread(void *arg)
 
       // Call some callbacks to tell them that play is about to begin
       invokeCallbacks(myStartPlaybackCBList);
+      std::list<ArFunctor1<ArSoundsQueue::Item> *>::iterator lIt;
+      for (lIt = myStartItemPlaybackCBList.begin(); 
+	   lIt != myStartItemPlaybackCBList.end(); 
+	   lIt++)
+      {
+	(*lIt)->invoke(myLastItem);
+      }
+
 
       // Abort if any conditions return false
       bool doPlayback = true;
@@ -542,6 +550,12 @@ AREXPORT void *ArSoundsQueue::runThread(void *arg)
       unlock();
       myLastItem.done();
       invokeCallbacks(myEndPlaybackCBList);
+      for (lIt = myEndItemPlaybackCBList.begin(); 
+	   lIt != myEndItemPlaybackCBList.end(); 
+	   lIt++)
+      {
+	(*lIt)->invoke(myLastItem);
+      }
       lock();
 
       if(myQueue.size() == 0)
@@ -669,6 +683,33 @@ AREXPORT void ArSoundsQueue::removePendingItems(ItemType type)
   myQueue.remove_if<ItemComparator_WithType>(ItemComparator_WithType(type));
   unlock();
 }
+
+AREXPORT void ArSoundsQueue::removeItems(int priority) 
+{
+
+  lock();
+  removePendingItems(priority);
+  if (myPlayingSomething && myLastItem.priority < priority)
+  {
+    interrupt();
+  }
+  unlock();
+}
+
+
+AREXPORT void ArSoundsQueue::removeItems(Item item) 
+{
+
+  lock();
+  removePendingItems(item.data.c_str(), item.type);
+  if (myPlayingSomething && myLastItem.type == item.type && 
+      myLastItem.data == item.data)
+  {
+    interrupt();
+  }
+  unlock();
+}
+
 
 AREXPORT string ArSoundsQueue::nextItem(ItemType type)
 {

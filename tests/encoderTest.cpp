@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "Aria.h"
 #include <time.h>
@@ -32,7 +32,7 @@ bool encoderPrinter(ArRobotPacket *packet)
 {
   long int left;
   long int right;
-  printf("0x%X %s\n", packet->getID(), 
+  printf("encoderTest received packet 0x%X %s\n", packet->getID(), 
     (packet->getID() == 0x90 ? "[ENCODERpac]" : 
       ( (packet->getID() == 0x32 || packet->getID() == 0x33) ? "[SIP]" : "" ) 
     ) 
@@ -48,35 +48,33 @@ bool encoderPrinter(ArRobotPacket *packet)
 
 int main(int argc, char **argv) 
 {
+  Aria::init();
+
   std::string str;
   int ret;
   
   ArGlobalRetFunctor1<bool, ArRobotPacket *> encoderPrinterCB(&encoderPrinter);
-  ArSerialConnection con;
-  Aria::init();
-  
+
+  ArArgumentParser parser(&argc, argv);
+  parser.loadDefaultArguments();
   robot = new ArRobot;
+  ArRobotConnector robotConnector(&parser, robot);
+
+  if(!robotConnector.connectRobot())
+  {
+    ArLog::log(ArLog::Terse, "encoderTest: Could not connect to the robot.");
+    if(parser.checkHelpAndWarnUnparsed())
+    {
+        // -help not given
+        Aria::logOptions();
+        Aria::exit(1);
+    }
+  }
+  
 
   robot->addPacketHandler(&encoderPrinterCB, ArListPos::FIRST);
 
-  ArArgumentParser args(&argc, argv);
-  char* portName = args.checkParameterArgument("-rp");  // might return NULL but ArSerialConnection::open accepts that for default port.
-  if ((ret = con.open(portName)) != 0)
-  {
-    str = con.getOpenMessage(ret);
-    printf("Open failed: %s\n", str.c_str());
-    exit(0);
-  }
-
-  robot->setDeviceConnection(&con);
-  if (!robot->blockingConnect())
-  {
-    printf("Could not connect to robot... exiting\n");
-    exit(0);
-  }
-
   robot->requestEncoderPackets();
-  //robot->comInt(ArCommands::ENCODER, 1);
 
   robot->run(true);
   Aria::shutdown();

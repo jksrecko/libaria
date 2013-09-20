@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -115,7 +115,8 @@ AREXPORT ArVCC4::ArVCC4(ArRobot *robot, bool inverted, CommState commDirection, 
   myTaskCB(this, &ArVCC4::camTask)
 {
   myConn = NULL;
-  myInverted = inverted;
+//  myInverted = inverted;
+  ArPTZ::setInverted(inverted);
   myRobot = robot;
   myError = CAM_ERROR_NONE;
   myCommType = commDirection;
@@ -172,6 +173,7 @@ AREXPORT ArVCC4::ArVCC4(ArRobot *robot, bool inverted, CommState commDirection, 
   /*myFOVAtMinZoom = 38;
   myFOVAtMaxZoom = 0.1;
   */
+  ArPTZ::setLimits(MAX_PAN, MIN_PAN, MAX_TILT, MIN_TILT, MAX_ZOOM_OPTIC, MIN_ZOOM);
 
   if (disableLED)
     myDesiredLEDControlMode = 2;
@@ -1751,19 +1753,19 @@ AREXPORT int ArVCC4::getMaxZoom(void) const
     return MAX_ZOOM_OPTIC;
 }
 
-AREXPORT bool ArVCC4::panTilt(double pdeg, double tdeg)
+AREXPORT bool ArVCC4::panTilt_i(double pdeg, double tdeg)
 {
-  if (pdeg > getMaxPosPan())
-    myPanDesired = getMaxPosPan();
-  else if (pdeg < getMaxNegPan())
-    myPanDesired = getMaxNegPan();
+  if (pdeg > getMaxPosPan_i())
+    myPanDesired = getMaxPosPan_i();
+  else if (pdeg < getMaxNegPan_i())
+    myPanDesired = getMaxNegPan_i();
   else
     myPanDesired = pdeg;
 
-  if (tdeg > getMaxPosTilt())
-    myTiltDesired = getMaxPosTilt();
-  else if (tdeg < getMaxNegTilt())
-    myTiltDesired = getMaxNegTilt();
+  if (tdeg > getMaxPosTilt_i())
+    myTiltDesired = getMaxPosTilt_i();
+  else if (tdeg < getMaxNegTilt_i())
+    myTiltDesired = getMaxNegTilt_i();
   else
     myTiltDesired = tdeg;
 
@@ -2024,8 +2026,8 @@ bool ArVCC4::sendPanTilt()
   myPacket.empty();
   preparePacket(&myPacket);
   myPacket.uByteToBuf(ArVCC4Commands::PANTILT);
-  myPacket.byte2ToBuf(ArMath::roundInt(invert(myPanDesired)/.1125) + 0x8000);
-  myPacket.byte2ToBuf(ArMath::roundInt(invert(myTiltDesired)/.1125) + 0x8000);
+  myPacket.byte2ToBuf(ArMath::roundInt( (myPanDesired)/.1125 ) + 0x8000);
+  myPacket.byte2ToBuf(ArMath::roundInt( (myTiltDesired)/.1125 ) + 0x8000);
 
   // set these so that we know what was sent if the command is successful
   myPanSent = myPanDesired;
@@ -2332,4 +2334,22 @@ bool ArVCC4::sendFocus(void)
   requestBytes(6);
 
   return sendPacket(&myPacket);
+}
+
+ArPTZConnector::GlobalPTZCreateFunc ArVCC4::ourCreateFunc(&ArVCC4::create);
+
+ArPTZ* ArVCC4::create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot)
+{
+  CameraType vccType = CAMERA_VCC4;
+  if(params.type == "vcc50i")
+    vccType = CAMERA_C50I;
+  return new ArVCC4(robot, params.inverted, COMM_UNKNOWN, true, false, vccType);
+  // ArPTZConnector takes care of choosing serial port or aux robot port
+}
+
+void ArVCC4::registerPTZType()
+{
+  ArPTZConnector::registerPTZType("vcc4", &ourCreateFunc);
+  ArPTZConnector::registerPTZType("vcc50i", &ourCreateFunc);
+  ArPTZConnector::registerPTZType("vcc", &ourCreateFunc);
 }

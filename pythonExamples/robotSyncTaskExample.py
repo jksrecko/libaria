@@ -1,8 +1,8 @@
 """
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 """
 from AriaPy import *
 import sys
@@ -60,15 +60,19 @@ class PrintingTask:
     print "x %6.1f  y %6.1f  th  %6.1f vel %7.1f mpacs %3d"  % (self.myRobot.getX(), self.myRobot.getY(), self.myRobot.getTh(), self.myRobot.getVel(), self.myRobot.getMotorPacCount())
 
 
-con = ArSimpleConnector(sys.argv)
-if not con.parseArgs():
-  con.logOptions()
+
+Aria_init()
+
+parser = ArArgumentParser(sys.argv)
+robot = ArRobot()
+con = ArRobotConnector(parser, robot)
+
+if not con.connectRobot():
+  print "Could not connect to robot, exiting"
+  Aria_logOptions()
   Aria_exit(1)
 
-# robot
-robot = ArRobot()
 
-# sonar array range device
 sonar = ArSonarDevice()
 
 # This object encapsulates the task we want to do every cycle. 
@@ -81,7 +85,6 @@ recover = ArActionStallRecover()
 aFront = ArActionAvoidFront()
 constantVelocity = ArActionConstantVelocity("Constant Velocity", 400)
 
-Aria_init()
 
 robot.addRangeDevice(sonar)
 

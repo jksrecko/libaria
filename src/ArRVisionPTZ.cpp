@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -97,7 +97,8 @@ AREXPORT void ArRVisionPacket::byte2ToBufAtPos(ArTypes::Byte2 val,
 AREXPORT ArRVisionPTZ::ArRVisionPTZ(ArRobot *robot) :
   ArPTZ(NULL),
   myPacket(255), 
-  myZoomPacket(9)
+  myZoomPacket(9),
+  mySerialPort(ArUtil::COM3)
 {
   //myRobot = robot;
   initializePackets();
@@ -110,6 +111,16 @@ AREXPORT ArRVisionPTZ::ArRVisionPTZ(ArRobot *robot) :
   myPanOffsetInDegrees = PAN_OFFSET_IN_DEGREES; 
 
   myConn = NULL;
+
+  ArPTZ::setLimits(MAX_PAN, MIN_PAN, MAX_TILT, MIN_TILT, MAX_ZOOM, MIN_ZOOM);
+    /*
+  AREXPORT virtual double getMaxPosPan(void) const { return MAX_PAN; }
+  AREXPORT virtual double getMaxNegPan(void) const { return MIN_PAN; }
+  AREXPORT virtual double getMaxPosTilt(void) const { return MAX_TILT; }
+  AREXPORT virtual double getMaxNegTilt(void) const { return MIN_TILT; }
+  AREXPORT virtual int getMaxZoom(void) const { return MAX_ZOOM; }
+  AREXPORT virtual int getMinZoom(void) const { return MIN_ZOOM; }
+  */
 
 }
 
@@ -161,11 +172,11 @@ AREXPORT bool ArRVisionPTZ::init(void)
   myConn = getDeviceConnection();
   if(!myConn)
   {
-     ArLog::log(ArLog::Normal, "ArRVisionPTZ: opening connectino to camera on COM3...");
+     ArLog::log(ArLog::Normal, "ArRVisionPTZ: opening connection to camera on COM3...");
      ArSerialConnection *ser = new ArSerialConnection();
-     if(ser->open(ArUtil::COM3) != 0)
+     if(ser->open(mySerialPort) != 0)
      {
-	ArLog::log(ArLog::Terse, "ArRVisionPTZ: error opening COM3 for camera PTZ control, initialization failed.");
+	ArLog::log(ArLog::Terse, "ArRVisionPTZ: error opening %s for camera PTZ control, initialization failed.", mySerialPort);
         myConn = NULL;
         return false;
      }
@@ -195,7 +206,7 @@ AREXPORT bool ArRVisionPTZ::init(void)
   return true;
 }
 
-AREXPORT bool ArRVisionPTZ::panTilt(double degreesPan, double degreesTilt)
+AREXPORT bool ArRVisionPTZ::panTilt_i(double degreesPan, double degreesTilt)
 {
   if (degreesPan > MAX_PAN)
     degreesPan = MAX_PAN;
@@ -214,29 +225,29 @@ AREXPORT bool ArRVisionPTZ::panTilt(double degreesPan, double degreesTilt)
   return sendPacket(&myPanTiltPacket);
 }
 
-AREXPORT bool ArRVisionPTZ::panTiltRel(double degreesPan, double degreesTilt)
+AREXPORT bool ArRVisionPTZ::panTiltRel_i(double degreesPan, double degreesTilt)
 {
-  return panTilt(myPan + degreesPan, myTilt + degreesTilt);
+  return panTilt_i(myPan + degreesPan, myTilt + degreesTilt);
 }
 
-AREXPORT bool ArRVisionPTZ::pan(double degrees)
+AREXPORT bool ArRVisionPTZ::pan_i(double degrees)
 {
-  return panTilt(degrees, myTilt);
+  return panTilt_i(degrees, myTilt);
 }
 
-AREXPORT bool ArRVisionPTZ::panRel(double degrees)
+AREXPORT bool ArRVisionPTZ::panRel_i(double degrees)
 {
-  return panTiltRel(degrees, 0);
+  return panTiltRel_i(degrees, 0);
 }
 
-AREXPORT bool ArRVisionPTZ::tilt(double degrees)
+AREXPORT bool ArRVisionPTZ::tilt_i(double degrees)
 {
-  return panTilt(myPan, degrees);
+  return panTilt_i(myPan, degrees);
 }
 
-AREXPORT bool ArRVisionPTZ::tiltRel(double degrees)
+AREXPORT bool ArRVisionPTZ::tiltRel_i(double degrees)
 {
-  return panTiltRel(0, degrees);
+  return panTiltRel_i(0, degrees);
 }
 
 AREXPORT bool ArRVisionPTZ::zoom(int zoomValue)
@@ -267,17 +278,17 @@ AREXPORT bool ArRVisionPTZ::packetHandler(ArRobotPacket *packet)
 }
 */
 
-#define MAX_RESPONSE_BYTES 16
+#define ARRVISION_MAX_RESPONSE_BYTES 16
 //AREXPORT bool ArRVisionPTZ::packetHandler(ArBasePacket *packet)
 ArBasePacket * ArRVisionPTZ::readPacket(void)
 {
-  unsigned char data[MAX_RESPONSE_BYTES];
+  unsigned char data[ARRVISION_MAX_RESPONSE_BYTES];
   unsigned char byte;
   int num;
-  memset(data, MAX_RESPONSE_BYTES, 0);
-  for (num=0; num <= MAX_RESPONSE_BYTES+1; num++) {
+  memset(data, ARRVISION_MAX_RESPONSE_BYTES, 0);
+  for (num=0; num <= ARRVISION_MAX_RESPONSE_BYTES+1; num++) {
     if (myConn->read((char *) &byte, 1,1) <= 0 ||
-	num == MAX_RESPONSE_BYTES+1) {
+	num == ARRVISION_MAX_RESPONSE_BYTES+1) {
       return NULL;
     }
     else if (byte == 0x90) {
@@ -290,7 +301,7 @@ ArBasePacket * ArRVisionPTZ::readPacket(void)
     }
   }
   // we got the header
-  for (num=1; num <= MAX_RESPONSE_BYTES; num++) {
+  for (num=1; num <= ARRVISION_MAX_RESPONSE_BYTES; num++) {
     if (myConn->read((char *) &byte, 1, 1) <= 0) {
       // there are no more bytes, so check the last byte for the footer
       if (data[num-1] != 0xFF) {
@@ -312,4 +323,19 @@ ArBasePacket * ArRVisionPTZ::readPacket(void)
   //printf("\t[%d]: 0x%x\n", i, data[i]);
   //}
   return NULL;
+}
+
+ArPTZConnector::GlobalPTZCreateFunc ArRVisionPTZ::ourCreateFunc(&ArRVisionPTZ::create);
+
+ArPTZ* ArRVisionPTZ::create(size_t index, ArPTZParams params, ArArgumentParser *parser, ArRobot *robot)
+{
+  ArRVisionPTZ *ptz = new ArRVisionPTZ(robot);
+  if(params.serialPort != "" && params.serialPort != "none")
+	  ptz->setPort(params.serialPort.c_str());
+  return ptz;
+}
+
+void ArRVisionPTZ::registerPTZType()
+{
+  ArPTZConnector::registerPTZType("rvision", &ourCreateFunc);
 }

@@ -44,7 +44,7 @@ public:
   /// Destructor
   AREXPORT ~ArClientSimpleConnector(void);
   /// Connects the client with the options given
-  AREXPORT bool connectClient(ArClientBase *client, bool print = true);
+  AREXPORT bool connectClient(ArClientBase *client, bool log = true);
   /// Parses the arguments 
   AREXPORT bool parseArgs(void);
   /// Parses the arguments 

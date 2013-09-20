@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #ifndef ARSYSTEMSTATUS_H
@@ -38,20 +38,32 @@ class ArSystemStatusRefreshThread;
 /** @brief Utility to get statistics about the  host operating system
  *  (CPU usage, wireless link data, etc).
  *
+ *  Normally, calling any accessor to read a value will query the operating
+ *  system to get the most recent value.  However, if you will be accessing
+ *  data very frequently and want those calls to be faster, you can start 
+ *  a thread by calling startPeriodicUpdate() which will periodically query
+ *  new values from the operating system and cache them for accessors to 
+ *  return.
+ *
  *  This class is only implemented for Linux; on Windows you will get invalid
  *  information.
  *  @todo Add a function and functor that formats uptime like "X years, 
  *  X months, X days, X hours, X min, X sec." (omitting 0 values).
+
+  @ingroup UtilityClasses
  */
 class ArSystemStatus {
 public:
 
   /** Create a new thread which periodically invalidates cached data,
-   *  causing it to be recalculated when next accessed. Use this if you
-   *  will be accessing the data too frequently to require it to be 
-   *  recacluted on each access.
+   *  causing it to be recalculated when next accessed.  Starting
+   *  this thread is optional; start it if you 
+   *  will be accessing the data frequently, so that is doesn't need to
+   *  be re-read and re-calculated on each access. If you will only be 
+   *  accessing the data occasionally, you do not need to start the update
+   *  thread, it will be updated each time you read a value.
    */
-  AREXPORT static void startPeriodicUpdate(int refreshFrequency = 5000);
+  AREXPORT static void startPeriodicUpdate(int refreshFrequency = 5000, ArLog::LogLevel logLevel = ArLog::Verbose);
 
   /** Stop periodic update thread. Henceforth any access of data will
    *  cause it to be re-read and recalculated. */
@@ -86,6 +98,9 @@ public:
   /// Get total system uptime (seconds)
   AREXPORT static unsigned long getUptime();
 
+  /// Get program's uptime (seconds)
+  AREXPORT static unsigned long getProgramUptime();
+
   /// Get total system uptime (hours)
   AREXPORT static double getUptimeHours();
 
@@ -97,6 +112,12 @@ public:
 
   /** @return Pointer to a functor which can be used to retrieve the current uptime (hours) */
   AREXPORT static ArRetFunctor<double>* getUptimeHoursFunctor();
+
+  /** @return Pointer to a functor which can be used to retrieve the current uptime (hours) */
+  AREXPORT static ArRetFunctor<unsigned long>* getUptimeFunctor();
+
+  /** @return Pointer to a functor which can be used to retrieve the current uptime (hours) */
+  AREXPORT static ArRetFunctor<unsigned long>* getProgramUptimeFunctor();
 
 
 
@@ -121,6 +142,7 @@ public:
    * wireless device). */
   AREXPORT static int getWirelessDiscardedPacketsBecauseNetConflict();
 
+
   AREXPORT static ArRetFunctor<int>* getWirelessLinkQualityFunctor();
   AREXPORT static ArRetFunctor<int>* getWirelessLinkNoiseFunctor();
   AREXPORT static ArRetFunctor<int>* getWirelessLinkSignalFunctor();
@@ -136,10 +158,13 @@ private:
   static ArMutex ourCPUMutex;
   static double ourCPU;
   static unsigned long ourUptime;
+  static unsigned long ourFirstUptime;
   static unsigned long ourLastCPUTime;
   static ArTime ourLastCPURefreshTime;
   static ArGlobalRetFunctor<double> ourGetCPUPercentCallback;
   static ArGlobalRetFunctor<double> ourGetUptimeHoursCallback;
+  static ArGlobalRetFunctor<unsigned long> ourGetUptimeCallback;
+  static ArGlobalRetFunctor<unsigned long> ourGetProgramUptimeCallback;
 
   static ArMutex ourWirelessMutex;
   static int ourLinkQuality, ourLinkSignal, ourLinkNoise,

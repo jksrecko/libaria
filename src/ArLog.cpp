@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "ArExport.h"
@@ -39,6 +39,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #else
 #include <fcntl.h>
 #include <errno.h>
+#include <execinfo.h>
 #endif
 
 #if defined(_ATL_VER) || defined(ARIA_MSVC_ATL_VER)
@@ -64,16 +65,16 @@ bool ArLog::ourConfigLogTime = false;
 bool ArLog::ourConfigAlsoPrint = false;
 ArGlobalRetFunctor<bool> ArLog::ourConfigProcessFileCB(&ArLog::processFile);
 
+#ifndef ARINTERFACE
 char ArLog::ourAramConfigLogLevel[1024] = "Normal";
 double ArLog::ourAramConfigLogSize = 10;
 bool ArLog::ourUseAramBehavior = false;
 double ArLog::ourAramLogSize = 0;
-#ifndef ARINTERFACE
 ArGlobalRetFunctor<bool> ArLog::ourAramConfigProcessFileCB(
 	&ArLog::aramProcessFile);
 std::string ArLog::ourAramPrefix = "";
-bool ArLog::ourAramDaemonized = false;
 #endif
+bool ArLog::ourAramDaemonized = false;
 
 ArFunctor1<const char *> *ArLog::ourFunctor;
 
@@ -246,7 +247,7 @@ AREXPORT void ArLog::logErrorFromOS(LogLevel level, const char *str, ...)
         (LPTSTR) &errorString,
         0, NULL);
  
-  snprintf(bufWithError, sizeof(bufWithError) - 1, "%s | ErrorFromOSNum: %d ErrorFromOSString: %s", buf, err, errorString);
+  snprintf(bufWithError, sizeof(bufWithError) - 1, "%s | ErrorFromOSNum: %d ErrorFromOSString: %s", buf, err, (char*)errorString);
   bufWithError[sizeof(bufWithError) - 1] = '\0';
 
   LocalFree(errorString);
@@ -612,6 +613,28 @@ AREXPORT void ArLog::logNoLock(LogLevel level, const char *str, ...)
   va_end(ptr);
 }
 
+AREXPORT void ArLog::logBacktrace(LogLevel level)
+{
+#ifndef WIN32
+  int size = 100;
+  int numEntries;
+  void *buffer[size];
+  char **names;
+  
+  numEntries = backtrace(buffer, size);
+  ArLog::log(ArLog::Normal, "Backtrace %d levels", numEntries);
+  
+  names = backtrace_symbols(buffer, numEntries);
+  if (names == NULL)
+    return;
+  
+  int i;
+  for (i = 0; i < numEntries; i++)
+    ArLog::log(ArLog::Normal, "%s", names[i]);
+  
+  free(names);
+#endif
+}
 
 AREXPORT void ArLog::addToConfig(ArConfig *config)
 {
@@ -698,21 +721,31 @@ AREXPORT void ArLog::aramInit(const char *prefix, ArLog::LogLevel defaultLevel,
 
   if (ourAramDaemonized)
   {
+
     if (dup2(fileno(ourFP), fileno(stderr)) < 0)
       ArLog::logErrorFromOSNoLock(
 	      ArLog::Normal, "ArLog: Error redirecting stderr to log file.");
+    
+    // this is is taken out since if you set this flag, the file gets
+    //closed twice, then really weird stuff happens after the exec
+    //ArUtil::setFileCloseOnExec(fileno(stderr), true);
 
-    ArUtil::setFileCloseOnExec(fileno(stderr), true);
+    fprintf(stderr, "Stderr...\n");
+
+    /* stdout is taken out since we don't necessarily need it and it
+     * wound up at the end of the file, which got really strange
 
     if (dup2(fileno(ourFP), fileno(stdout)) < 0)
 
       ArLog::logErrorFromOSNoLock(
 	      ArLog::Normal, "ArLog: Error redirecting stdout to log file.");
 
+    // this is is taken out since if you set this flag, the file gets
+    //closed twice, then really weird stuff happens after the exec
     ArUtil::setFileCloseOnExec(fileno(stdout), true);
 
-    fprintf(stderr, "Stderr...\n");
     fprintf(stdout, "Stdout...\n");
+    */
   }
 
   ourAramConfigLogSize  = defaultSize;  // even megabytes
@@ -769,20 +802,28 @@ AREXPORT void ArLog::filledAramLog(void)
   {
 
     if (dup2(fileno(ourFP), fileno(stderr)) < 0)
-
       ArLog::logErrorFromOSNoLock(
 	      ArLog::Normal, "ArLog: Error redirecting stderr to log file.");
 
-    ArUtil::setFileCloseOnExec(fileno(stderr), true);
+    // this is is taken out since if you set this flag, the file gets
+    //closed twice, then really weird stuff happens after the exec
+    //ArUtil::setFileCloseOnExec(fileno(stderr), true);
+
+    fprintf(stderr, "Stderr...\n");
+    
+    /* stdout is taken out since we don't necessarily need it and it
+     * wound up at the end of the file, which got really strange
 
     if (dup2(fileno(ourFP), fileno(stdout)) < 0)
       ArLog::logErrorFromOSNoLock(
 	      ArLog::Normal, "ArLog: Error redirecting stdout to log file.");
 
+    // this is is taken out since if you set this flag, the file gets
+    //closed twice, then really weird stuff happens after the exec
     ArUtil::setFileCloseOnExec(fileno(stdout), true);
 
-    fprintf(stderr, "Stderr...\n");
     fprintf(stdout, "Stdout...\n");
+    */
   }
 }
 
@@ -813,3 +854,10 @@ AREXPORT void ArLog::checkFileSize(void)
     }
   }
 }
+
+AREXPORT void ArLog::internalForceLockup(void)
+{
+  ArLog::log(ArLog::Terse, "ArLog: forcing internal lockup");
+  ourMutex.lock();
+}
+

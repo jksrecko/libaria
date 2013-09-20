@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,15 +19,19 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "ArExport.h"
 #include "ariaOSDef.h"
 #include "ArGPS.h"
 #include "ArDeviceConnection.h"
+#include "ArRobotPacket.h"
+#include "ArRobot.h"
+#include "ArCommands.h"
+#include "ariaInternal.h"
 
 #include <iostream>
 
@@ -71,11 +75,11 @@ void ArGPS_printBuf(FILE *fp, const char *data, int size){  for(int i = 0; i < s
  *
  * If your GPS device does not support NMEA, or it requires special
  * initialization commands to start sending NMEA data etc., then you can
- * to define a subclass of ArGPS. Override connect(), setDeviceType(), and/or read() to do 
+ * define a subclass of ArGPS. Override connect(), setDeviceType(), and/or read() to do 
  * special things. See ArNovatelGPS as an example. Then add support to
  * it to ArGPSConnector: add a new member of the GPSType enum, a check for
  * it in parseArgs(), mention it in logArgs(), and create your ArGPS subclass
- * in createGP().
+ * in createGPS().
  *
  * You can find out the NMEA messages ArGPS wants by accessing "myHandlers",
  * of type HandlersMap (a std::map).
@@ -111,6 +115,9 @@ AREXPORT ArGPS::ArGPS() :
   addNMEAHandler("HCHDG", &myHCHDxHandler);
   addNMEAHandler("HCHDM", &myHCHDxHandler);
   addNMEAHandler("HCHDT", &myHCHDxHandler);
+  addNMEAHandler("GPHDG", &myHCHDxHandler);
+  addNMEAHandler("GPHDM", &myHCHDxHandler);
+  addNMEAHandler("GPHDT", &myHCHDxHandler);
   addNMEAHandler("GPGSA", &myGPGSAHandler);
   addNMEAHandler("GPGSV", &myGPGSVHandler);
   addNMEAHandler("GPMSS", &myGPMSSHandler);
@@ -335,7 +342,7 @@ void ArGPS::handleGPGGA(ArNMEAParser::Message msg)
   
   readUShortFromStringVec(message, 7, &(myData.numSatellitesTracked));
   myData.haveHDOP = readFloatFromStringVec(message, 8, &myData.HDOP); // note redundant with GPGSA
-  myData.haveAltitude = readFloatFromStringVec(message, 9, &myData.altitude); // might be redundant with PGRMZ
+  myData.haveAltitude = readFloatFromStringVec(message, 9, &myData.altitude); 
   // TODO get altitude geoidal seperation
   myData.haveDGPSStation = readUShortFromStringVec(message, 14, &myData.DGPSStationID);
 }
@@ -598,7 +605,7 @@ double ArGPS::knotsToMPS(double knots)
 }
 
 
-bool ArGPS::readFloatFromString(std::string& str, double* target, double (*convf)(double)) const
+bool ArGPS::readFloatFromString(const std::string& str, double* target, double (*convf)(double)) const
 {
   if (str.length() == 0) return false;
   if (convf)
@@ -608,7 +615,7 @@ bool ArGPS::readFloatFromString(std::string& str, double* target, double (*convf
   return true;
 }
 
-bool ArGPS::readUShortFromString(std::string& str, unsigned short* target, unsigned short (*convf)(unsigned short)) const
+bool ArGPS::readUShortFromString(const std::string& str, unsigned short* target, unsigned short (*convf)(unsigned short)) const
 {
   if (str.length() == 0) return false;
   if (convf)
@@ -619,13 +626,13 @@ bool ArGPS::readUShortFromString(std::string& str, unsigned short* target, unsig
 }
 
 
-bool ArGPS::readFloatFromStringVec(std::vector<std::string>* vec, size_t i, double* target, double (*convf)(double)) const
+bool ArGPS::readFloatFromStringVec(const std::vector<std::string>* vec, size_t i, double* target, double (*convf)(double)) const
 {
   if (vec->size() < (i+1)) return false;
   return readFloatFromString((*vec)[i], target, convf);
 }
 
-bool ArGPS::readUShortFromStringVec(std::vector<std::string>* vec, size_t i, unsigned short* target, unsigned short (*convf)(unsigned short)) const
+bool ArGPS::readUShortFromStringVec(const std::vector<std::string>* vec, size_t i, unsigned short* target, unsigned short (*convf)(unsigned short)) const
 {
   if (vec->size() < (i+1)) return false;
   return readUShortFromString((*vec)[i], target, convf);
@@ -651,7 +658,7 @@ void ArGPS::handleGPGSV(ArNMEAParser::Message msg)
   unsigned short thisMsg;
   if(!readUShortFromStringVec(message, 1, &numMsgs)) return;
   if(!readUShortFromStringVec(message, 2, &thisMsg)) return;
-  for(unsigned short offset = 0; offset + 7 < message->size(); offset+=4) // should be less than 5 sets of data per message though
+  for(unsigned short offset = 0; (ArNMEAParser::MessageVector::size_type)(offset + 7) < message->size(); offset+=4) // should be less than 5 sets of data per message though
   {
     unsigned short snr = 0;
     if((*message)[7+offset].length() == 0) continue;  // no SNR for this satellite.
@@ -728,4 +735,103 @@ void ArGPS::handleGPGST(ArNMEAParser::Message msg)
   myData.haveAltitudeError = readFloatFromStringVec(message, 8, &(myData.altitudeError));
 }
   
-  
+AREXPORT ArSimulatedGPS::ArSimulatedGPS(ArRobot *robot) :
+    ArGPS(), myHaveDummyPosition(false), mySimStatHandlerCB(this, &ArSimulatedGPS::handleSimStatPacket),
+    myRobot(robot)
+  {
+    myData.havePosition = false;
+    myData.fixType = NoFix;   // need to set a position with setDummyPosition() or get data from MobileSim to get a (simulated) fix
+  }
+
+AREXPORT void ArSimulatedGPS::setDummyPosition(ArArgumentBuilder *args)
+{
+printf("%s | 0=%f | 1=%f | 2=%f\n", args->getFullString(),
+args->getArgDouble(0), args->getArgDouble(1), args->getArgDouble(2));
+  double lat = 0;
+  double lon = 0;
+  double alt = 0;
+  bool haveArg = false;
+  lat = args->getArgDouble(0, &haveArg);
+  if(!haveArg) {
+    ArLog::log(ArLog::Terse, "ArSimulatedGPS: Can't set dummy position: No valid double precision numeric value given as first argument for latitude.");
+    return;
+  }
+  lon = args->getArgDouble(1, &haveArg);
+  if(!haveArg)  {
+    ArLog::log(ArLog::Terse, "ArSimulatedGPS: Can't set dummy position: No valid double precision numeric value given as second argument for longitude.");
+    return;
+  }
+  alt = args->getArgDouble(2, &haveArg);
+  if(haveArg) {
+    ArLog::log(ArLog::Normal, "ArSimulatedGPS: Setting dummy position %f, %f, %f", lat, lon, alt);
+    setDummyPosition(lat, lon, alt);
+  } else {
+    ArLog::log(ArLog::Normal, "ArSimulatedGPS: Setting dummy position %f, %f", lat, lon);
+    setDummyPosition(lat, lon);
+  }
+}
+
+bool ArSimulatedGPS::handleSimStatPacket(ArRobotPacket *pkt)
+{
+  if(pkt->getID() != 0x62) return false;
+  char c = pkt->bufToByte(); // skip
+  c = pkt->bufToByte(); // skip
+  ArTypes::UByte4 flags = pkt->bufToUByte4();
+  if(flags&ArUtil::BIT1)   // bit 1 is set if map has OriginLLA georeference point, and this packet will contain latitude and longitude.
+  {
+    myData.timeGotPosition.setToNow();
+    myData.fixType = SimulatedFix;
+    myData.HDOP = myData.VDOP = myData.PDOP = 1.0;
+    myData.haveHDOP = myData.haveVDOP = myData.havePDOP = true;
+    //myData.numSatellitesTracked = 6;
+    myData.numSatellitesTracked = 0;
+    int x = pkt->bufToUByte2(); // skip simint
+    x = pkt->bufToUByte2(); // skip realint
+    x = pkt->bufToUByte2(); // skip lastint
+    x = pkt->bufToByte4(); // skip truex
+    x = pkt->bufToByte4(); // skip truey
+    x = pkt->bufToByte4(); // skip truez
+    x = pkt->bufToByte4(); // skip trueth
+    // TODO check if packet is still long enough to contain latitude and longitude.
+    myData.havePosition = true;
+    myData.latitude = pkt->bufToByte4() / 10e6; 
+    myData.longitude = pkt->bufToByte4() / 10e6; 
+    myData.GPSPositionTimestamp.setToNow();
+    // TODO check if packet is still long enough to contain altitude
+    myData.haveAltitude = true;
+    myData.altitude = pkt->bufToByte4() / 100.0;
+  }
+  else
+  {
+    if(myData.havePosition && !myHaveDummyPosition)
+      clearPosition();
+  }
+  return true;
+}
+
+AREXPORT ArSimulatedGPS::~ArSimulatedGPS()
+{
+  if(myRobot)
+    myRobot->remPacketHandler(&mySimStatHandlerCB);
+}
+
+bool ArSimulatedGPS::connect(unsigned long connectTimeout) 
+{
+  /*
+  std::list<ArRobot*> *robots = Aria::getRobotList();
+  std::list<ArRobot*>::const_iterator first = robots->begin();
+  if(first != robots->end())
+    myRobot = *(first);
+  */
+  if(myRobot)
+  {
+    myRobot->addPacketHandler(&mySimStatHandlerCB);
+    ArLog::log(ArLog::Normal, "ArSimulatedGPS: Will receive data from the simulated robot.");
+    myRobot->comInt(ArCommands::SIM_STAT, 2);
+  }
+  else
+  {
+    ArLog::log(ArLog::Normal, "ArSimulatedGPS: Can't receive data from a simulated robot; dummy position must be set manually instead");
+  }
+  return true;
+}

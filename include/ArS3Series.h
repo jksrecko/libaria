@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARS3SERIES_H
 #define ARS3SERIES_H
@@ -52,7 +52,7 @@ public:
 
   void setDataLength(int x)
   { myDataLength = x; }
-  ArTypes::UByte2 getDataLength()
+  int getDataLength()
   { return myDataLength; }
   void setNumReadings(int x)
   { myNumReadings = x; }
@@ -94,6 +94,26 @@ public:
   { return myCrcByte2; }
   void setCrcByte2(unsigned char c)
   { myCrcByte2 = c; }
+  unsigned char getMonitoringDataByte1()
+  { return myMonitoringDataByte1; }
+  void setMonitoringDataByte1(unsigned char c)
+  { myMonitoringDataByte1 = c; }
+  unsigned char getMonitoringDataByte2()
+  { return myMonitoringDataByte2; }
+  void setMonitoringDataByte2(unsigned char c)
+  { myMonitoringDataByte2 = c; }
+  bool getMonitoringDataAvailable()
+  { return myMonitoringDataAvailable; }
+  void setMonitoringDataAvailable(bool c)
+  { myMonitoringDataAvailable = c; }
+  unsigned char getProtocolVersionByte1()
+  { return myProtocolVersionByte1; }
+  void setProtocolVersionByte1(unsigned char c)
+  { myProtocolVersionByte1 = c; }
+  unsigned char getProtocolVersionByte2()
+  { return myProtocolVersionByte2; }
+  void setProtocolVersionByte2(unsigned char c)
+  { myProtocolVersionByte2 = c; }
 
 protected:
 
@@ -111,6 +131,11 @@ protected:
   unsigned char myTelegramNumByte2;
   unsigned char myCrcByte1;
   unsigned char myCrcByte2;
+	bool myMonitoringDataAvailable;
+	unsigned char myMonitoringDataByte1;
+	unsigned char myMonitoringDataByte2;
+	unsigned char myProtocolVersionByte1;
+	unsigned char myProtocolVersionByte2;
 
 };
 
@@ -136,11 +161,11 @@ public:
   unsigned short CRC16(unsigned char *, int);
 
   // PS - added to pass info to this class
-  AREXPORT void	setmyInfoLogLevel(ArLog::LogLevel infoLogLevel)
+  AREXPORT void	setInfoLogLevel(ArLog::LogLevel infoLogLevel)
   { myInfoLogLevel = infoLogLevel; }
-  AREXPORT void setmyIsS300(bool isS300)
+  AREXPORT void setIsS300(bool isS300)
   { myIsS300 = isS300; }
-  AREXPORT void setmyName(const char *name )
+  AREXPORT void setName(const char *name )
   { strcpy(myName, name); }
 
 protected:
@@ -184,6 +209,12 @@ public:
       else
 	return false;
     }  
+  AREXPORT bool isMonitoringDataAvailable(void)
+		{ return myIsMonitoringDataAvailable; }
+  AREXPORT int getMonitoringData(void)
+		{ return myMonitoringData; }
+  AREXPORT bool compareMonitoringDataAgainst(int val)
+    { return myMonitoringData == val; }
 
   /// Logs the information about the sensor
   AREXPORT void log(void);
@@ -200,6 +231,8 @@ protected:
 
   int myNumChans;
 
+	bool myIsMonitoringDataAvailable;
+	int myMonitoringData;
 
   ArLog::LogLevel myLogLevel;
 

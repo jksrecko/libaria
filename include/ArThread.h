@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,22 +19,28 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARTHREAD_H
 #define ARTHREAD_H
 
 
 #include <map>
-#ifndef WIN32
+#if !defined(WIN32) || defined(MINGW)
 #include <pthread.h>
 #endif
 #include "ariaTypedefs.h"
 #include "ArMutex.h"
 #include "ArFunctor.h"
 #include "ArLog.h"
+
+#ifdef MINGW
+#include <vector>
+#else
+#include <map>
+#endif
 
 /// POSIX/WIN32 thread wrapper class. 
 /**
@@ -50,18 +56,33 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
   Calling cancel() will cancel the thread.
 
   The static function self() will return a thread
+
+  @sa ArASyncTask which provides a different approach with a simpler interface.
+
 */
 class ArThread
 {
 public:
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(MINGW)
   typedef DWORD ThreadType;
 #else
   typedef pthread_t ThreadType;
 #endif
 
+// pthread_t on Linux happens to be an integer or pointer that can be used in a map. On other platforms, pthread_t may be a struct or similar, and this is true on MINGW, so store them differently.  Use the access methods that follow to access the map.
+#ifdef MINGW
+  typedef std::vector< std::pair<ThreadType, ArThread*> > MapType;
+#else
   typedef std::map<ThreadType, ArThread*> MapType;
+#endif
+
+protected:
+  static ArThread* findThreadInMap(ThreadType t);
+  static void removeThreadFromMap(ThreadType t); 
+  static void addThreadToMap(ThreadType pt, ArThread *at);
+  
+public:
   typedef enum {
     STATUS_FAILED=1, ///< Failed to create the thread
     STATUS_NORESOURCE, ///< Not enough system resources to create the thread
@@ -94,6 +115,10 @@ public:
   AREXPORT static void cancelAll(void);
   /// Join on all threads
   AREXPORT static void joinAll(void);
+
+  /// Shuts down and deletes the last remaining thread; call after joinAll
+  AREXPORT static void shutdown();
+
   /// Yield the processor to another thread
   AREXPORT static void yieldProcessor(void);
   /// Gets the logging level for thread information
@@ -194,6 +219,7 @@ public:
 
 #ifndef WIN32
   pid_t getPID(void) { return myPID; }
+  pid_t getTID(void) { return myTID; }
 #endif
 
   /// Gets the name of the this thread
@@ -206,7 +232,7 @@ public:
 protected:
   static ArMutex ourThreadsMutex;
   static MapType ourThreads;
-#ifdef WIN32
+#if defined(WIN32) && !defined(MINGW)
   static std::map<HANDLE, ArThread *> ourThreadHandles;
 #endif 
   AREXPORT static ArLog::LogLevel ourLogLevel; 
@@ -227,13 +253,14 @@ protected:
   ArStrMap myStrMap;
   ArFunctor *myFunc;
   ThreadType myThread;
-#ifdef WIN32
+#if defined(WIN32) && !defined(MINGW)
   HANDLE myThreadHandle;
 #endif
 
   
-#ifndef WIN32
+#if !defined(WIN32) || defined(MINGW)
   pid_t myPID;
+  pid_t myTID;
 #endif
 
   static std::string ourUnknownThreadName;

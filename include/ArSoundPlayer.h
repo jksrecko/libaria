@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #ifndef _ARSOUNDPLAYER_H_
@@ -50,7 +50,16 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
  * issue any output.  'play' from the 'sox' toolset automatically supresses
  * normal output if it isn't called from an interactive terminal, but it may
  * still issue some error messages, which will cause it to hang indefinately.
+ *
+ * The volume (level) of audio output from a robot is determined by two things:
+ * the computer sound device mixer, and also the amplifier which drives the
+ * speakers.  The computer's mixer can be adjusted through the operating system:
+ * on Linux, you can use the 'aumix' program to adjust the Master and PCM
+ * levels.  On Windows, use the Windows mixer program.  If on Linux, ArSoundPlayer also
+ * prodives the setVolume() method, which adjusts the volume of the sound before
+ * it is played.
  *  
+    @ingroup UtilityClasses
  */
 class ArSoundPlayer
 {
@@ -64,6 +73,8 @@ class ArSoundPlayer
     * @param params ignored
     */
   AREXPORT static bool playWavFile(const char* filename, const char* params);
+
+  AREXPORT static bool playWavFile(const char* filename) { return playWavFile(filename, NULL); }
 
   /** Play a file in some native file format for the compilation platform. */
   AREXPORT static bool playNativeFile(const char* filename, const char* params);
@@ -84,12 +95,28 @@ class ArSoundPlayer
    *  @return false on error, true on success.
    */
   AREXPORT static bool playSoundPCM16(char* data, int numSamples);
+
+  /** Set a volume adjustment applied to all sounds right before playing.
+     (So this adjusts the volume in addition to, not instead of, the
+      computer audio mixer). 
+      Any value less than or equal to 0 is no volume i.e. muted or no output.
+      @linuxonly
+  */
+  AREXPORT static void setVolume(double v);
+
+  /**
+      Set volume as a "percent" of normal, where 100% is normal or natural
+      volume, 50% is increased by 50%, -50% is decreased by 50%, etc. (-100.0% is 
+      no volume, or mute.)
+      @linuxonly
+  */
+  AREXPORT static void setVolumePercent(double pct);
  
 protected:
-  static int myPlayChildPID; ///< Only used on Linux.
+  static int ourPlayChildPID; ///< Only used on Linux.
   static ArGlobalRetFunctor2<bool, const char*, const char*> ourPlayWavFileCB;
   static ArGlobalFunctor ourStopPlayingCB;
-
+  static double ourVolume;
 };
     
   

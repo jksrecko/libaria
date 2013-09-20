@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include <ctype.h>
 #include "ArExport.h"
@@ -34,7 +34,8 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArArgumentBuilder.h"
 #include "ariaInternal.h"
 
-ArNetServer::ArNetServer(bool addAriaExitCB) :
+
+ArNetServer::ArNetServer(bool addAriaExitCB, bool doNotAddShutdownServer) :
   myTaskCB(this, &ArNetServer::runOnce),
   myHelpCB(this, &ArNetServer::internalHelp),
   myEchoCB(this, &ArNetServer::internalEcho),
@@ -54,8 +55,13 @@ ArNetServer::ArNetServer(bool addAriaExitCB) :
   addCommand("help", &myHelpCB, "gives the listing of available commands");
   addCommand("echo", &myEchoCB, "with no args gets echo, with args sets echo");
   addCommand("quit", &myQuitCB, "closes this connection to the server");
-  addCommand("shutdownServer", &myShutdownServerCB, "shuts down the server");
+  // MPL 2013_06_10 letting folks take out shutdownServer since it
+  // can do no good and much ill
+  if (!doNotAddShutdownServer)
+    addCommand("shutdownServer", &myShutdownServerCB, "shuts down the server");
 
+  myNextCycleSendsMutex.setLogName("ArNetServer::myNextCycleSendsMutex");
+  
   myAriaExitCB.setName("ArNetServerExit");
   if (addAriaExitCB)
     Aria::addExitCallback(&myAriaExitCB, 40);
@@ -141,9 +147,8 @@ AREXPORT bool ArNetServer::open(ArRobot *robot, unsigned int port,
     proc = rootTask->findNonRecursive(&myTaskCB);
     if (proc == NULL)
     {
-      // toss in a netserver
-      taskName = "Net Servers ";
-      taskName += myPort;
+      // toss in a netserver (it used to say the port name, but did it wrong so put in gibberish)
+      taskName = "TextServer";
       rootTask->addNewLeaf(taskName.c_str(), 60, &myTaskCB, NULL);
     }
   }
@@ -195,6 +200,7 @@ AREXPORT void ArNetServer::sendToAllClientsPlain(const char *str)
 
   if (myLoggingDataSent)
     ArLog::log(ArLog::Terse, "ArNetServer::sendToAllClients: Sending %s", str);
+
   for (it = myConns.begin(); it != myConns.end(); ++it)
   {
     (*it)->setLogWriteStrings(false);
@@ -210,12 +216,43 @@ AREXPORT void ArNetServer::sendToAllClientsPlain(const char *str)
 **/
 AREXPORT void ArNetServer::sendToAllClients(const char *str, ...)
 {
-  char buf[2049];
+  char buf[40000];
   va_list ptr;
   va_start(ptr, str);
   vsprintf(buf, str, ptr);
 
   sendToAllClientsPlain(buf);
+  
+  va_end(ptr);
+}
+
+
+
+AREXPORT void ArNetServer::sendToAllClientsNextCyclePlain(const char *str)
+{
+  std::list<ArSocket *>::iterator it;
+
+  if (myLoggingDataSent)
+    ArLog::log(ArLog::Terse, "ArNetServer::sendToAllClientsNextCycle: Next cycle will send: %s", str);
+
+  myNextCycleSendsMutex.lock();
+  myNextCycleSends.push_back(str);
+  myNextCycleSendsMutex.unlock();
+}
+
+
+/**
+   This sends the given string to all the clients, this string cannot
+   be more than 2048 number of bytes
+**/
+AREXPORT void ArNetServer::sendToAllClientsNextCycle(const char *str, ...)
+{
+  char buf[40000];
+  va_list ptr;
+  va_start(ptr, str);
+  vsprintf(buf, str, ptr);
+
+  sendToAllClientsNextCyclePlain(buf);
   
   va_end(ptr);
 }
@@ -311,6 +348,18 @@ AREXPORT void ArNetServer::runOnce(void)
     return;
   }
 
+  // copy the strings we want to send next cycle
+  myNextCycleSendsMutex.lock();
+
+  std::list<std::string> nextCycleSends;
+  std::list<std::string>::iterator ncsIt;;
+  
+  nextCycleSends = myNextCycleSends;
+  myNextCycleSends.clear();
+
+  myNextCycleSendsMutex.unlock();
+
+
   lock();
   // get any new sockets that want to connect
   while (myServerSocket.accept(&myAcceptingSocket) &&
@@ -393,11 +442,35 @@ AREXPORT void ArNetServer::runOnce(void)
   }
 
 
-  // now we read in data from our connecting sockets and see if
-  // they've given us the password
+
+  // first send it all the things to be sent the next cycle... this
+  // could be done in the for loop below this one, but since we want
+  // to only log once per broadcast it's done here
+  for (ncsIt = nextCycleSends.begin(); 
+       ncsIt != nextCycleSends.end(); 
+       ncsIt++)
+  {
+
+    // now we read in data from our connected sockets 
+    for (it = myConns.begin(); it != myConns.end() && myOpened; ++it)
+    {
+      socket = (*it);
+
+      socket->setLogWriteStrings(false);
+
+      if (myLoggingDataSent)
+	ArLog::log(ArLog::Terse, "ArNetServer::sendToAllClientsNextCycle: Sending: %s", (*ncsIt).c_str());
+      socket->writeString((*ncsIt).c_str());
+      
+      socket->setLogWriteStrings(myLoggingDataSent);
+    }
+  }
+
+  // now we read in data from our connected sockets 
   for (it = myConns.begin(); it != myConns.end() && myOpened; ++it)
   {
     socket = (*it);
+
     // read in what the client has to say
     while ((str = socket->readString()) != NULL)
     {
@@ -431,9 +504,12 @@ AREXPORT void ArNetServer::runOnce(void)
     socket = (*it);
     myConnectingConns.remove(socket);
     myConns.remove(socket);
+    // remove this instead of the old pop since there could be two of
+    // the same in the list if it lost connection exactly when it
+    // parsed the quit
+    myDeleteList.remove(socket);
     socket->close();
     delete socket;
-    myDeleteList.pop_front();
   }
 
   if (myWantToClose)
@@ -493,6 +569,7 @@ AREXPORT void ArNetServer::internalHelp(ArSocket *socket)
  for (it = myHelpMap.begin(); it != myHelpMap.end(); ++it)
    socket->writeString("%15s%10s%s", it->first.c_str(), "", 
 		       it->second.c_str());
+ socket->writeString("End of commands");
 }
 
 AREXPORT void ArNetServer::internalHelp(char **argv, int argc, 

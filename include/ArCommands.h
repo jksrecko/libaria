@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARCOMMANDS_H
 #define ARCOMMANDS_H
@@ -30,6 +30,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 /**
    A class with an enum of the commands that can be sent to the robot, see the 
    robot operations manual for more detailed descriptions.
+ @ingroup OptionalClasses
 */
 class ArCommands
 {
@@ -135,11 +136,21 @@ public:
   POWER_AUDIO = 128, ///< int, Powers on or off the audio (if the firwmare is set up to do this in its power settings)
   POWER_LRF2 = 129, ///< int, Powers on or off the second laser (if the firwmare is set up to do this in its power settings)
 
-
   // For SEEKUR or later lateral-capable robots
   LATVEL = 110, ///< int, sets the lateral velocity (mm)
   LATACCEL = 113, ///< int, sets the lateral acceleration (+, mm/sec2) or lateral deceleration (-, mm/sec2)
   SETLATV = 0, /// set max. lat. vel. (not available yet)
+
+  // MTX commands
+  SRECORD = 210, /// < int, (for downloading MTX firmware) byte with 0 for wait, 1 for OK, -1 for ERROR (waiting might take 3-5 seconds
+  MARCDEBUG = 211, ///<  for debug messages from MARC, possibly responses, possibly pushed... they are ascii strings that should be logged
+  WHEEL_LIGHT = 212, ///<  For the wheel lights
+  ABSOLUTE_MAXES = 213, ///<  To set the absolute maxes
+
+  SAFETY_STATE_INFO = 214, ///< int, request safety state info packets (0 == stop, 1 == send once, 2 == send continuous),
+  SAFETY_SET_STATE = 215, ///< 2 bytes, first byte which system, second byte for value
+  SAFETY_DISABLE_POWER_OFF_TIMER = 216, ///< int, 0 set off, 1 set on
+
 
   // MobileSim specific:
   SIM_SET_POSE = 224,       ///< int4,int4,int4 Move robot to global pose in simulator (does not change odometry). Each value is a 4-byte integer.

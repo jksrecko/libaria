@@ -19,8 +19,11 @@
 class ArClientSwitchManager : public ArASyncTask
 {
 public:
-  AREXPORT ArClientSwitchManager(ArServerBase *serverBase, 
-				 ArArgumentParser *parser);
+  AREXPORT ArClientSwitchManager(
+	  ArServerBase *serverBase, 
+	  ArArgumentParser *parser, 
+	  const char *serverDescription = "Central Server",
+	  const char *clientSoftwareDescription = "Software");
   AREXPORT virtual ~ArClientSwitchManager();
   /// Returns if we're connected or not
   AREXPORT bool isConnected(void);
@@ -30,6 +33,23 @@ public:
   AREXPORT void logOptions(void) const;
   /// Gets the hostname we're using for the central server (NULL means we're not trying to sue the central server)
   AREXPORT const char *getCentralServerHostName(void);
+  /// Gets the identifier we're using
+  AREXPORT const char *getIdentifier(void);
+  /// Sets the identifier we're using
+  AREXPORT void setIdentifier(const char *identifier)
+	{ myIdentifier = identifier; }
+
+  /// Enforces the that the server is using this protocol version
+  AREXPORT void enforceProtocolVersion(const char *protocolVersion);
+  /// Enforces that the robots that connect are this type
+  AREXPORT void enforceType(ArServerCommands::Type type);
+
+  /// Gets the config display hint items dependent on the central
+  /// server should use (still check getCentralServerHostName to see
+  /// if it's being used)
+  const char *getConfigDisplayHint(void) 
+    { return myConfigDisplayHint.c_str(); }
+
   /// The handler for the response to the switch command
   AREXPORT void clientSwitch(ArNetPacket *packet);
   /// The handler for the packet to let the server know we're still talking to it
@@ -49,10 +69,42 @@ public:
     { myDebugLogging = debugLogging; }
   /// Gets if this is using debug logging 
   AREXPORT bool getDebugLogging(void) { return myDebugLogging; }
+  
+  /// Gets the server client the forwarder is using (internal)
+  /**
+     @internal
+  **/
+  AREXPORT ArServerClient* getServerClient(void) 
+    { return myServerClient; }    
+
+  /// Adds central server or identifier not passed into the config
+  AREXPORT void addToConfig(const char *configSection,
+			    const char *connectName, const char *connectDesc, 
+			    const char *addressName, const char *addressDesc);
+
+  /// Adds a callback when we switch states while starting
+  AREXPORT void addFailedConnectCB(
+	  ArFunctor1<const char *> *functor, int position = 50) 
+    { myFailedConnectCBList.addCallback(functor, position); }
+  /// Removes a callback when we switch to running
+  AREXPORT void remFailedConnectCB(ArFunctor1<const char *> *functor)
+    { myFailedConnectCBList.remCallback(functor); }
+
+  /// Adds a callback when we switch states while starting
+  AREXPORT void addConnectedCB(
+	  ArFunctor1<const char *> *functor, int position = 50) 
+    { myConnectedCBList.addCallback(functor, position); }
+  /// Removes a callback when we switch to running
+  AREXPORT void remConnectedCB(ArFunctor1<const char *> *functor)
+    { myConnectedCBList.remCallback(functor); }
+
+
 protected:
   AREXPORT void socketClosed(void);
   ArServerBase *myServer;  
   ArArgumentParser *myParser;
+  std::string myServerDesc;
+  std::string myClientSoftwareDesc;
   
   ArServerClient *myServerClient;
   ArTime myLastTcpHeartbeat;
@@ -97,6 +149,18 @@ protected:
   std::string myCentralServer;
   int myCentralServerPort;  
   std::string myIdentifier;
+
+  std::string myEnforceProtocolVersion;
+  ArServerCommands::Type myEnforceType;
+
+  bool myConfigFirstProcess;
+  bool myConfigConnectToCentralServer;
+  char myConfigCentralServer[1024];
+  char myConfigIdentifier[1024];
+  std::string myConfigDisplayHint;
+
+  ArCallbackList1<const char *> myFailedConnectCBList;
+  ArCallbackList1<const char *> myConnectedCBList;
 
   bool myDebugLogging;
 

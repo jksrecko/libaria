@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #ifndef ARGPS_H
@@ -43,7 +43,7 @@ class ArDeviceConnection; // for pointer in ArGPS
  *  Connects to GPS device over a serial port or other device connection and reads data.
  *  Supports GPS devices sending standard NMEA format data 
  *  (specifically the GPRMC, GPGGA, GPGSA, GPGRME, and optionally GPGSV, PGRMZ, PGRME, 
- *  and HCHDG/T/M messages). 
+ *  HCHDG/T/M and GPHDG/T/M messages). 
  *  If your GPS device supports several data formats or modes, select
  *  NMEA output in its configuration.
  *
@@ -97,6 +97,9 @@ class ArDeviceConnection; // for pointer in ArGPS
  *  the subclasses of Ar3DPoint (ArLLACoords, etc) to convert between different
  *  geographical coordinate systems, which may help you match GPS coordinates to
  *  the robot pose coordinate system.
+
+  @ingroup OptionalClasses
+   @ingroup DeviceClasses
  */
 class ArGPS {
 
@@ -125,10 +128,10 @@ public:
      *
      *  @sa blockingConnect()
      */
-    AREXPORT virtual bool connect(unsigned long connectTimeout = 10000);
+    AREXPORT virtual bool connect(unsigned long connectTimeout = 20000);
 
-    /** Same as connect(). See connect(). */
-    bool blockingConnect(unsigned long connectTimeout = 10000) { return connect(connectTimeout); }
+    /** Same as connect(). See connect().  */
+    bool blockingConnect(unsigned long connectTimeout = 20000) { return connect(connectTimeout); }
 
 protected:
     /** Block until data is read from GPS.
@@ -220,186 +223,229 @@ public:
     class Data {
     public:
         AREXPORT Data();
-        double latitude;
-        double longitude;
-        bool havePosition;
-        ArTime timeGotPosition;   ///< Local computer time when ArGPS class received the position message from the GPS
-        double speed;
-        bool haveSpeed;
-        ArTime GPSPositionTimestamp;   ///< Timestamp provided by GPS device along with latitude and longitude
-        ArGPS::FixType fixType;
+        double latitude; ///< (from NMEA GPRMC)
+        double longitude; ///< (from NMEA GPRMC)
+        bool havePosition; ///< (from NMEA GPRMC)
+        ArTime timeGotPosition;   ///< Local computer time when ArGPS class received the position message from the GPS. (From NMEA GPRMC)
+        double speed; ///< (From NMEA GPRMC, if provided)
+        bool haveSpeed; ///< (From NMEA GPRMC)
+        ArTime GPSPositionTimestamp;   ///< Timestamp provided by GPS device along with latitude and longitude. (from NMEA GPRMC)
+        ArGPS::FixType fixType; ///< (from NMEA GPGGA)
         unsigned short numSatellitesTracked;
-        double altitude;    ///< received provides this based on GPS data
-        bool haveAltitude;
-        double altimeter;   ///< from seperate altimeter (if receiver provides PGRMZ message)
+        double altitude;    ///< receiver provides this based on GPS data.  meters above sea level. (from NMEA GPGGA)
+        bool haveAltitude; //< (from NMEA GPGGA)
+        double altimeter;   ///< from seperate altimeter (if receiver provides PGRMZ message). meters above sea level.
         bool haveAltimeter;
-        unsigned short DGPSStationID;
-        bool haveDGPSStation;
+        unsigned short DGPSStationID; ///< (from NMEA GPGGA)
+        bool haveDGPSStation; ///< (from NMEA GPGGA)
         double garminPositionError; ///< Error in meters, only some GPS devices provide this
-        bool haveGarminPositionError; ///< Error in meters, only some GPS devices provide this
-        double garminVerticalPositionError; ///< Error in meters, only some GPS devices provide this
-        bool haveGarminVerticalPositionError; ///< Error in meters, only some GPS devices provide this
-        double compassHeadingMag;
-        double compassHeadingTrue;
-        bool haveCompassHeadingMag;
-        bool haveCompassHeadingTrue;
+        bool haveGarminPositionError; ///< Error in meters, only some GPS devices provide this (PGRME)
+        double garminVerticalPositionError; ///< Error in meters, only some GPS devices provide this (PGRME)
+        bool haveGarminVerticalPositionError; ///< Error in meters, only some GPS devices provide this (PGRME)
+        double compassHeadingMag; ///< (from HCDHM message, if device provides it)
+        double compassHeadingTrue; ///< (from HCHDT, if device provides it)
+        bool haveCompassHeadingMag; ///< (from HCDHM message, if device provides it)
+        bool haveCompassHeadingTrue; ///< (from HCHDT message, if device provides it)
         unsigned long compassMagCounter;  ///< Incremented whenever @a compassHeadingMag is updated with new data
         unsigned long compassTrueCounter;  ///< Incremented whenever @a compassHeadingMag is updated with new data
-        bool haveHDOP; ///< Horizontal dilution of precision
-        double HDOP; ///< Horizontal dilution of precision
-        bool haveVDOP; ///< Vertical dilution of precision
-        double VDOP; ///< Vertical dilution of precision
-        bool havePDOP; ///< Combined dilution of precision
-        double PDOP; ///< Combined dilution of precision
+        bool haveHDOP; ///< Horizontal dilution of precision (from NMEA GPGGA)
+        double HDOP; ///< Horizontal dilution of precision (from NMEA GPGGA)
+        bool haveVDOP; ///< Vertical dilution of precision (from NMEA GPGGA)
+        double VDOP; ///< Vertical dilution of precision (from NMEA GPGGA)
+        bool havePDOP; ///< Combined dilution of precision (from NMEA GPGGA)
+        double PDOP; ///< Combined dilution of precision (from NMEA GPGGA)
         bool qualityFlag;   ///< Some GPS devices set this to false if data quality is below some thresholds.
         double meanSNR;   ///< Mean of satellite signal-noise ratios (dB)
-        bool haveSNR;
-        double beaconSignalStrength;  ///< dB
-        double beaconSNR; ///< dB
-        double beaconFreq; ///< kHz
-        unsigned short beaconBPS; ///< Bits/sec
-        unsigned short beaconChannel;
-        bool haveBeaconInfo;
-        double inputsRMS;
-        bool haveInputsRMS;
-        ArPose errorEllipse; ///< Ellipse shows standard deviation, in meters. Orientation is degrees from true north.
-        bool haveErrorEllipse;
+        bool haveSNR; ///< (from NMEA GPGSV)
+        double beaconSignalStrength;  ///< dB (from NMEA GPMSS)
+        double beaconSNR; ///< dB  (from NMEA GPMSS)
+        double beaconFreq; ///< kHz (from NMEA GPMSS)
+        unsigned short beaconBPS; ///< Bits/sec (from NMEA GPMSS)
+        unsigned short beaconChannel; ///< (from NMEA GPMSS)
+        bool haveBeaconInfo; ///< (from NMEA GPMSS)
+        double inputsRMS; ///< (from NMEA GPGST)
+        bool haveInputsRMS; ///< (from NMEA GPGST)
+        ArPose errorEllipse; ///< Ellipse shows standard deviation, in meters. Orientation is degrees from true north. (from NMEA GPGST)
+        bool haveErrorEllipse; ///< (from NMEA GPGST)
         ArPose latLonError; ///< Std.deviation, meters. Theta is unused. May only be provided by the GPS in certain fix modes. Note, values could be inf or nan (GPS sends these in some situations). Use isinf() and isnan() to check.
         bool haveLatLonError;
         double altitudeError; ///< Std. deviation, meters. Note, value could be inf or nan (GPS sends these in some situations). use isinf() and isnan() to check.
         bool haveAltitudeError;
     };
 
-    const ArGPS::Data& getCurrentDataRef( ) const { return myData; } 
+    /** Access all of the internally stored data directly. @see ArGPS::Data  */
+    const ArGPS::Data& getCurrentDataRef() const { return myData; } 
 
+    /** (from NMEA GPGGA) */
     FixType getFixType() const { return myData.fixType; }
+    /** (from NMEA GPGGA) */
     AREXPORT const char* getFixTypeName() const;
     static AREXPORT const char* getFixTypeName(FixType type);
 
+    /** (from NMEA GPRMC) */
     AREXPORT bool havePosition() const { return myData.havePosition; }
+    /** (from NMEA GPRMC) */
     AREXPORT bool haveLatitude() const { return myData.havePosition; }
+    /** (from NMEA GPRMC) */
     AREXPORT bool haveLongitude() const { return myData.havePosition; }
 
-    /** @return latitude in decimal degrees */
+    /** @return latitude in decimal degrees. 
+        (from NMEA GPRMC) */
     double getLatitude() const { return myData.latitude; }
 
-    /** @return longitude in decimal degrees */
+    /** @return longitude in decimal degrees. 
+        (from NMEA GPRMC) */
     double getLongitude() const { return myData.longitude; }
 
-    /** @return copy of an ArTime object set to the time that ArGPS read and received latitude and longitude data from the GPS. */
+    /** @return copy of an ArTime object set to the time that ArGPS read and received latitude and longitude data from the GPS. 
+        (from NMEA GPRMC) */
     ArTime getTimeReceivedPosition() const { return myData.timeGotPosition; }
 
+    /** (from NMEA GPRMC) */
     bool haveSpeed() const { return myData.haveSpeed; }
 
-    /** @return GPS' measured speed converted to meters per second */
+    /** @return GPS' measured speed converted to meters per second, if provided
+        (from NMEA GPRMC, if provided)
+        */
     double getSpeed() const { return myData.speed; }
 
+    /** Timestamp provided by GPS device along with position. (from NMEA GPRMC) */
     ArTime getGPSPositionTimestamp() const { return myData.GPSPositionTimestamp; }
 
     int getNumSatellitesTracked() const { return (int) myData.numSatellitesTracked; }
+    /** (from NMEA GPGGA) */
     bool haveDGPSStation() const { return myData.haveDGPSStation; }
+    /** (from NMEA GPGGA) */
     unsigned short getDGPSStationID() const { return myData.DGPSStationID; }
 
-    /** @return whether GPS provided a distance error estimation (only some Garmins do) */
+    /** @return whether GPS provided a distance error estimation (from a
+     * Garmin-specific message PGRME, most GPS receivers will not provide this) */
     bool haveGarminPositionError() const { return myData.haveGarminPositionError; }
-    /** GPS device's error estimation in meters */
+    /** GPS device's error estimation in meters (from a Garmin-specific message PGRME,
+ * most GPS receivers will not provide this)*/
     double getGarminPositionError() const { return myData.garminPositionError; }
-    /** @return whether GPS provided an altitude error estimation (only some device models do) */
+    /** @return whether GPS provided an altitude error estimation (from a
+     * Garmin-specific message PGRME, most GPS receivers will not provide this) */
     bool haveGarminVerticalPositionError() const { return myData.haveGarminVerticalPositionError; }
-    /// GPS device's error estimation in meters
+    /** @return An altitude error estimation (from a Garmin-specific message PGRME,
+ * most GPS receivers will not provide this) */
     double getGarminVerticalPositionError() const { return myData.garminVerticalPositionError; }
 
-    /// Have a compass heading value relative to magnetic north
+    /** Have a compass heading value relative to magnetic north.
+        @note The GPS or compass device must be configured to send HCHDM messages 
+        to receive compass data. Only some GPS receivers support this. 
+    */
     bool haveCompassHeadingMag() const { return myData.haveCompassHeadingMag; }
-    /// Have a compass heading value relative to true north (using device's configured declination)
+    /** Have a compass heading value relative to true north (using GPS/compass
+        device's configured declination).
+        @note The GPS or compass device must be configured to send HCHDT messages 
+        to receive compass data. Only some GPS receivers support this. 
+    */
     bool haveCompassHeadingTrue() const { return myData.haveCompassHeadingTrue; }
-    /// Heading from magnetic north
+    /** Heading from magnetic north
+        @note The GPS or compass device must be configured to send HCHDM messages 
+        to receive compass data. Only some GPS receivers support this. 
+    */
     double getCompassHeadingMag() const { return myData.compassHeadingMag; }
-    /// Heading from true north
+    /** Heading from true north
+        @note The GPS or compass device must be configured to send HCHDT messages 
+        to receive compass data. Only some GPS receivers support this. 
+    */
     double getCompassHeadingTrue() const { return myData.compassHeadingTrue; }
 
 
-    /** Manually set compass values. */
-    //@{
+    /** Manually set compass value. */
     void setCompassHeadingMag(double val) { 
       myData.haveCompassHeadingMag = true;
       myData.compassHeadingMag = val; 
       myData.compassMagCounter++; 
     }
 
+    /** Manually set compass value. */
     void setCompassHeadingTrue(double val) { 
       myData.haveCompassHeadingTrue = true;
       myData.compassHeadingTrue = val; 
       myData.compassMagCounter++; 
     }
 
+    /** Manually set compass value. */
     void setCompassHeadingMagWithLock(double val) { lock(); setCompassHeadingMag(val); unlock(); }
+    /** Manually set compass value. */
     void setCompassHeadingTrueWithLock(double val) { lock(); setCompassHeadingTrue(val); unlock(); }
-    //@}
 
-    /// Calculated from GPS 
+    /// Altitude above sea level calculated from satellite positions (see also haveAltimiter()) (from NMEA GPGGA, if provided)
     bool haveAltitude() const { return myData.haveAltitude; }
-    /// Calculated from GPS 
+    /// Altitude above sea level (meters), calculated from satellite positions (see also getAltimiter()) (from NMEA GPGGA, if provided)
     double getAltitude() const { return myData.altitude; }
 
+    /// Some receivers may have an additional altitude from an altimiter (meters above sea level) (from PGRMZ, if receiver provides it)
     bool haveAltimeter() const { return myData.haveAltimeter; }
+    /// Some receivers may have an additional altitude from an altimiter (meters above sea level) (from PGRMZ, if receiver provides it)
     double getAltimeter() const { return myData.altimeter; }
 
+    /** (from NMEA GPGGA) */
     bool haveHDOP() const { return myData.haveHDOP; }
+    /** (from NMEA GPGGA) */
     double getHDOP() const { return myData.HDOP; }
+    /** (from NMEA GPGGA) */
     bool haveVDOP() const { return myData.haveVDOP; }
+    /** (from NMEA GPGGA) */
     double getVDOP() const { return myData.VDOP; }
+    /** (from NMEA GPGGA) */
     bool havePDOP() const { return myData.havePDOP; }
+    /** (from NMEA GPGGA) */
     double getPDOP() const { return myData.PDOP; }
 
+    /** (from NMEA GPGSV) */
     bool haveSNR() const { return myData.haveSNR; }
-    /// dB
+    /// dB (from NMEA GPGSV)
     double getMeanSNR() const { return myData.meanSNR; }
 
-    /** DGPS stationary beacon info */
-    //@{
+    /** Whether we have any DGPS stationary beacon info  (from NMEA GPMSS) */
     bool haveBeaconInfo() const { return myData.haveBeaconInfo; }
-    /// dB
+    /** DGPS stationary beacon signal strength (dB) (from NMEA GPMSS) */
     double getBeaconSignalStrength() const { return myData.beaconSignalStrength; }  
-    /// dB
+    /** DGPS stationary beacon signal to noise (dB) (from NMEA GPMSS) */
     double getBeaconSNR() const { return myData.beaconSNR; }  
-    /// kHz
+    /** DGPS stationary beacon frequency (kHz) (from NMEA GPMSS) */
     double getBeaconFreq() const { return myData.beaconFreq; }
-    /// bitrate (bits per second)
+    /** DGPS stationary beacon bitrate (bits per second) (from NMEA GPMSS) */
     unsigned short getBecaonBPS() const { return myData.beaconBPS; }
+    /** DGPS stationary beacon channel (from NMEA GPMSS) */
     unsigned short getBeaconChannel() const { return myData.beaconChannel; }
-    //@}
 
-    /** Standard deviation of position error, meters. Theta in ArPose is orientation of ellipse from true north, Y is the length of the major axis on that orientation, X the minor.
+    /** Whether we have a position error estimate (as standard deviations in latitude and longitude) (from NMEA GPGST) */
+    bool haveErrorEllipse() const { return myData.haveErrorEllipse; }
+    /** Standard deviation of position error (latitude and longitude), meters. Theta in ArPose is orientation of ellipse from true north, Y is the length of the major axis on that orientation, X the minor.
+        (from NMEA GPGST)
         @note Values may be inf or NaN (if GPS supplies "Inf" or "NAN")
     */
-    //@{
-    bool haveErrorEllipse() const { return myData.haveErrorEllipse; }
     ArPose getErrorEllipse() const {return myData.errorEllipse; }
-    //@}
     
+    /** Whether we have latitude or longitude error estimates  (from NMEA GPGST) */
+    bool haveLatLonError() const { return myData.haveLatLonError; }
     /** Standard deviation of latitude and longitude error, meters. 
         Theta value in ArPose is unused. 
         @note May only be provided by GPS in certain fix modes
           (e.g. Trimble AgGPS provides it in Omnistar and RTK modes, but not in GPS
           or DGPS modes).
         @note Values may be inf or NaN (if GPS supplies "Inf" or "NAN")
+        (from NMEA GPGST)
     */
-    //@{
-    bool haveLatLonError() const { return myData.haveLatLonError; }
     ArPose getLatLonError() const { return myData.latLonError; }
+    /** @copydoc getLatLonError() */
     double getLatitudeError() const { return myData.latLonError.getX(); }
+    /** @copydoc getLatLonError() */
     double getLongitudeError() const { return myData.latLonError.getY(); }
 
     bool haveAltitudeError() const { return myData.haveAltitudeError; }
-    /// Standard deviation of altitude error, meters.
+    /// Standard deviation of altitude error, meters. (from NMEA GPGST, if provided)
     double getAltitudeError() const { return myData.altitudeError; }
     
-
+    /// (from NMEA GPGST)
     bool haveInputsRMS() const { return myData.haveInputsRMS; }
+    /// (from NMEA GPGST)
     double getInputsRMS() const { return myData.inputsRMS; }
-
-    //@}
 
     
 
@@ -410,6 +456,10 @@ public:
      */
     void addNMEAHandler(const char *message, ArNMEAParser::Handler *handler) { myNMEAParser.addHandler(message, handler); }
     void removeNMEAHandler(const char *message) { myNMEAParser.removeHandler(message); }
+    void replaceNMEAHandler(const char *message, ArNMEAParser::Handler *handler) { 
+      myNMEAParser.removeHandler(message);
+      myNMEAParser.addHandler(message, handler); 
+    }
 
 protected:
 
@@ -420,19 +470,19 @@ protected:
     /* Utility to read a double floating point number out of a std::string, if possible.
      * @return true if the string was nonempty and @a target was modified.
      */
-    bool readFloatFromString(std::string& str, double* target, double(*convf)(double) = NULL) const;
+    bool readFloatFromString(const std::string& str, double* target, double(*convf)(double) = NULL) const;
 
     /* Utility to read an unsigned short integer out of a std::string, if possible.
      * @return true if the string was nonempty and @a target was modified.
      */
-    bool readUShortFromString(std::string& str, unsigned short* target, unsigned short (*convf)(unsigned short) = NULL) const;
+    bool readUShortFromString(const std::string& str, unsigned short* target, unsigned short (*convf)(unsigned short) = NULL) const;
 
 
     /* Utility to read a double from a member of a vector of strings, if it exists. */
-    bool readFloatFromStringVec(std::vector<std::string>* vec, size_t i, double* target, double (*convf)(double) = NULL) const;
+    bool readFloatFromStringVec(const std::vector<std::string>* vec, size_t i, double* target, double (*convf)(double) = NULL) const;
 
     /* Utility to read a double from a member of a vector of strings, if it exists. */
-    bool readUShortFromStringVec(std::vector<std::string>* vec, size_t i, unsigned short* target, unsigned short (*convf)(unsigned short) = NULL) const;
+    bool readUShortFromStringVec(const std::vector<std::string>* vec, size_t i, unsigned short* target, unsigned short (*convf)(unsigned short) = NULL) const;
 
     /* Utility to convert DDDMM.MMMM to decimal degrees */
     static double gpsDegminToDegrees(double degmin);
@@ -440,8 +490,8 @@ protected:
     /* Utility to convert US nautical knots to meters/sec */
     static double knotsToMPS(double knots);
  
-    /* Utility to convert meters/sec to miles/hour */
-    static double mpsToMph(double mps) { return mps * 2.23693629; }
+    /** Convert meters per second to miles per hour */
+    static double mpsToMph(const double mps) { return mps * 2.23693629; }
 
     /* Utility to convert meters to US feet */
     static double metersToFeet(double m) { return m * 3.2808399; }
@@ -507,6 +557,67 @@ protected:
      */
     void parseGPRMC(const ArNMEAParser::Message &msg, double &latitudeResult, double &longitudeResult, bool &qualityFlagResult, bool &gotPosition, ArTime &timeGotPositionResult, ArTime &gpsTimestampResult, bool &gotSpeedResult, double &speedResult);
 
+};
+
+
+class ArRobotPacket;
+class ArRobot;
+
+/// @since Aria 2.7.4
+class ArSimulatedGPS : public virtual ArGPS
+{
+  bool myHaveDummyPosition;
+  ArRetFunctor1C<bool, ArSimulatedGPS, ArRobotPacket*> mySimStatHandlerCB;
+  ArRobot *myRobot;
+public:
+  AREXPORT ArSimulatedGPS(ArRobot *robot = NULL);
+  AREXPORT virtual ~ArSimulatedGPS();
+  void setDummyPosition(double latitude, double longitude) {
+    myData.latitude = latitude;
+    myData.havePosition = true;
+    myData.longitude = longitude;
+    if(!myData.haveHDOP) myData.HDOP = 1.0;
+    myData.haveHDOP = true;
+    if(!myData.haveVDOP) myData.VDOP = 1.0;
+    myData.haveVDOP = true;
+    if(!myData.havePDOP) myData.PDOP = 1.0;
+    myData.havePDOP = true;
+    myData.fixType = SimulatedFix;
+    myHaveDummyPosition = true;
+  }
+  void clearDummyPosition() {
+    clearPosition();
+    myHaveDummyPosition = false;
+  }
+  void clearPosition() {
+    myData.havePosition = false;
+    myData.latitude = 0;
+    myData.longitude = 0;
+    myData.altitude = 0;
+    myData.HDOP = 0;
+    myData.VDOP = 0;
+    myData.PDOP = 0;
+    myData.fixType = NoFix;
+  }
+  void setDummyPosition(double latitude, double longitude, double altitude) {
+    myData.altitude = altitude;
+    setDummyPosition(latitude, longitude);
+  }
+  AREXPORT void setDummyPosition(ArArgumentBuilder *args); 
+  void setDummyPositionFromArgs(ArArgumentBuilder *args) { setDummyPosition(args); } // non-overloaded function can be used in functors
+  AREXPORT virtual bool connect(unsigned long connectTimeout = 10000);
+  virtual bool initDevice() { return true; }
+  virtual int read(unsigned long maxTime = 0) {
+    if(myHaveDummyPosition)
+    {
+      myData.timeGotPosition.setToNow();
+    }
+    return ReadUpdated | ReadFinished;
+  }
+private:
+#ifndef SWIG
+  bool handleSimStatPacket(ArRobotPacket *pkt); 
+#endif
 };
 
 #endif // ifdef ARGPS_H

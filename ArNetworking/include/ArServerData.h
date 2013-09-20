@@ -24,7 +24,7 @@ public:
 	  const char *commandGroup = NULL, const char *dataFlags = NULL,
 	  ArRetFunctor1<long, unsigned int> *getFrequencyFunctor = NULL,
 	  ArFunctor2<long, unsigned int> *requestChangedFunctor = NULL, 
-	  ArFunctor2<ArServerClient *, ArNetPacket *> 
+	  ArRetFunctor2<bool, ArServerClient *, ArNetPacket *> 
 	  *requestOnceFunctor = NULL);
   /// Destructor
   AREXPORT virtual ~ArServerData();
@@ -39,7 +39,7 @@ public:
     { return myReturnDescription.c_str(); }
   const char *getCommandGroup(void) 
     { return myCommandGroup.c_str(); }
-  ArFunctor2<ArServerClient *, ArNetPacket *> *getRequestOnceFunctor(void)
+  ArRetFunctor2<bool, ArServerClient *, ArNetPacket *> *getRequestOnceFunctor(void)
     { return myRequestOnceFunctor; }
   AREXPORT bool hasDataFlag(const char *dataFlag);
   AREXPORT bool addDataFlags(const char *dataFlags);
@@ -62,7 +62,7 @@ protected:
   ArFunctor2<ArServerClient *, ArNetPacket *> *myFunctor;
   ArRetFunctor1<long, unsigned int> *myGetFrequencyFunctor;
   ArFunctor2<long, unsigned int> *myRequestChangedFunctor;
-  ArFunctor2<ArServerClient *, ArNetPacket *> *myRequestOnceFunctor;
+  ArRetFunctor2<bool, ArServerClient *, ArNetPacket *> *myRequestOnceFunctor;
   bool mySlowPacket;
   bool myIdlePacket;
 };

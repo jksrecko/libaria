@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARROBOTPACKETSENDER_H
 #define ARROBOTPACKETSENDER_H
@@ -43,6 +43,12 @@ public:
   AREXPORT ArRobotPacketSender(ArDeviceConnection *deviceConnection,
 			       unsigned char sync1 = 0xfa,
 			       unsigned char sync2 = 0xfb);
+  /// Constructor with assignment of a device connection and tracking
+  AREXPORT ArRobotPacketSender(ArDeviceConnection *deviceConnection,
+			       unsigned char sync1,
+			       unsigned char sync2,
+						bool tracking,
+						const char *trackingLogName);
   /// Destructor
   AREXPORT virtual ~ArRobotPacketSender();
 
@@ -58,16 +64,30 @@ public:
   AREXPORT bool comStrN(unsigned char command, const char *str, int size);
   /// Sends a command containing exactly the data in the given buffer as argument
   AREXPORT bool comDataN(unsigned char command, const char *data, int size);
+  /// Sends a ArRobotPacket
+  AREXPORT bool sendPacket(ArRobotPacket *packet);
   
   /// Sets the device this instance sends commands to
   AREXPORT void setDeviceConnection(ArDeviceConnection *deviceConnection);
   /// Gets the device this instance sends commands to
   AREXPORT ArDeviceConnection *getDeviceConnection(void);
 
+  /// Sets the callback that gets called with the finalized version of
+  /// every packet set... this is ONLY for very internal very
+  /// specialized use
+  AREXPORT void setPacketSentCallback(ArFunctor1<ArRobotPacket *> *functor);
 protected:
   bool connValid(void);
   ArDeviceConnection * myDeviceConn;
   ArRobotPacket myPacket;
+
+	bool myTracking;
+	std::string myTrackingLogName;
+
+  ArMutex mySendingMutex;
+
+  ArFunctor1<ArRobotPacket *> *myPacketSentCallback;
+
   enum { INTARG = 0x3B, NINTARG = 0x1B, STRARG = 0x2B };
 };
 

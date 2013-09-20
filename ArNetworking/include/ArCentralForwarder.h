@@ -6,32 +6,81 @@
 #include "ArClientBase.h"
 
 /**
-   Class 
+   Class for forwarding...  You sould use the commands on this instead
+   of the ones on the server and client it holds.  
+  
+   requestStop is missing since that'd only cause problems.
+
+   request doesn't take a packet since that'd cause problems with the
+   proxying, other than that everything should be like the client.
+
+   Talk to MattL if there's questions.
 **/
 class ArCentralForwarder 
 {
 public:
   AREXPORT ArCentralForwarder(
 	  ArServerBase *mainServer, ArSocket *socket,
-	  const char *robotName, int startingPort, std::set<int> *usedPorts,
+	  const char *robotName, int startingPort, 
+	  std::map<int, ArTime *> *usedPorts,
 	  ArFunctor2<ArCentralForwarder *,
-	  ArServerClient *> *notifyServerClientRemovedCB);
+		     ArServerClient *> *notifyServerClientRemovedCB,
+	  const char *enforceProtocolVersion,
+	  ArServerCommands::Type enforceType
+      );
   AREXPORT ~ArCentralForwarder();
-  ArServerBase *getServer(void) { return myServer; }
-  ArClientBase *getClient(void) { return myClient; }
-  int getPort(void) { return myPort; }
+
+  /// Gets the robot name
   const char *getRobotName(void) { return myRobotName.c_str(); }
-  AREXPORT void netCentralHeartbeat(ArNetPacket *packet);
+
+  /// Adds a functor for some particular data
+  AREXPORT bool addHandler(const char *name, 
+			    ArFunctor1 <ArNetPacket *> *functor);
+
+  /// Removes a functor for some particular data by name
+  AREXPORT bool remHandler(const char *name, ArFunctor1<ArNetPacket *> *functor);
+
+  /// Request some data every @a mSec milliseconds
+  AREXPORT bool request(const char *name, long mSec);		
+
+  /// Request some data (or send a command) just once
+  AREXPORT bool requestOnce(const char *name, 
+			                      ArNetPacket *packet = NULL,
+                            bool quiet = false);
+
+  /// Request some data (or send a command) just once by UDP 
+  AREXPORT bool requestOnceUdp(const char *name, 
+			       ArNetPacket *packet = NULL, 
+			       bool quiet = false);
+
+  /// Request some data (or send a command) just once with a string as argument
+  AREXPORT bool requestOnceWithString(const char *name, const char *str);
+
+  /// Sees if this data exists
+  AREXPORT bool dataExists(const char *name);
+
+  
+
+  /// Gets the server (shouldn't need to be used by anyone)
+  ArServerBase *getServer(void) { return myServer; }
+  /// Gets the client (shouldn't need to be used by anyone)
+  ArClientBase *getClient(void) { return myClient; }
+  /// Gets the port (shouldn't need to be used by anyone)
+  int getPort(void) { return myPort; }
   AREXPORT bool callOnce(
 	  double heartbeatTimeout, double udpHeartbeatTimeout,
 	  double robotBackupTimeout, double clientBackupTimeout);
   AREXPORT bool isConnected(void) { return myState == STATE_CONNECTED; }
+  AREXPORT void willReplace(void) { myBeingReplaced = true; }
 protected:
+  AREXPORT void netCentralHeartbeat(ArNetPacket *packet);
+
   void robotServerClientRemoved(ArServerClient *client);
   void clientServerClientRemoved(ArServerClient *client);
   void receiveData(ArNetPacket *packet);
-  void requestChanged(long interval, unsigned int command);
-  void requestOnce(ArServerClient *client, ArNetPacket *packet);
+  void internalRequestChanged(long interval, unsigned int command);
+  bool internalRequestOnce(ArServerClient *client, ArNetPacket *packet,
+			   bool tcp);
 
   AREXPORT bool startingCallOnce(
 	  double heartbeatTimeout, double udpHeartbeatTimeout,
@@ -46,12 +95,15 @@ protected:
 	  double heartbeatTimeout, double udpHeartbeatTimeout,
 	  double robotBackupTimeout, double clientBackupTimeout);
 
+  std::string myEnforceProtocolVersion;
+  ArServerCommands::Type myEnforceType;
+
   ArServerBase *myMainServer;
   ArSocket *mySocket;
   std::string myRobotName;
   std::string myPrefix;
   int myStartingPort;
-  std::set<int> *myUsedPorts;
+  std::map<int, ArTime *> *myUsedPorts;
   ArFunctor2<ArCentralForwarder *,
 	     ArServerClient *> *myForwarderServerClientRemovedCB;
 
@@ -62,6 +114,8 @@ protected:
     STATE_GATHERING,
     STATE_CONNECTED
   };
+  bool myBeingReplaced;
+
 
   ArServerBase *myServer;
   ArClientBase *myClient;
@@ -88,14 +142,19 @@ protected:
   std::map<unsigned int, ArTime *> myLastRequest;
   std::map<unsigned int, ArTime *> myLastBroadcast;
 
+  ReturnType getReturnType(int command);
+  void checkRequestOnces(unsigned int command);
+  void setLastRequest(unsigned int command);
+  void setLastBroadcast(unsigned int command);
+
   ArTime myLastTcpHeartbeat;
   ArTime myLastUdpHeartbeat;
 
   ArFunctor1C<ArCentralForwarder, ArNetPacket *> myReceiveDataFunctor;
   ArFunctor2C<ArCentralForwarder, 
-	      long, unsigned int> myRequestChangedFunctor;
-  ArFunctor2C<ArCentralForwarder, 
-	      ArServerClient *, ArNetPacket *> myRequestOnceFunctor;
+	      long, unsigned int> myInternalRequestChangedFunctor;
+  ArRetFunctor3C<bool, ArCentralForwarder, ArServerClient *, 
+	      ArNetPacket *, bool> myInternalRequestOnceFunctor;
   ArFunctor1C<ArCentralForwarder, 
       ArServerClient *> myRobotServerClientRemovedCB;
   ArFunctor1C<ArCentralForwarder, 

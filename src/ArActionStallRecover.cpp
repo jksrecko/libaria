@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -34,16 +34,22 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
    @param name name of the action
    @param obstacleDistance distance at which not to move because of 
    obstacle. (mm)
-   @param cyclesToMove number of cycles to move (# of cycles)
-   @param speed speed at which to back up or go forward (mm/sec)
-   @param degreesToTurn number of degrees to turn (deg)
+   @param cyclesToMove default number of cycles to move (# of cycles) (may be
+changed via ArConfig)
+   @param speed default speed at which to back up or go forward (mm/sec) (may be
+changed via ArConfig)
+   @param degreesToTurn default number of degrees to turn (deg) (may be changed vi
+ArConfig)
+   @param enabled default value of "enabled" state configuration parameter (may
+be changed via ArConfig)
 */
 AREXPORT
 ArActionStallRecover::ArActionStallRecover(const char * name,
 					   double obstacleDistance, 
 					   int cyclesToMove, 
 					   double speed, 
-					   double degreesToTurn) :
+					   double degreesToTurn,
+					   bool enabled) :
     ArAction(name, "Recovers the robot from a stall.")
 {
   setNextArgument(ArArg("obstacle distance", &myObstacleDistance, 
@@ -58,6 +64,10 @@ ArActionStallRecover::ArActionStallRecover(const char * name,
   setNextArgument(ArArg("degrees to turn", &myDegreesToTurn, 
 			"Number of Degrees to turn (deg)"));
   myDegreesToTurn = degreesToTurn;
+  setNextArgument(ArArg("enabled", &myEnabled, 
+			"Whether stall recover is enabled or not"));
+  myEnabled = enabled;
+
   myState = STATE_NOTHING;
 
   myResolver = NULL;
@@ -83,6 +93,12 @@ ArActionStallRecover::~ArActionStallRecover()
 
 }
 
+AREXPORT void ArActionStallRecover::activate(void)
+{
+  myState = STATE_NOTHING;
+  ArAction::activate();
+}
+
 void ArActionStallRecover::addSequence(int sequence)
 {
   mySequence[mySequenceNum] = sequence;
@@ -94,6 +110,9 @@ ArActionDesired *ArActionStallRecover::fire(ArActionDesired currentDesired)
 {
   std::string doingString;
 
+  if (!myEnabled)
+    return NULL;
+  
   if (myRobot->isLeftMotorStalled())
     ArLog::log(ArLog::Verbose, "########## Left stall");
   if (myRobot->isRightMotorStalled())
@@ -272,17 +291,18 @@ void ArActionStallRecover::doit(void)
   }
 }
 
-void ArActionStallRecover::addToConfig(ArConfig* config, const char* sectionName, int priority)
+void ArActionStallRecover::addToConfig(ArConfig* config, const char* sectionName, ArPriority::Priority priority)
 {
   if (config == NULL || sectionName == NULL)
   {
     ArLog::log(ArLog::Terse, "Could not add ArActionStallRecoverToConfig because config (%p) or section (%p) are null", config, sectionName);
     return;
   }
-  config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), sectionName, ArPriority::DETAILED);
-  config->addParam(ArConfigArg("StallRecoverSpeed", &mySpeed, "Speed at which to back away when stalled.", priority), sectionName, ArPriority::DETAILED);
-  config->addParam(ArConfigArg("StallRecoverDuration", &myCyclesToMove, "Cycles of operation to move when recovering from stall.", priority), sectionName, ArPriority::DETAILED);
-  config->addParam(ArConfigArg("StallRecoverRotation", &myDegreesToTurn, "Amount of rotation when recovering (degrees).", priority), sectionName, ArPriority::DETAILED);
-  config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), sectionName, ArPriority::DETAILED);
+  config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), sectionName, priority);
+  config->addParam(ArConfigArg("StallRecoverEnabled", &myEnabled, "Whether a stall recover should be done when the robot stalls."), sectionName, priority);
+  config->addParam(ArConfigArg("StallRecoverSpeed", &mySpeed, "Speed at which to back away when stalled.", 0), sectionName, priority);
+  config->addParam(ArConfigArg("StallRecoverDuration", &myCyclesToMove, "Cycles of operation to move when recovering from stall.", 0), sectionName, priority);
+  config->addParam(ArConfigArg("StallRecoverRotation", &myDegreesToTurn, "Amount of rotation when recovering (degrees).", 0), sectionName, priority);
+  config->addParam(ArConfigArg(ArConfigArg::SEPARATOR), sectionName, priority);
 }
 

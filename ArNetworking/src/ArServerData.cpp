@@ -11,7 +11,7 @@ AREXPORT ArServerData::ArServerData(
 	const char *commandGroup, const char *dataFlags,
 	ArRetFunctor1<long, unsigned int> *getFrequencyFunctor,
 	ArFunctor2<long, unsigned int> *requestChangedFunctor,
-	ArFunctor2<ArServerClient *, ArNetPacket *> 
+	ArRetFunctor2<bool, ArServerClient *, ArNetPacket *> 
 	*requestOnceFunctor) : 
   myDataFlagsBuilder(512, '|')
 { 

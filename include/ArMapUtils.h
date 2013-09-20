@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 /* 
  * Contains utility classes for the ArMap class.
@@ -202,7 +202,8 @@ public:
   AREXPORT long int getSize() const;
   /// Returns the last modified time of the file
 	AREXPORT time_t getTimestamp() const;
-  
+
+ 
   // --------------------------------------------------------------------------
   // Setters
   // --------------------------------------------------------------------------
@@ -231,6 +232,9 @@ public:
   
   /// Returns whether the source and file names are identical
   AREXPORT bool isVersionOfSameFile(const ArMapId &other) const;
+  
+  /// Returns true if the timestamp is valid; false if it's a special 'not-set' indicator 
+  AREXPORT bool isValidTimestamp() const;
   
   /// Returns whether the two map IDs are equivalent
   /**
@@ -699,7 +703,7 @@ public:
 
   /// Returns a pointer to the specified info lines that have been changed
   /**
-   * @param infoType the int identifier of the info type to be returned
+   * @param infoName the int identifier of the info type to be returned
    * @param change the MapLineChangeType that indicates whether added or removed
    * map info lines are to be returned
    * @return a non-NULL pointer to the ArMapFileLineSet that describes the changes
@@ -914,7 +918,7 @@ class ArMapChangedHelper
 
    /// Adds a callback to be invoked when the map is changed
    AREXPORT virtual void addMapChangedCB(ArFunctor *functor, 
- 				                                ArListPos::Pos position = ArListPos::LAST);
+					 int position = 50);
    /// Removes a callback invoked when the map is changed
    AREXPORT virtual void remMapChangedCB(ArFunctor *functor);
  
@@ -925,7 +929,7 @@ class ArMapChangedHelper
     * callbacks.  They are not 
    **/
    AREXPORT virtual void addPreMapChangedCB(ArFunctor *functor,
-                                            ArListPos::Pos position = ArListPos::LAST);
+                                            int position = 50);
    /// Removes a callback called before the map changed callbacks are called
    AREXPORT virtual void remPreMapChangedCB(ArFunctor *functor);
  
@@ -945,8 +949,8 @@ class ArMapChangedHelper
  
    ArLog::LogLevel myMapChangedLogLevel;
  
-   std::list<ArFunctor *> myMapChangedCBList;
-   std::list<ArFunctor *> myPreMapChangedCBList;
+   ArCallbackList myMapChangedCBList;
+   ArCallbackList myPreMapChangedCBList;
  
  }; // end class ArMapChangedHelper
  

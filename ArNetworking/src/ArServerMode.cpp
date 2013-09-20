@@ -2,6 +2,7 @@
 #include "ArExport.h"
 #include "ArServerMode.h"
 #include "ArServerModeIdle.h"
+#include <algorithm>
 
 AREXPORT bool ArServerMode::ourActiveModeLocked = false;
 AREXPORT bool ArServerMode::ourActiveModeWillUnlockIfRequested = false;
@@ -33,12 +34,18 @@ AREXPORT ArServerBase *ArServerMode::ourServerBase = NULL;
 AREXPORT ArServerModeIdle *ArServerMode::ourIdleMode = NULL;
 AREXPORT ArMutex ArServerMode::ourIdleModeMutex;
 AREXPORT bool ArServerMode::ourIdleModeCreated = false;
+AREXPORT bool ArServerMode::ourActiveModeSetActivityThisCycle = false;
 
 AREXPORT void ArServerMode::modeUserTask(void)
 {
   if (ourActiveMode != NULL)
   {
+    ourActiveMode->mySetActivityThisCycle = false;
     ourActiveMode->userTask();
+    if (ourActiveMode != NULL)
+      ourActiveModeSetActivityThisCycle = ourActiveMode->mySetActivityThisCycle;
+    else
+      ourActiveModeSetActivityThisCycle = true;
   }
   else
   {
@@ -85,19 +92,22 @@ AREXPORT ArServerMode::ArServerMode(ArRobot *robot, ArServerBase *server,
 {
   ourModeDataMapMutex.setLogName("ArServerMode::ourModeDataMapMutex");
 
+  myName = name;
+  std::replace(myName.begin(), myName.end(), ' ', '_');
+
   std::string activityMutexName;
   activityMutexName = "ArServerMode::";
-  activityMutexName += name;
+  activityMutexName += myName;
   activityMutexName += "::myActivityTimeMutex";
   myActivityTimeMutex.setLogName(activityMutexName.c_str());
   myVerboseLogLevel = ArLog::Verbose;
   myRobot = robot;
   myServer = server;
-  myName = name;
   myIsActive = false;
   myStatusSetThisCycle = false;
   ourModes.push_front(this);
   myHasSetActivityTime = false;
+  mySetActivityThisCycle = false;
 
   std::string cbListName;
   cbListName = "ArServerMode::";
@@ -206,7 +216,7 @@ AREXPORT void ArServerMode::forceUnlock(void)
 }
 
 /// Gets whether we'll unlock if requested or not
-AREXPORT bool ArServerMode::willUnlockIfRequested(void)
+AREXPORT bool ArServerMode::willUnlockIfRequested(void) 
 {
   if (ourActiveMode == NULL || !ourActiveModeLocked || 
       (ourActiveModeLocked && ourActiveModeWillUnlockIfRequested))
@@ -215,7 +225,15 @@ AREXPORT bool ArServerMode::willUnlockIfRequested(void)
     return false;
 }
 
-       
+/// Gets if the active mode is locked or not 
+AREXPORT bool ArServerMode::isLocked(void) 
+{
+  if (ourActiveMode == NULL || !ourActiveModeLocked)
+    return false;
+  else
+    return true;
+}
+
 AREXPORT bool ArServerMode::isAutoResumeAfterInterrupt()
 {
   return false;
@@ -489,6 +507,7 @@ AREXPORT void ArServerMode::setActivityTimeToNow(void)
 { 
   myActivityTimeMutex.lock();
   myHasSetActivityTime = true; 
+  mySetActivityThisCycle = true;
   myActivityTime.setToNow(); 
   myActivityTimeMutex.unlock();
 }
@@ -499,9 +518,38 @@ AREXPORT int ArServerMode::getActiveModeActivityTimeSecSince(void)
   // use the getActivityTime on the ourActiveMode
   if (ourActiveMode != NULL)
     return (int)ourActiveMode->getActivityTime().secSince();
-  else {
+  else 
     return -1;
-  }
+}
+
+AREXPORT bool ArServerMode::getActiveModeSetActivityThisCycle(void) 
+{ 
+  return ourActiveModeSetActivityThisCycle;
+}
+
+AREXPORT const char *ArServerMode::getActiveModeModeString(void) 
+{ 
+  if (ourActiveMode != NULL)
+    return ourActiveMode->getMode();
+  else 
+    return NULL;
+}
+
+
+AREXPORT const char *ArServerMode::getActiveModeStatusString(void) 
+{ 
+  if (ourActiveMode != NULL)
+    return ourActiveMode->getStatus();
+  else 
+    return NULL;
+}
+
+AREXPORT const char *ArServerMode::getActiveModeExtendedStatusString(void) 
+{ 
+  if (ourActiveMode != NULL)
+    return ourActiveMode->getExtendedStatus();
+  else 
+    return NULL;
 }
 
 /**

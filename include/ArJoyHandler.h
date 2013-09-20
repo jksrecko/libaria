@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARJOYHANDLER_H
 #define ARJOYHANDLER_H
@@ -44,26 +44,35 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 
 
 
-/// Interfaces to a joystick
+/// Interfaces to a computer joystick
 /** 
-    The joystick handler keeps track of the minimum and maximums for both
-    axes, updating them to constantly be better calibrated.  The speeds set 
-    influence what is returned by getAdjusted...
+  This class is used to read data from a joystick device attached to the computer
+  (usually via USB).
+  The joystick handler keeps track of the minimum and maximums for both
+  axes, updating them to constantly be better calibrated.  The speeds set 
+  with setSpeed() influence what is returned by getAdjusted() or getDoubles().
     
-    The joystick is not opened until init is called.  What should basically 
-    be done to use this class is to 'init' a joystick, do a 'setSpeed' so you 
-    can use 'getAdusted', then at some point do a 'getButton' to see if a
-    button is pressed, and then do a 'getAdjusted' to get the values to act
-    on.
-    
-    Also note that x is usually rotational velocity (since it right/left),
-    whereas Y is translational (since it is up/down).
-    
-    You can also use this to do multiple uses with the joystick, for example to
-    have button 1 drive the robot while to have button 2 move the camera, 
-    you can get the different values you want (don't want to move the camera
-    as quickly or as far as the robot) by using setSpeed before doing 
-    getAdjusted since setSpeed is fast and won't take any time.
+  The joystick device is not opened until init() is called.  If there was
+	an error connecting to the joystick device, it will return false, and
+	haveJoystick() will return false. After calling
+	init(), use getAdjusted() or getDoubles()
+	to get values, and getButton() to check whether a button is pressed. setSpeed() may be
+	called at any time to configure or reconfigure the range of the values returned by
+	getAdjusted() and getDoubles().
+
+	To get the raw data instead, use getUnfiltered() or getAxis().
+
+	For example, if you want the X axis output to range from -1000 to 1000, and the Y axis
+	output to range from -100 to 100, call <code>setSpeed(1000, 100);</code>.
+
+    The X joystick axis is usually the left-right axis, and Y is forward-back.
+  If a joystick has a Z axis, it is usually a "throttle" slider or dial on the
+  joystick. The usual way to 
+	drive a robot with a joystick is to use the X joystick axis for rotational velocity,
+	and Y for translational velocity (note the robot coordinate system, this is its local
+	X axis), and use the Z axis to adjust the robot's maximum driving speed.
+
+  @ingroup OptionalClasses
 */
 class ArJoyHandler
 {
@@ -75,16 +84,16 @@ class ArJoyHandler
   /// Intializes the joystick, returns true if successful
   AREXPORT bool init(void);
   /// Returns if the joystick was successfully initialized or not
-  AREXPORT bool haveJoystick(void) { return myInitialized; }
+  bool haveJoystick(void) { return myInitialized; }
   /// Gets the adjusted reading, as floats, between -1.0 and 1.0
   AREXPORT void getDoubles(double *x, double *y, double *z = NULL);
   /// Gets the button 
   AREXPORT bool getButton(unsigned int button);
   /// Returns true if we definitely have a Z axis (we don't know in windows unless it moves)
-  AREXPORT bool haveZAxis(void) { return myHaveZ; }
+  bool haveZAxis(void) { return myHaveZ; }
 
-  /// Sets the max that X or Y will return
-  AREXPORT void setSpeeds(int x, int y, int z = 0) 
+  /// Sets the maximums for the x, y and optionally, z axes.
+  void setSpeeds(int x, int y, int z = 0) 
     { myTopX = x; myTopY = y; myTopZ = z; }
   /// Gets the adjusted reading, as integers, based on the setSpeed
   AREXPORT void getAdjusted(int *x, int *y, int *z = NULL);
@@ -113,8 +122,9 @@ class ArJoyHandler
   /// Sets the stats for the joystick, useful for restoring calibrated settings
   AREXPORT void setStats(int maxX, int minX, int maxY, int minY, 
 		int cenX, int cenY);
-  /// Gets the speeds that X and Y are set to
+  /// Gets the maximums for each axis.
   AREXPORT void getSpeeds(int *x, int *y, int *z);
+
  protected:
   // function to get the data for OS dependent part
   void getData(void);

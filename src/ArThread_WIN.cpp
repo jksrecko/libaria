@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -29,6 +29,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArThread.h"
 #include "ArLog.h"
 #include "ArSignalHandler.h"
+#include "ariaUtil.h"
 
 
 static DWORD WINAPI run(void *arg)
@@ -68,6 +69,40 @@ void ArThread::init()
   ourThreads.insert(MapType::value_type(pt, main));
   ourThreadsMutex.unlock();
 }
+
+AREXPORT void ArThread::shutdown()
+{
+  ourThreadsMutex.lock();
+
+  // At this point, the ourThreads map should only contain the main thread 
+  // that was created in init (presuming that joinAll was called, from 
+  // the main thread).
+  // 
+  // Do not use deleteSetPairs because this causes the ourThreads map 
+  // to be updated recursively (because the destructor updates the map).
+  //
+  std::list<ArThread *> threadList;
+
+  for (MapType::iterator mapIter = ourThreads.begin(); 
+       mapIter != ourThreads.end();
+       mapIter++) {
+    if (mapIter->second != NULL) {
+      threadList.push_back(mapIter->second);
+    }
+  }
+  for (std::list<ArThread *>::iterator listIter = threadList.begin();
+      listIter != threadList.end();
+      listIter++) {
+    delete (*listIter);
+  }
+  if (!ourThreads.empty()) {
+    ArLog::log(ArLog::Normal,
+               "ArThread::shutdown() unexpected thread leftover");
+  }
+  ourThreadsMutex.unlock();
+
+} // end method shutdown
+
 
 AREXPORT ArThread::~ArThread()
 {
@@ -116,8 +151,16 @@ AREXPORT void ArThread::cancelAll()
 
 
 AREXPORT int ArThread::create(ArFunctor *func, bool joinable,
-			      bool lowerPriority)
+                              bool lowerPriority)
 {
+  // Log a warning (until desired behavior is determined)
+  if (myThreadHandle != 0) {
+    ArLog::log(ArLog::Terse, "ArThread::create: Thread %s (ID %d) already created.",
+               (myName.empty() ? "[anonymous]" : myName.c_str()),
+		           myThread);
+  }
+
+
   DWORD err;
 
   myJoinable=joinable;
@@ -134,11 +177,16 @@ AREXPORT int ArThread::create(ArFunctor *func, bool joinable,
   else
   {
     if (myName.size() == 0)
+    {
       ArLog::log(ourLogLevel, "Created anonymous thread with ID %d", 
 		 myThread);
+      //ArLog::logBacktrace(ArLog::Normal);
+    }
     else
+    {
       ArLog::log(ourLogLevel, "Created %s thread with ID %d", myName.c_str(),
 		 myThread);
+    }
     ourThreadsMutex.lock();
     ourThreads.insert(MapType::value_type(myThread, this));
 	ourThreadHandles.insert(std::map<HANDLE, ArThread *>::value_type(myThreadHandle, this));

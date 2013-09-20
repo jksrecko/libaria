@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 
 #include "ArExport.h"
@@ -88,7 +88,7 @@ AREXPORT ArCompassConnector::~ArCompassConnector() {
   }
 }
 
-AREXPORT bool ArCompassConnector::parseArgs()
+bool ArCompassConnector::parseArgs()
 {
   if(!myArgParser) return false;
   if(!myArgParser->checkParameterArgumentString("-compassPort", &mySerialPort)) return false;
@@ -110,7 +110,7 @@ AREXPORT bool ArCompassConnector::parseArgs()
   return true;
 }
 
-AREXPORT void ArCompassConnector::logOptions()
+void ArCompassConnector::logOptions()
 {
   ArLog::log(ArLog::Terse, "Compass options:");
   ArLog::log(ArLog::Terse, "-compassType <robot|serialTCM>\tSelect compass device type (default: robot)");
@@ -152,11 +152,11 @@ AREXPORT ArTCM2 *ArCompassConnector::create(ArRobot *robot)
   switch(myDeviceType)
   {
     case Robot:
-      ArLog::log(ArLog::Normal, "ArCompassConnector: Using robot compass");
+      ArLog::log(ArLog::Verbose, "ArCompassConnector: Using robot compass");
       return new ArTCMCompassRobot(robot);
     case SerialTCM:
       {
-        ArLog::log(ArLog::Normal, "ArCompassConnector: Using TCM2 compass on serial port %s", mySerialPort);
+        ArLog::log(ArLog::Verbose, "ArCompassConnector: Using TCM2 compass on serial port %s", mySerialPort);
         ArTCMCompassDirect *newDirectTCM = new ArTCMCompassDirect(mySerialPort);
         mySerialTCMReadFunctor = new ArRetFunctor1C<int, ArTCMCompassDirect, unsigned int>(newDirectTCM, &ArTCMCompassDirect::read, 1);
         robot->lock();
@@ -165,6 +165,10 @@ AREXPORT ArTCM2 *ArCompassConnector::create(ArRobot *robot)
         robot->unlock();
         return newDirectTCM;
       }
+    case None:
+    default:
+      // break out of switch and print warning there
+      break;
   }
   ArLog::log(ArLog::Terse, "ArCompassConnector: Error: No compass type selected.");
   return NULL;

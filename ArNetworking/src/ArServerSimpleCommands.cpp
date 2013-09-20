@@ -10,10 +10,13 @@ AREXPORT ArServerSimpleComUC::ArServerSimpleComUC(
 {
   myHandlerCommands = handlerCommands;
   myRobot = robot;
-  myHandlerCommands->addStringCommand("MicroControllerCommand",
-				      "MicroController (uC) command mode has three ways to send commands:\ncom: <command>\ncomInt: <command> <int>\ncom2Bytes: <command> <byte1> <byte2>", &myCommandCB);
-  myHandlerCommands->addStringCommand("MicroControllerMotionCommand",
-				      "MicroController (uC) motion commands will suspend normal motion commands to the microcontroller and ONLY the motion commands will be in charge.  This will last until the server mode is changed or stop is pressed (unless the server mode is locked, ie docking).  This has four ways to send commands:\ncom: <command>\ncomInt: <command> <int>\ncom2Bytes: <command> <byte1> <byte2>:", &myMotionCommandCB);
+  if (myHandlerCommands != NULL)
+  {
+    myHandlerCommands->addStringCommand("MicroControllerCommand",
+					"MicroController (uC) command mode has three ways to send commands:\ncom: <command>\ncomInt: <command> <int>\ncom2Bytes: <command> <byte1> <byte2>", &myCommandCB);
+    myHandlerCommands->addStringCommand("MicroControllerMotionCommand",
+					"MicroController (uC) motion commands will suspend normal motion commands to the microcontroller and ONLY the motion commands will be in charge.  This will last until the server mode is changed or stop is pressed (unless the server mode is locked, ie docking).  This has four ways to send commands:\ncom: <command>\ncomInt: <command> <int>\ncom2Bytes: <command> <byte1> <byte2>:", &myMotionCommandCB);
+  }
 }
 
 AREXPORT ArServerSimpleComUC::~ArServerSimpleComUC()
@@ -232,8 +235,8 @@ AREXPORT ArServerSimpleComMovementLogging::ArServerSimpleComMovementLogging(
 	    &myPopupMovementParamsCB);
   }
   myHandlerCommands->addCommand(
-	  "ResetOdometer",
-	  "Resets the robot odometer",
+	  "ResetTripOdometer",
+	  "Resets the robot's trip odometer",
 	  &myResetOdometerCB);
 
 }
@@ -338,11 +341,13 @@ AREXPORT void ArServerSimpleComMovementLogging::popupMovementParams(void)
 {
   char buf[32000];
   myRobot->lock();
-  sprintf(buf, "TransVelTop %.0f TransAccelTop %.0f TransDecelTop %.0f\nTransVelMax %.0f TransAccel %.0f TransDecel %.0f\n\nRotVelTop %.0f RotAccelTop %.0f RotDecelTop %.0f\nRotVelMax %.0f RotAccel %.0f RotDecel %.0f",
+  sprintf(buf, "AbsoluteMaxTransVel %.0f AbsoluteMaxTransNegVel %.0f\nTransVelMax %.0f TransNegVelMax %.0f\n\nAbsoluteMaxTransAccel %.0f AbsoluteMaxTransDecel %.0f\nTransAccel %.0f TransDecel %.0f\n\nAbsoluteMaxRotVel %.0f AbsoluteMaxRotAccel %.0f AbsoluteMaxRotDecel %.0f\nRotVelMax %.0f RotAccel %.0f RotDecel %.0f",
 	  myRobot->getAbsoluteMaxTransVel(), 
+	  myRobot->getAbsoluteMaxTransNegVel(), 
+	  myRobot->getTransVelMax(),
+	  myRobot->getTransNegVelMax(),
 	  myRobot->getAbsoluteMaxTransAccel(),
 	  myRobot->getAbsoluteMaxTransDecel(),
-	  myRobot->getTransVelMax(),
 	  myRobot->getTransAccel(),
 	  myRobot->getTransDecel(),	  
 	  myRobot->getAbsoluteMaxRotVel(), 
@@ -352,7 +357,7 @@ AREXPORT void ArServerSimpleComMovementLogging::popupMovementParams(void)
 	  myRobot->getRotAccel(),
 	  myRobot->getRotDecel());
   if (myRobot->hasLatVel())
-    sprintf(buf, "%s\n\nLatVelTop %.0f LatAccelTop %.0f LatDecelTop %.0f\nLatVelMax %.0f LatAccel %.0f LatDecel %.0f",
+    sprintf(buf, "%s\n\nAbsoluteMaxLatVel %.0f AbsoluteMaxLatAccel %.0f AbsoluteMaxLatDecel %.0f\nLatVelMax %.0f LatAccel %.0f LatDecel %.0f",
 	    buf, 
 	    myRobot->getAbsoluteMaxLatVel(), 
 	    myRobot->getAbsoluteMaxLatAccel(),

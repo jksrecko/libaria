@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,30 +19,31 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
+
 #include "ArExport.h"
 #include "ariaOSDef.h"
 #include "ArActionDesired.h"
 
-/* VS 2003 can't use export attribute here on const static variables */
-#if (_MSC_VER <= 1310)
-#define STATIC_CONST_AREXPORT // defined to nothing
-#else
-#define STATIC_CONST_AREXPORT AREXPORT
-#endif
+/* Need to export symbols but can't prior to VS 2010 (The VS 2003 _MSC_VER is version 1310, 2005 is 14xx, 2008 is 15xx, 2010 is 1600)*/
+//#if (_MSC_VER < 1600)
+//#define STATIC_CONST_AREXPORT // defined to nothing
+//#else
+//#define STATIC_CONST_AREXPORT AREXPORT
+//#endif
 
-STATIC_CONST_AREXPORT const double ArActionDesired::NO_STRENGTH = 0.0;
-STATIC_CONST_AREXPORT const double ArActionDesired::MIN_STRENGTH = .000001;
-STATIC_CONST_AREXPORT const double ArActionDesired::MAX_STRENGTH = 1.0;
+AREXPORT const double ArActionDesired::NO_STRENGTH = 0.0;
+AREXPORT const double ArActionDesired::MIN_STRENGTH = .000001;
+AREXPORT const double ArActionDesired::MAX_STRENGTH = 1.0;
 
-STATIC_CONST_AREXPORT const double ArActionDesiredChannel::NO_STRENGTH =
+AREXPORT const double ArActionDesiredChannel::NO_STRENGTH =
                                                  ArActionDesired::NO_STRENGTH;
-STATIC_CONST_AREXPORT const double ArActionDesiredChannel::MIN_STRENGTH = 
+AREXPORT const double ArActionDesiredChannel::MIN_STRENGTH = 
                                                 ArActionDesired::MIN_STRENGTH;
-STATIC_CONST_AREXPORT const double ArActionDesiredChannel::MAX_STRENGTH = 
+AREXPORT const double ArActionDesiredChannel::MAX_STRENGTH = 
                                                 ArActionDesired::MAX_STRENGTH;
 
 
@@ -58,9 +59,16 @@ AREXPORT void ArActionDesired::log(void) const
     ArLog::log(ArLog::Normal, "\tTransAccel %.0f", getTransAccel());
   if (getTransDecelStrength() >= ArActionDesired::MIN_STRENGTH)
     ArLog::log(ArLog::Normal, "\tTransDecel %.0f", getTransDecel());
+
   if (getMaxRotVelStrength() >= ArActionDesired::MIN_STRENGTH)
     ArLog::log(ArLog::Normal, "%25s\tMaxRotVel %.0f", "",
 	       getMaxRotVel());
+  if (getMaxRotVelPosStrength() >= ArActionDesired::MIN_STRENGTH)
+    ArLog::log(ArLog::Normal, "%25s\tMaxRotVelPos %.0f", "",
+	       getMaxRotVelPos());
+  if (getMaxRotVelNegStrength() >= ArActionDesired::MIN_STRENGTH)
+    ArLog::log(ArLog::Normal, "%25s\tMaxRotVelNeg %.0f", "",
+	       getMaxRotVelNeg());
   if (getRotAccelStrength() >= ArActionDesired::MIN_STRENGTH)
     ArLog::log(ArLog::Normal, "%25s\tRotAccel %.0f", "",
 	       getRotAccel());
@@ -101,17 +109,21 @@ AREXPORT void ArActionDesired::log(void) const
 
 AREXPORT bool ArActionDesired::isAnythingDesired(void) const
 {
-  if (getMaxVelStrength() >= ArActionDesired::MIN_STRENGTH ||
+  if (getVelStrength() >= ArActionDesired::MIN_STRENGTH ||
+      getMaxVelStrength() >= ArActionDesired::MIN_STRENGTH ||
       getMaxNegVelStrength() >= ArActionDesired::MIN_STRENGTH || 
       getTransAccelStrength() >= ArActionDesired::MIN_STRENGTH || 
       getTransDecelStrength() >= ArActionDesired::MIN_STRENGTH ||
-      getMaxRotVelStrength() >= ArActionDesired::MIN_STRENGTH ||
-      getRotAccelStrength() >= ArActionDesired::MIN_STRENGTH ||
-      getRotDecelStrength() >= ArActionDesired::MIN_STRENGTH ||
-      getVelStrength() >= ArActionDesired::MIN_STRENGTH ||
+
       getHeadingStrength() >= ArActionDesired::MIN_STRENGTH ||
       getDeltaHeadingStrength() >= ArActionDesired::MIN_STRENGTH ||
       getRotVelStrength() >= ArActionDesired::MIN_STRENGTH ||
+      getMaxRotVelStrength() >= ArActionDesired::MIN_STRENGTH ||
+      getMaxRotVelPosStrength() >= ArActionDesired::MIN_STRENGTH ||
+      getMaxRotVelNegStrength() >= ArActionDesired::MIN_STRENGTH ||
+      getRotAccelStrength() >= ArActionDesired::MIN_STRENGTH ||
+      getRotDecelStrength() >= ArActionDesired::MIN_STRENGTH ||
+
       getMaxLeftLatVelStrength() >= ArActionDesired::MIN_STRENGTH ||
       getMaxRightLatVelStrength() >= ArActionDesired::MIN_STRENGTH ||
       getLatAccelStrength() >= ArActionDesired::MIN_STRENGTH ||
@@ -121,3 +133,32 @@ AREXPORT bool ArActionDesired::isAnythingDesired(void) const
   else
     return false;
 }
+
+AREXPORT void ArActionDesired::sanityCheck(const char *actionName)
+{
+  myMaxVelDes.checkLowerBound(actionName, "TransMaxVel", 0);
+  myMaxNegVelDes.checkUpperBound(actionName, "TransMaxNegVel", 0);
+
+  myTransAccelDes.checkLowerBound(actionName, "TransAccel", 1);
+  myTransDecelDes.checkLowerBound(actionName, "TransDecel", 1);
+
+  if (myMaxRotVelDes.getStrength() >= ArActionDesired::MIN_STRENGTH && 
+      ArMath::roundInt(myMaxRotVelDes.getDesired()) == 0)
+    ArLog::log(ArLog::Normal, 
+	  "ActionSanityChecking: '%s' setting %s to %g which winds up as 0 (this is just a warning)",
+	       actionName, "MaxRotVel", myMaxRotVelDes.getDesired());
+  myMaxRotVelDes.checkLowerBound(actionName, "MaxRotVel", 0);
+
+
+  myMaxRotVelPosDes.checkLowerBound(actionName, "MaxRotVelPos", 1); 
+  myMaxRotVelNegDes.checkLowerBound(actionName, "MaxRotVelNeg", 1);
+
+  myRotAccelDes.checkLowerBound(actionName, "RotAccel", 1);
+  myRotDecelDes.checkLowerBound(actionName, "RotDecel", 1);
+
+  myMaxLeftLatVelDes.checkLowerBound(actionName, "MaxLeftLatVel", 0);
+  myMaxRightLatVelDes.checkLowerBound(actionName, "MaxRightLatVel", 0);
+
+  myLatAccelDes.checkLowerBound(actionName, "LatAccel", 1);
+  myLatDecelDes.checkLowerBound(actionName, "LatDecel", 1);
+};

@@ -16,13 +16,15 @@ class ArServerClient;
  * 
  * This class handles the following requests:
  *  <ul>
- *    <li>getConfigBySections:  Replies with multiple packets, one for each ArConfig
- *        section plus an empty packet that terminates the reply.  Each
- *        packet contains the following header information:
+ *    <li>getConfigBySections/getConfigBySectionsV2:  Replies with multiple 
+ *        packets, one for each ArConfig section plus an empty packet that 
+ *        terminates the reply.  Each packet contains the following header 
+ *        information:
  *        <ol> 
  *          <li>Section Indicator: Always set to 'S' (byte)</li>
  *          <li>Section Name: (string)</li>
- *          <li>Section Comment: (string) </li>     
+ *          <li>Section Comment: (string) </li>  
+ *          <li>Section Category Name: (string) Only for getConfigBySectionsV2 </li>
  *        </ol>
  *        For each parameter in the section, the packet then contains a 
  *        a Parameter Indicator (always set to 'P' (byte)) followed by a 
@@ -97,9 +99,13 @@ public:
   **/
   AREXPORT ArServerHandlerConfig(ArServerBase *server, 
                                  ArConfig *config,
-				                         const char *defaultFile = NULL, 
-				                         const char *defaultFileBaseDirectory = NULL);
-
+                                 const char *defaultFile = NULL, 
+                                 const char *defaultFileBaseDirectory = NULL,
+                                 bool allowFactory = true,
+                                 const char *robotName = NULL,
+                                 bool preventChanges = false,
+                                 const char *preventChangesString = NULL);
+  
   /// Destructor
   AREXPORT virtual ~ArServerHandlerConfig();
 
@@ -113,18 +119,32 @@ public:
   /// Handles the "getConfigBySections" request.
   AREXPORT void getConfigBySections(ArServerClient *client, ArNetPacket *packet);
 
+  /// Handles the "getConfigBySectionsV2" request.
+  AREXPORT void getConfigBySectionsV2(ArServerClient *client, ArNetPacket *packet);
+
+  /// Handles the "getConfigBySectionsV3" request.
+  AREXPORT void getConfigBySectionsV3(ArServerClient *client, ArNetPacket *packet);
+
   /// Handles the (deprecated) "getConfig" request.
   AREXPORT void getConfig(ArServerClient *client, ArNetPacket *packet);
   
   /// Handles the "setConfig" request.
   AREXPORT void setConfig(ArServerClient *client, ArNetPacket *packet);
+  
+  AREXPORT void setConfigBySections(ArServerClient *client, ArNetPacket *packet);
+  
+  AREXPORT void setConfigBySectionsV2(ArServerClient *client, ArNetPacket *packet);
 
   /// Handles the "getConfigDefaults" request.
   AREXPORT void getConfigDefaults(ArServerClient *client, ArNetPacket *packet);
 
   /// Handles the "getConfigSectionFlags" request.
   AREXPORT void getConfigSectionFlags(ArServerClient *client, 
-				      ArNetPacket *packet);
+				                              ArNetPacket *packet);
+
+  /// Handles the "getLastEditablePriority" request.
+  AREXPORT void getLastEditablePriority(ArServerClient *client,
+                                        ArNetPacket *packet);
 
   // ---------------------------------------------------------------------------
   // Callback Methods
@@ -144,9 +164,35 @@ public:
 
   /// Adds a callback to be called when the config is updated
   AREXPORT void addConfigUpdatedCallback(ArFunctor *functor, 
-				  ArListPos::Pos position = ArListPos::LAST);
+				                ArListPos::Pos position = ArListPos::LAST);
   /// Removes a callback to be called when the config is updated
   AREXPORT void remConfigUpdatedCallback(ArFunctor *functor);  
+
+  /// Restarts the IO manually (mostly for because of a config change)
+  void restartIO(const char *reason);
+  /// Restarts the software manually (mostly for because of a config change)
+  void restartSoftware(const char *reason);
+  /// Restarts the hardware manually (mostly for because of a config change)
+  void restartHardware(const char *reason);
+
+  /// Adds a callback for when the IO is changed
+  void addRestartIOCB(ArFunctor *functor, int position = 50) 
+    { myRestartIOCBList.addCallback(functor, position); }
+  /// Adds a callback for when the IO is changed
+  void remRestartIOCB(ArFunctor *functor)
+    { myRestartIOCBList.remCallback(functor); }
+
+  /// Sets a callback for when a RESTART_SERVER config param is changed
+  AREXPORT void setRestartSoftwareCB(ArFunctor *restartServerCB);
+
+  /// Gets the callback for when a RESTART_SERVER config param is changed
+  AREXPORT ArFunctor *getRestartSoftwareCB(void);
+
+  /// Sets a callback for when a RESTART_ROBOT config param is changed
+  AREXPORT void setRestartHardwareCB(ArFunctor *restartRobotCB);
+
+  /// Gets the callback for when a RESTART_ROBOT config param is changed
+  AREXPORT ArFunctor *getRestartHardwareCB(void);
 
   /// Locks the config so we don't do anything with it
   AREXPORT int lockConfig(void) { return myConfigMutex.lock(); }
@@ -159,7 +205,10 @@ public:
   AREXPORT bool writeConfig(void);
   /// Notifies the clients that the config was updated
   AREXPORT bool configUpdated(ArServerClient *client = NULL);
-
+  
+  /// Changes the variables that prevent changes
+  void setPreventChanges(bool preventChanges = false,
+			 const char *preventChangesString = NULL);
 
   /// loads the whole of a default file (for internal use)
   AREXPORT bool loadDefaultsFromFile(void);
@@ -167,22 +216,67 @@ public:
   AREXPORT bool loadDefaultsFromPacket(ArNetPacket *packet);
   /// Creates an empty default config...
   AREXPORT void createEmptyConfigDefaults(void);
+
+  /// Changes if factory is allowed... this is internal, only for when
+  /// that decision is deferred
+  void setAllowFactory(bool allowFactory) 
+    {  myPermissionAllowFactory = allowFactory; }
+  /// Changes if factory is allowed... this is internal, only for when
+  /// that decision is deferred
+  bool getAllowFactory(void)
+    { return myPermissionAllowFactory; }
 protected:
 
-  /// Helper method for getConfigBySections and getConfig.
+  AREXPORT void doGetConfigBySections(ArServerClient *client, 
+                                      ArNetPacket *packet,
+                                      int version);
+
+  /// Helper method for the get config callbacks (e.g. getConfigBySections, getConfig, ...).
   AREXPORT void handleGetConfig(ArServerClient *client, 
                                 ArNetPacket *packet,
                                 bool isMultiplePackets,
-                                ArPriority::Priority lastPriority);
+                                ArPriority::Priority lastPriority,
+                                bool isSendIneditablePriorities,
+                                int version);
+
+  /// Helper method for the get config callbacks (e.g. getConfigBySections, getConfig, ...).
+  AREXPORT bool handleGetConfigSection(ArNetPacket &sending,
+                                       ArServerClient *client, 
+                                      ArNetPacket *packet,
+                                      bool isMultiplePackets,
+                                      ArPriority::Priority lastPriority,
+                                      bool isSendIneditablePriorities,
+                                      int version,
+                                      ArConfigSection *section,
+                                      int startIndex,
+                                      int paramCount,
+                                      int sectionIndex,
+                                      std::set<std::string> &sentParams);
+
 
   /// Internal method that handles a setConfig packet for myConfig or
   /// myDefaults
-  bool internalSetConfig(ArServerClient *client, ArNetPacket *packet);
+  bool internalSetConfig(ArServerClient *client, 
+                         ArNetPacket *packet,
+                         int version,
+                         bool isMultiplePackets = false);
 
   /// just creates the default config... (internal, don't use)
   void createDefaultConfig(const char *defaultFileBaseDir);
   /// Adds the default config callbacks;
   void addDefaultServerCommands(void);
+
+  /// Determines the last editable priority based on the input flags
+  ArPriority::Priority findLastEditablePriority();
+
+  ArPriority::Priority convertToPriority(int priorityVal,
+                                         ArPriority::Priority defaultPriority);
+
+
+protected:
+  
+  std::string myRobotName;
+  std::string myLogPrefix;
 
   ArServerBase *myServer;
   ArConfig *myConfig;
@@ -194,18 +288,33 @@ protected:
   ArMutex myDefaultConfigMutex;
   bool myAddedDefaultServerCommands;
 
+  bool myPermissionAllowFactory;
+  bool myPreventChanges;
+  std::string myPreventChangesString;
+
   ArMutex myConfigMutex;
   
   std::list<ArFunctor *> myPreWriteCallbacks;
   std::list<ArFunctor *> myPostWriteCallbacks;
   std::list<ArFunctor *> myConfigUpdatedCallbacks;
 
+  ArCallbackList myRestartIOCBList;
+  ArFunctor *myRestartSoftwareCB;
+  bool myRestartSoftwareCBSet;
+  ArFunctor *myRestartHardwareCB;
+  bool myRestartHardwareCBSet;
+
   ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myGetConfigBySectionsCB;
+  ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myGetConfigBySectionsV2CB;
+  ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myGetConfigBySectionsV3CB;
   ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myGetConfigCB;
   ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> mySetConfigCB;
+  ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> mySetConfigBySectionsCB;
+  ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> mySetConfigBySectionsV2CB;
   ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myReloadConfigCB;
   ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myGetConfigDefaultsCB;
   ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myGetConfigSectionFlagsCB;
+  ArFunctor2C<ArServerHandlerConfig, ArServerClient*, ArNetPacket *> myGetLastEditablePriorityCB;
 
 };
 

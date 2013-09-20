@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "Aria.h"
 #include <string>
@@ -97,11 +97,13 @@ int main(int argc, char **argv)
   ArLog::init(ArLog::StdErr, ArLog::Normal);
 
   // connector
-  ArSimpleConnector connector(&argc, argv);
-  if (!connector.parseArgs() || argc > 1)
+  ArArgumentParser parser(&argc, argv);
+  parser.loadDefaultArguments();
+  ArRobotConnector connector(&parser, &robot);
+  if (!Aria::parseArgs())
   {
-    connector.logOptions();
-    exit(1);
+    Aria::logOptions();
+    Aria::exit(1);
   }
 
   printf("This program will continously print some data and events.\nPress Ctrl-C to exit.\n");
@@ -112,10 +114,10 @@ int main(int argc, char **argv)
   robot.addRangeDevice(&ir);
   
   // try to connect, if we fail exit
-  if (!connector.connectRobot(&robot))
+  if (!connector.connectRobot())
   {
     printf("Could not connect to robot... exiting\n");
-    Aria::shutdown();
+    Aria::exit(1);
     return 1;
   }
 

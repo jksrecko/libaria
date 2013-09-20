@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,14 +19,17 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
 #include "ArLaser.h"
 #include "ArRobot.h"
+#include "ArDeviceConnection.h"
+
+bool ArLaser::ourUseSimpleNaming = false;
 
 AREXPORT ArLaser::ArLaser(
 	int laserNumber, const char *name, 
@@ -117,7 +120,18 @@ AREXPORT ArLaser::~ArLaser()
 **/
 AREXPORT void ArLaser::laserSetName(const char *name)
 {
-  myName = name;
+  if (ourUseSimpleNaming)
+  {
+    myName = "Laser_";
+    char buf[1024];
+    sprintf(buf, "%d", myLaserNumber);
+    myName += buf;
+  }    
+  else
+  {
+    myName = name;
+  }
+
 
   myTask.setThreadName(myName.c_str());
 
@@ -128,6 +142,7 @@ AREXPORT void ArLaser::laserSetName(const char *name)
   myDisconnectNormallyCBList.setNameVar(
 	  "%s::myDisconnectNormallyCBList", myName.c_str());
   myDataCBList.setNameVar("%s::myDataCBList", myName.c_str());
+  //myDataCBList.setLogging(false); // supress debug logging since it drowns out all other logging
 }
 
 AREXPORT void ArLaser::setMaxRange(unsigned int maxRange)
@@ -604,6 +619,7 @@ AREXPORT void ArLaser::setDeviceConnection(ArDeviceConnection *conn)
 {
   myConnMutex.lock();
   myConn = conn; 
+  myConn->setDeviceName(getName());
   myConnMutex.unlock();
 }
 
@@ -627,11 +643,15 @@ AREXPORT ArDeviceConnection *ArLaser::getDeviceConnection(void)
 **/
 AREXPORT void ArLaser::setConnectionTimeoutSeconds(double seconds)
 {
+  ArLog::log(ArLog::Normal, 
+	     "%s::setConnectionTimeoutSeconds: Setting timeout to %g secs", 
+	     getName(), seconds);
+  myLastReading.setToNow();
+
   if (seconds > 0)
     myTimeoutSeconds = seconds;
   else
     myTimeoutSeconds = 0;
-	
 }
 
 /**
@@ -1285,7 +1305,8 @@ AREXPORT bool ArLaser::addIgnoreReadings(const char *ignoreReadings)
     else
     {
       str = args.getArg(i);
-      if (sscanf(str, "%f-%f", &begin, &end) == 2)
+      if (sscanf(str, "%f:%f", &begin, &end) == 2 || 
+	  sscanf(str, "%f-%f", &begin, &end) == 2)
       {
 	ArLog::log(ArLog::Verbose, "%s: Adding ignore reading from %g to %g", 
 		   getName(), begin, end);
@@ -1312,7 +1333,7 @@ AREXPORT bool ArLaser::addIgnoreReadings(const char *ignoreReadings)
       }
       else
       {
-	ArLog::log(ArLog::Terse, "%s: Bad syntax for ignore readings, had string '%s' as one of the arguments (the values need to either be individual doubles, or begin-end, ie 75-77)", getName(), str);
+	ArLog::log(ArLog::Terse, "%s: Bad syntax for ignore readings, had string '%s' as one of the arguments (the values need to either be individual doubles, or begin:end (75:77) or begin-end (75-77))", getName(), str);
 	return false;
       }
     }
@@ -1371,4 +1392,10 @@ AREXPORT void ArLaser::copyReadingCount(const ArLaser* laser)
   myTimeLastReading = laser->myTimeLastReading;
   myReadingCurrentCount = laser->myReadingCurrentCount;
   myReadingCount = laser->myReadingCount;
+}
+
+AREXPORT void ArLaser::useSimpleNamingForAllLasers(void)
+{
+  ArLog::log(ArLog::Normal, "ArLaser: Will use simple naming for all lasers");
+  ourUseSimpleNaming = true;
 }

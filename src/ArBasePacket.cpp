@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
@@ -65,7 +65,7 @@ AREXPORT ArBasePacket::ArBasePacket(ArTypes::UByte2 bufferSize,
 AREXPORT ArBasePacket::ArBasePacket(const ArBasePacket &other) :
   myHeaderLength(other.myHeaderLength),
   myFooterLength(other.myFooterLength),
-  myMaxLength(other.myMaxLength),
+  myMaxLength(other.myLength),
   myReadLength(other.myReadLength),
   myOwnMyBuf(true),
   myBuf((other.myLength > 0) ? new char[other.myLength] : NULL),
@@ -83,17 +83,18 @@ AREXPORT ArBasePacket &ArBasePacket::operator=(const ArBasePacket &other)
 
     myHeaderLength = other.myHeaderLength;
     myFooterLength = other.myFooterLength;
-    myMaxLength    = other.myMaxLength;
     myReadLength   = other.myReadLength;
-    myOwnMyBuf     = true;
 
     if (myLength != other.myLength) {
-      delete [] myBuf;
+      if (myOwnMyBuf && myBuf != NULL)
+	delete [] myBuf;
+      myOwnMyBuf = true;
       myBuf = NULL;
       if (other.myLength > 0) {
         myBuf = new char[other.myLength];
       }
       myLength = other.myLength;
+      myMaxLength = other.myLength;
     }
 
     if ((myBuf != NULL) && (other.myBuf != NULL)) {
@@ -243,7 +244,12 @@ AREXPORT void ArBasePacket::resetValid()
   myIsValid = true;
 }
 
-AREXPORT const char *ArBasePacket::getBuf(void)
+AREXPORT const char *ArBasePacket::getBuf(void) const
+{
+  return myBuf;
+}
+
+AREXPORT char *ArBasePacket::getBuf(void) 
 {
   return myBuf;
 }
@@ -305,6 +311,7 @@ AREXPORT void ArBasePacket::uByte2ToBuf(ArTypes::UByte2 val)
   if (!hasWriteCapacity(2)) {
     return;
   }
+  // Note that MSB is placed one byte after the LSB in the end of the buffer:
   unsigned char c;
   c = (val >> 8) & 0xff;
   memcpy(myBuf+myLength+1, &c, 1);
@@ -318,6 +325,7 @@ AREXPORT void ArBasePacket::uByte4ToBuf(ArTypes::UByte4 val)
   if (!hasWriteCapacity(4)) {
     return;
   }
+  // TODO make sure its put in LSB first.
   memcpy(myBuf+myLength, &val, 4);
   myLength += 4;
 }

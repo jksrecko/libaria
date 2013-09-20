@@ -70,11 +70,16 @@ public:
   AREXPORT void netRangeDeviceCumulative(ArServerClient *client, 
 					 ArNetPacket *packet,
 					 ArRangeDevice *device);
-
+  /// internal function that gets the drawing data for a drawing
+  /// @internal
+  AREXPORT ArDrawingData *internalGetDrawingData(const char *name);
+  /// internal function that gets the functor for a drawing
+  /// @internal
+  AREXPORT ArFunctor2<ArServerClient *, ArNetPacket *> *internalGetDrawingCallback(const char *name);
 protected:
   ArServerBase *myServer;
   std::map<std::string, ArDrawingData *, ArStrCaseCmpOp> myDrawingDatas;
-  std::map<std::string, ArFunctor *, ArStrCaseCmpOp> myDrawingCallbacks;
+  std::map<std::string, ArFunctor2<ArServerClient *, ArNetPacket *> *, ArStrCaseCmpOp> myDrawingCallbacks;
   ArFunctor2C<ArServerInfoDrawings, ArServerClient *, ArNetPacket *> myNetListDrawingsCB;  
   ArFunctor2C<ArServerInfoDrawings, ArServerClient *, ArNetPacket *> myNetGetDrawingListCB;  
 };

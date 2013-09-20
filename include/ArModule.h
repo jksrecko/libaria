@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARMODULE_H
 #define ARMODULE_H
@@ -81,14 +81,12 @@ public:
 
   /// Initialize the module. The module should use the supplied ArRobot pointer
   /**
-     @param robot Robot this module should attach to, can be NULL for
-     none, so make sure you handle that case
+     @param robot Robot this module should attach to or operate on. Note, may be NULL.
 
-     @param modArgument an optional string argument to the module,
-     this defaults to NULL, you'll need to cast this to whatever you
-     want it to be... you'll want to document this clearly with the
-     module
-  **/
+     @param argument an optional argument passed to the module. Default
+     is NULL.  The module can interpret this in any way, it is recommended
+     that you make sure this is documented if used. 
+  */
   AREXPORT virtual bool init(ArRobot *robot, 
 			     void *argument = NULL) = 0;
 
@@ -123,44 +121,44 @@ protected:
 
 #define ARDEF_MODULE(mod) \
 extern "C" {\
-ArModule *__AriaModule__=&mod; \
+static ArModule *__AriaModule_##mod = &mod; \
 _declspec(dllexport) bool \
 ariaInitModule(ArRobot *robot, void *argument = NULL) \
 { \
-  if (__AriaModule__) \
+  if (__AriaModule_##mod) \
   { \
     __AriaModule__->setRobot(robot); \
-    return(__AriaModule__->init(robot, argument)); \
+    return(__AriaModule_##mod->init(robot, argument)); \
   } \
   else \
     return(false); \
 } \
 _declspec(dllexport) bool ariaExitModule() \
 { \
-  if (__AriaModule__) \
-    return(__AriaModule__->exit()); \
+  if (__AriaModule_##mod) \
+    return(__AriaModule_##mod->exit()); \
   return(false); \
 } \
 }
 #else // WIN32
 
 #define ARDEF_MODULE(mod) \
-ArModule *__AriaModule__=&mod; \
+static ArModule *__AriaModule_##mod = &mod; \
 extern "C" {\
 bool ariaInitModule(ArRobot *robot, void *argument = NULL) \
 { \
-  if (__AriaModule__) \
+  if (__AriaModule_##mod) \
   { \
-    __AriaModule__->setRobot(robot); \
-    return(__AriaModule__->init(robot, argument)); \
+    __AriaModule_##mod->setRobot(robot); \
+    return(__AriaModule_##mod->init(robot, argument)); \
   } \
   else \
     return(false); \
 } \
 bool ariaExitModule() \
 { \
-  if (__AriaModule__) \
-    return(__AriaModule__->exit()); \
+  if (__AriaModule_##mod) \
+    return(__AriaModule_##mod->exit()); \
   return(false); \
 } \
 }

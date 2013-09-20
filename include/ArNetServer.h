@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,9 +19,9 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #ifndef ARNETSERVER_H
 #define ARNETSERVER_H
@@ -30,6 +30,7 @@ MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
 #include "ArSocket.h"
 #include "ArFunctor.h"
 #include "ariaUtil.h"
+
 #include <list>
 
 
@@ -41,21 +42,39 @@ class ArArgumentBuilder;
 /**
    This class is for running a simple server which will have a
    list of commands to use and a fairly simple set of interactions...
-   Start the server with the open function, add commands with the
-   addCommand function and remove commands with remCommand, and close
-   the server with the close function.
+   Start the server with the open() function, add commands with the
+   addCommand() function and remove commands with remCommand(), and close
+   the server with the close() function.
 
-   It has a built in mutex, if you only use sendToAllClients through
+   A client can connect via TCP on the port provided to open() and send
+   a line of text where the first word is the command and the following
+   words are extra arguments or data (space separated).  The line should
+   end with a newline ("\n") or carriage return character.   The first
+   line sent should be a password and must match the password given to
+   open() in order to continue.
+
+   You can use the "telnet" program as a general client to any ArNetServer server.
+
+   It has a built in mutex, if you only use sendToAllClients() through
    the normal commands or during the robot loop you don't need to
    worry about locking anything and the server is locked before any of
    the callbacks for the commands are called so you really only need
-   to lock the server if you're dealing with it from outside the way.
+   to lock the server if you're dealing with from another thread....
+   From another thread you can use sendToAllClientsNextCycle which
+   takes care of all the locking itself in a threadsafe way (it puts
+   the message in a list, then sends it in the next cycle of the
+   loop).  The only real reason to use the
+   lock/sendToAllClients/unlock method is if you're highly concerned
+   about synchronizing the different types of output.
+
+    @ingroup OptionalClasses
 **/
 class ArNetServer
 {
 public:
   /// Constructor
-  AREXPORT ArNetServer(bool addAriaExitCB = true);
+  AREXPORT ArNetServer(bool addAriaExitCB = true,
+      bool doNotAddShutdownServer = false);
   /// Destructor
   AREXPORT ~ArNetServer();
   
@@ -76,15 +95,27 @@ public:
   AREXPORT bool remCommand(const char *command);
 
 #ifndef SWIG
-  /** @brief Sends the given string to all the clients
-   *  @swigomit
-   *  @sa sendToAllClientsPlain()
+  /** @brief Sends the given string to all the clients.  See also the
+   *  notes on locking in the class description.
+   *  @swigomit @sa
+   *  sendToAllClientsPlain()
    */
   AREXPORT void sendToAllClients(const char *str, ...);
 #endif
 
   /// Sends the given string to all the clients, no varargs, wrapper for java
   AREXPORT void sendToAllClientsPlain(const char *str);
+
+#ifndef SWIG
+  /** @brief Sends the given string to all the clients next cycle
+   *  @swigomit
+   *  @sa sendToAllClientsNextCyclePlain()
+   */
+  AREXPORT void sendToAllClientsNextCycle(const char *str, ...);
+#endif
+
+  /// Sends the given string to all the clients next cycle, no varargs, wrapper for java
+  AREXPORT void sendToAllClientsNextCyclePlain(const char *str);
 
 #ifndef SWIG
   /** @brief Sends the given string to the (hopefully) the client given (this method may go away)
@@ -177,6 +208,10 @@ protected:
   std::list<ArSocket *> myConns;
   std::list<ArSocket *> myConnectingConns;
   std::list<ArSocket *> myDeleteList;
+  
+  ArMutex myNextCycleSendsMutex;
+  std::list<std::string> myNextCycleSends;
+  
   ArFunctorC<ArNetServer> myTaskCB;
   ArFunctor3C<ArNetServer, char **, int, ArSocket *> myHelpCB;
   ArFunctor3C<ArNetServer, char **, int, ArSocket *> myEchoCB;

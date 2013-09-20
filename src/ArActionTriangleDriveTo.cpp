@@ -1,8 +1,8 @@
 /*
-MobileRobots Advanced Robotics Interface for Applications (ARIA)
+Adept MobileRobots Robotics Interface for Applications (ARIA)
 Copyright (C) 2004, 2005 ActivMedia Robotics LLC
 Copyright (C) 2006, 2007, 2008, 2009, 2010 MobileRobots Inc.
-Copyright (C) 2011, 2012 Adept Technology
+Copyright (C) 2011, 2012, 2013 Adept Technology
 
      This program is free software; you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
@@ -19,15 +19,16 @@ Copyright (C) 2011, 2012 Adept Technology
      Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 If you wish to redistribute ARIA under different terms, contact 
-MobileRobots for information about a commercial version of ARIA at 
+Adept MobileRobots for information about a commercial version of ARIA at 
 robots@mobilerobots.com or 
-MobileRobots Inc, 10 Columbia Drive, Amherst, NH 03031; 800-639-9481
+Adept MobileRobots, 10 Columbia Drive, Amherst, NH 03031; +1-603-881-7960
 */
 #include "ArExport.h"
 #include "ariaOSDef.h"
 #include "ArActionTriangleDriveTo.h"
 #include "ArRobot.h"
 #include "ArLaser.h"
+#include "ariaInternal.h"
 
 AREXPORT ArActionTriangleDriveTo::ArActionTriangleDriveTo(
 	const char *name, double finalDistFromVertex,  
@@ -76,6 +77,8 @@ AREXPORT ArActionTriangleDriveTo::ArActionTriangleDriveTo(
   myGotoVertex = false;
   myLocalXOffset = 0;
   myLocalYOffset = 0;
+  myThOffset = 0;
+  myUseLegacyVertexOffset = false;
 }
 
 AREXPORT void ArActionTriangleDriveTo::setParameters(
@@ -131,10 +134,17 @@ AREXPORT void ArActionTriangleDriveTo::setRobot(ArRobot *robot)
   ArAction::setRobot(robot);
   if (myLineFinder == NULL && myRobot != NULL)
   {
-    if ((myLaser = myRobot->findLaser(1)) != NULL)
+    int ii;
+    for (ii = 1; ii <= Aria::getMaxNumLasers(); ii++)
     {
-      myLineFinder = new ArLineFinder(myLaser);
-      myOwnLineFinder = true;
+      if (myRobot->findLaser(ii) != NULL && 
+	  myRobot->findLaser(ii)->isConnected())
+      {
+	myLaser = myRobot->findLaser(ii);
+	myLineFinder = new ArLineFinder(myLaser);
+	myOwnLineFinder = true;
+	break;
+      }
     }
   }
 }
@@ -221,7 +231,8 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
   ArPose adjustedVertex;
 
   ArPose lastVertex;
-  
+  bool printing = false;
+
   lastVertex = myRobot->getEncoderTransform().doTransform(myVertex);
 
   for (start = 0; start < len; start++)
@@ -254,13 +265,16 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
       else
 	line2Delta = 0;
 
-      if (0)
-	ArLog::log(ArLog::Normal, "dl1l2 %5.0f l1d %5.0f l2d %5.0f thdt %5.0f l1dt %5.0f l2dt %5.0f", 
+
+      if (printing)
+	ArLog::log(ArLog::Normal, "dl1l2 %5.0f l1d %5.0f l2d %5.0f ab %5.0f thdt %5.0f l1dt %5.0f l2dt %5.0f", 
 		   distLine1ToLine2,
 		   line1Dist,
 		   line2Dist,
+		   angleBetween,
 		   angleDelta,
 		   line1Delta, line2Delta);
+
       // if any of these is true the line is just too bad and we should bail
       if (line1Delta > 125 || line2Delta > 125 ||
 	  angleDelta > 15 || distLine1ToLine2 > 100)
@@ -302,8 +316,17 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
 					  (*myLines)[start+1]->getX2()),
 				    90));;
       */
-      vertex.setTh(ArMath::addAngle((*myLines)[start]->getLineAngle(),
-				    angleBetween / 2));
+      // if we don't care about the angle or it's a non-inverted
+      // triangle use the old way
+      if (myAngleBetween > -.1)
+	vertex.setTh(ArMath::addAngle((*myLines)[start]->getLineAngle(),
+				      angleBetween / 2));
+      // if it's an inverted triangle flip the angle so that things
+      // work right
+      else
+	vertex.setTh(ArMath::addAngle(180, 
+				      ArMath::addAngle((*myLines)[start]->getLineAngle(),
+						       angleBetween / 2)));
 
       vertexLine.newEndPoints(vertex.getX(), vertex.getY(),
 		      vertex.getX() + ArMath::cos(vertex.getTh()) * 20000,
@@ -320,7 +343,7 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
 
 	if (robotLine.getDistToLine(vertex) > myMaxLateralDist)
 	{
-	  if (0)
+	  if (printing)
 	    ArLog::log(ArLog::Normal, 
 		   "Robot off possible vertex line by %.0f, ignoring it", 
 		       robotLine.getDistToLine(vertex));
@@ -335,7 +358,7 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
 	if (fabs(ArMath::subAngle(ArMath::subAngle(myOriginalAngle, 180), 
 				  vertex.getTh())) > myMaxAngleMisalignment)
 	{
-	  if (0)
+	  if (printing)
 	    ArLog::log(ArLog::Normal, 
 	   "Robot misaligned from possible vertex line by %.0f (original %.0f robot %.0f line %.0f), ignoring it", 
 		       fabs(ArMath::subAngle(
@@ -400,8 +423,8 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
       // in front of us
       if (initial)
       {
-	if (0)
-	  printf("%.0f (%.3f) %.0f\n", 
+	if (printing)
+	  printf("init %.0f (%.3f) %.0f\n", 
 		 ArMath::subAngle(myRobot->getTh(),
 				  myRobot->getPose().findAngleTo(vertex)),
 		 90 - ArMath::fabs(myRobot->findDeltaHeadingTo(vertex)) / 90,
@@ -415,17 +438,21 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
 				ArMath::fabs(
 					ArMath::subAngle(myRobot->getTh(),
 			       myRobot->getPose().findAngleTo(vertex)))) / 30;
-	//printf("angle %.0f\n", lineScore);
+	if (printing)
+	  printf("angle %.0f\n", lineScore);
 	lineScore *= .5 + .5 * (1500 - 
 				vertexLine.getDistToLine(myRobot->getPose())) / 1500;
-	//printf("disttoline %.0f\n", lineScore);
+	if (printing)
+	  printf("disttoline %.0f\n", lineScore);
 
 	// weight it more heavily if the vertex points towards along
 	// the same line as the line from the robot to the vertex
 	lineScore *= .5 + .5 * (30 - fabs(ArMath::subAngle(
-		vertex.getTh(), vertex.findAngleTo(myRobot->getPose()))));
-	//printf("anglefrompointing %.0f\n", lineScore);
+						  vertex.getTh(), vertex.findAngleTo(myRobot->getPose()))));
 	
+	if (printing)
+	  printf("anglefrompointing %.0f (%.0f %.0f)\n", lineScore,
+		 vertex.getTh(), vertex.findAngleTo(myRobot->getPose()));
 
       }
       // for not the initial one weight them more heavily if they're
@@ -473,7 +500,8 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
 	    lineScore *= 0;
 	}
       }
-      //printf("4 %.0f\n", lineScore);
+      if (printing)
+	printf("linescore %.0f\n", lineScore);
       // if the match is too bad just bail
       if (lineScore < 5)
       {
@@ -483,7 +511,7 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
       // our actual vertex to it
       if (goodLineScore < 1 || lineScore > goodLineScore)
       {
-	if (0)
+	if (printing)
 	  printf("#### %.0f %.0f %.0f at %.0f %.0f\n", 
 		 vertex.getX(), vertex.getY(), vertex.getTh(),
 		 myRobot->getPose().findAngleTo(vertex),
@@ -503,31 +531,36 @@ AREXPORT void ArActionTriangleDriveTo::findTriangle(bool initial,
 	    //"@@ Before %.0f %.0f %.0f (%d %d %.1f)",
 	    //usedVertex.getX(), usedVertex.getY(), usedVertex.getTh(),
 	    //myLocalXOffset, myLocalYOffset, myThOffset);
-	  /* old wrong code
-	  usedVertex.setX(usedVertex.getX() + 
-			  myLocalXOffset * ArMath::cos(usedVertex.getTh()) + 
-			  myLocalYOffset * ArMath::sin(usedVertex.getTh()));
-	  usedVertex.setY(usedVertex.getY() - 
-			  myLocalXOffset * ArMath::sin(usedVertex.getTh()) -
-			  myLocalYOffset * ArMath::cos(usedVertex.getTh()));
-	  usedVertex.setTh(ArMath::addAngle(vertex.getTh(), myThOffset));
-	  //ArLog::log(ArLog::Normal, "@@ After %.0f %.0f %.0f (%.0f angle from before to after)",
-	  //usedVertex.getX(), usedVertex.getY(), usedVertex.getTh(),
-	  //before.findAngleTo(usedVertex));
-	  */
-
-	  // new code that uses a transform and does it right
-	  // make a transform so that our existing vertex becomes the origin
-	  ArTransform localTrans(before, ArPose(0, 0));
-	  // then do an inverse transform to pull the local offset out of 
-	  ArPose transformed = localTrans.doInvTransform(ArPose(myLocalXOffset, myLocalYOffset));
-	  usedVertex.setX(transformed.getX());
-	  usedVertex.setY(transformed.getY());
-	  usedVertex.setTh(ArMath::addAngle(vertex.getTh(), myThOffset));
-	  //ArLog::log(ArLog::Normal, "@@ Transformed %.0f %.0f %.0f (%.0f angle from before to after)",
-	  //transformed.getX(), transformed.getY(), transformed.getTh(),
-	  //before.findAngleTo(transformed));
-	  
+	  // old wrong code
+	  if (myUseLegacyVertexOffset)
+	  {
+	    ArLog::log(ArLog::Normal, "Legacy vertex mode...");
+	    usedVertex.setX(usedVertex.getX() + 
+			    myLocalXOffset * ArMath::cos(usedVertex.getTh()) + 
+			    myLocalYOffset * ArMath::sin(usedVertex.getTh()));
+	    usedVertex.setY(usedVertex.getY() - 
+			    myLocalXOffset * ArMath::sin(usedVertex.getTh()) -
+			    myLocalYOffset * ArMath::cos(usedVertex.getTh()));
+	    usedVertex.setTh(ArMath::addAngle(vertex.getTh(), myThOffset));
+	    //ArLog::log(ArLog::Normal, "@@ After %.0f %.0f %.0f (%.0f angle from before to after)",
+	    //usedVertex.getX(), usedVertex.getY(), usedVertex.getTh(),
+	    //before.findAngleTo(usedVertex));
+	  }
+	  else
+	  {
+	    ArLog::log(ArLog::Normal, "New vertex mode...");
+	    // new code that uses a transform and does it right
+	    // make a transform so that our existing vertex becomes the origin
+	    ArTransform localTrans(before, ArPose(0, 0));
+	    // then do an inverse transform to pull the local offset out of 
+	    ArPose transformed = localTrans.doInvTransform(ArPose(myLocalXOffset, myLocalYOffset));
+	    usedVertex.setX(transformed.getX());
+	    usedVertex.setY(transformed.getY());
+	    usedVertex.setTh(ArMath::addAngle(vertex.getTh(), myThOffset));
+	    //ArLog::log(ArLog::Normal, "@@ Transformed %.0f %.0f %.0f (%.0f angle from before to after)",
+	    //transformed.getX(), transformed.getY(), transformed.getTh(),
+	    //before.findAngleTo(transformed));
+	  }	  
 	}
 			  
 	myVertex = myRobot->getEncoderTransform().doInvTransform(usedVertex);

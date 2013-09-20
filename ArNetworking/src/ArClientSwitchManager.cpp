@@ -3,7 +3,8 @@
 #include "ArClientSwitchManager.h"
 
 AREXPORT ArClientSwitchManager::ArClientSwitchManager(
-	ArServerBase *serverBase, ArArgumentParser *parser) :
+	ArServerBase *serverBase, ArArgumentParser *parser,
+	const char *serverDesc, const char *clientSoftwareDesc) : 
   myParseArgsCB(this, &ArClientSwitchManager::parseArgs),
   myLogOptionsCB(this, &ArClientSwitchManager::logOptions),
   mySocketClosedCB(this, &ArClientSwitchManager::socketClosed),
@@ -19,6 +20,8 @@ AREXPORT ArClientSwitchManager::ArClientSwitchManager(
   myMutex.setLogName("ArClientSwitchManager::myDataMutex");
   myServer = serverBase;
   myParser = parser;
+  myServerDesc = serverDesc;
+  myClientSoftwareDesc = clientSoftwareDesc;
   
   setThreadName("ArClientSwitchManager");
 
@@ -66,7 +69,10 @@ AREXPORT ArClientSwitchManager::ArClientSwitchManager(
   myProcessFileCB.setName("ArClientSwitchManager");
   Aria::getConfig()->addProcessFileCB(&myProcessFileCB, -1000);
   
-
+  myConfigFirstProcess = true;
+  myConfigConnectToCentralServer = false;
+  myConfigCentralServer[0] = '\0';
+  myConfigIdentifier[0] = '\0';
   
   switchState(IDLE);
   myClient = NULL;
@@ -202,6 +208,11 @@ AREXPORT void ArClientSwitchManager::clientSwitch(ArNetPacket *packet)
   myLastTcpHeartbeat.setToNow();
   myLastUdpHeartbeat.setToNow();
   switchState(CONNECTED);
+  
+  char switchStr[1024];
+  sprintf(switchStr, "Recovered connection to %s at %s, now connected.", 
+    myServerDesc.c_str(), myCentralServer.c_str());
+  myConnectedCBList.invoke(switchStr);
   //myDataMutex.unlock();
 }
 
@@ -213,6 +224,12 @@ AREXPORT void ArClientSwitchManager::socketClosed(void)
     myServerClient = NULL;
     ArLog::log(ArLog::Normal, "ArClientSwitchManager: Lost connection to central server");
     switchState(LOST_CONNECTION);
+
+    char failedStr[1024];
+    sprintf(failedStr, "Lost connection to %s at %s, restarting connection.", 
+	    myServerDesc.c_str(), myCentralServer.c_str());
+    myFailedConnectCBList.invoke(failedStr);
+
   }
   myDataMutex.unlock();
 }
@@ -230,10 +247,13 @@ AREXPORT void *ArClientSwitchManager::runThread(void *arg)
     else if (myState == TRYING_CONNECTION)
     {
       myLastConnectionAttempt.setToNow();
-      ArLog::log(ArLog::Normal, "Trying to connect to central server");
+      ArLog::log(ArLog::Normal, "Trying to connect to central server %s",
+		 myCentralServer.c_str());
       myClient = new ArClientBase;
       myClient->setRobotName("ClientSwitch", myDebugLogging);
       myClient->setServerKey(myServerKey.c_str(), false);
+      myClient->enforceProtocolVersion(myEnforceProtocolVersion.c_str(), false);
+      myClient->enforceType(myEnforceType, false);
       myLastTcpHeartbeat.setToNow();
       myLastUdpHeartbeat.setToNow();
       if (!myClient->blockingConnect(myCentralServer.c_str(), 
@@ -241,18 +261,97 @@ AREXPORT void *ArClientSwitchManager::runThread(void *arg)
 				     myUser.c_str(), myPassword.c_str(),
 				     myServer->getOpenOnIP()))
       {
+	char failedStr[10000];
+	char verboseFailedStr[10000];
 	if (myClient->wasRejected())
-	  ArLog::log(ArLog::Normal, 
-		     "Could not connect to %s because it rejected connection (bad user, password, or serverkey)",
-		     myCentralServer.c_str());
+	{
+	  //ArLog::log(ArLog::Normal, 
+	             //"Could not connect to %s because it rejected connection (%d, %s)",
+		     //myCentralServer.c_str(), myClient->getRejected(), myClient->getRejectedString());
+	  if (myClient->getRejected() == 1)
+	  {
+	    sprintf(verboseFailedStr, 
+		    "Could not connect to %s at %s\n\nBad username and password.", 
+		    myServerDesc.c_str(), myCentralServer.c_str());
+	    sprintf(failedStr, 
+		    "Could not connect to %s (Bad username and password)", 
+		    myCentralServer.c_str());
+	  }
+	  else if (myClient->getRejected() == 2)
+	  {
+	    sprintf(verboseFailedStr, 
+		    "Could not connect to %s at %s\n\nIt rejected this connection because it is not direct.", 
+		    myServerDesc.c_str(), myCentralServer.c_str());
+	    sprintf(failedStr, 
+		    "Could not connect to %s (rejected because not a direct connection).", 
+		    myCentralServer.c_str());
+	  }
+	  else if (myClient->getRejected() == 3)
+	  {
+	    sprintf(verboseFailedStr, 
+		    "Could not connect to %s at %s\n\nIt is a version not supported by this robot's %s.", 
+		    myServerDesc.c_str(), myCentralServer.c_str(),
+		    myClientSoftwareDesc.c_str());
+	    sprintf(failedStr, 
+		    "Could not connect to %s (it is not a version supported by this robot's %s)", 
+		    myCentralServer.c_str(), myClientSoftwareDesc.c_str());
+	  }
+	  else if (myClient->getRejected() == 4)
+	  {
+	    sprintf(verboseFailedStr, 
+		    "Could not connect to %s at %s\n\nIt does not support this robot's %s version.", 
+		    myServerDesc.c_str(), myCentralServer.c_str(),
+		    myClientSoftwareDesc.c_str());
+	    sprintf(failedStr, 
+		    "Could not connect to %s at %s (It does not support this robot's %s version)", 
+		    myServerDesc.c_str(), myCentralServer.c_str(),
+		    myClientSoftwareDesc.c_str());
+	  }
+	  else if (myClient->getRejected() == 5)
+	  {
+	    sprintf(verboseFailedStr, 
+		    "Could not connect to %s at %s\n\nIt's number of licenses has been exceeded.\n\nPlease contact your robot provider for assistance purchasing more licenses.", 
+		    myServerDesc.c_str(), myCentralServer.c_str());
+	    sprintf(failedStr, 
+		    "Could not connect to %s (It's number of licenses has been exceeded)",
+		    myCentralServer.c_str());
+	  }
+	  else if (myClient->getRejected() == 6)
+	  {
+	    sprintf(verboseFailedStr, 
+		    "Could not connect to %s at %s\n\nIt does not allow connections from %s robots.\n\nPlease contact your robot administrator for assistance.", 
+		    myServerDesc.c_str(), myCentralServer.c_str(), 
+		    ArServerCommands::toString(myEnforceType));
+	    sprintf(failedStr, 
+		    "Could not connect to %s (It does not allow connections from %s robots)",
+		    myCentralServer.c_str(), 
+		    ArServerCommands::toString(myEnforceType));
+	  }
+	  else
+	  {
+	    sprintf(verboseFailedStr, 
+		    "Could not connect to %s at %s\n\nThe reason is '%s'", 
+		    myServerDesc.c_str(), myCentralServer.c_str(), myClient->getRejectedString());
+	    sprintf(failedStr, 
+		    "Could not connect to %s (reason %d '%s')", 
+		    myCentralServer.c_str(), myClient->getRejected(), 
+		    myClient->getRejectedString());
+	  }
+	}
 	else
+	{
 	  ArLog::log(ArLog::Verbose, 
 	     "Could not connect to %s to switch with, not doing anything",
 		     myCentralServer.c_str());
+	  sprintf(verboseFailedStr, "Could not connect to %s at %s\n\nIt may not be reachable by the robot.", myServerDesc.c_str(), myCentralServer.c_str());
+	  sprintf(failedStr, "Could not connect to %s", myCentralServer.c_str());
+	}
 	myClient->getTcpSocket()->close();
 	delete myClient;
 	myClient = NULL;
 	switchState(LOST_CONNECTION);
+	ArLog::log(ArLog::Normal, "%s", failedStr);
+	myFailedConnectCBList.invoke(verboseFailedStr);
 	myDataMutex.unlock();
 	continue;
       }
@@ -264,7 +363,13 @@ AREXPORT void *ArClientSwitchManager::runThread(void *arg)
 	myClient->disconnect();
 	delete myClient;
 	myClient = NULL;
-	switchState(IDLE);
+	switchState(LOST_CONNECTION);
+
+	char failedStr[1024];
+	sprintf(failedStr, "Connected to %s at %s, but it is inappropriate software, disconnecting.\n\nLikely this robot is pointing at another robot.", 
+		myServerDesc.c_str(), myCentralServer.c_str());
+	myFailedConnectCBList.invoke(failedStr);
+
 	myDataMutex.unlock();
 	continue;
       }
@@ -306,12 +411,19 @@ AREXPORT void *ArClientSwitchManager::runThread(void *arg)
       if (myStartedState.secSince() >= 15 && 
 	  myLastTcpHeartbeat.secSince() / 60.0 >= myServerHeartbeatTimeout)
       {
-	ArLog::log(ArLog::Normal, "ArClientSwitchManager: Connecting to central server has taken %.2f minutes, restarting connection", myStartedState.secSince() / 4.0);
+
+	ArLog::log(ArLog::Normal, "ArClientSwitchManager: Connecting to central server has taken %.2f minutes, restarting connection", myStartedState.secSince() / 60.0); // this had / 4.0 for no apparent reason, changed it (11/13/2012 MPL)
 	/// added this to try and eliminate the occasional duplicates
 	myClient->getTcpSocket()->close();
 	delete myClient;
 	myClient = NULL;
 	switchState(LOST_CONNECTION);
+
+	char failedStr[1024];
+	sprintf(failedStr, "Connection to %s at %s took over %.2f minutes, restarting connection.", 
+		myServerDesc.c_str(), myCentralServer.c_str(), myStartedState.secSince() / 60.0);
+	myFailedConnectCBList.invoke(failedStr);
+
 	myDataMutex.unlock();
 	continue;
       }
@@ -338,6 +450,12 @@ AREXPORT void *ArClientSwitchManager::runThread(void *arg)
 	myServerClient->forceDisconnect(false);
 	myServerClient = NULL;
 	switchState(LOST_CONNECTION);
+
+	char failedStr[1024];
+	sprintf(failedStr, "Dropping connection to %s at %s since the robot hasn't heard from it in over %g minutes, restarting connection.", 
+		myServerDesc.c_str(), myCentralServer.c_str(), myServerHeartbeatTimeout);
+	myFailedConnectCBList.invoke(failedStr);
+
 	myDataMutex.unlock();
 	continue;
       }
@@ -463,11 +581,107 @@ AREXPORT const char *ArClientSwitchManager::getCentralServerHostName(void)
     return myCentralServer.c_str();
 }
 
+AREXPORT const char *ArClientSwitchManager::getIdentifier(void)
+{
+  if (myIdentifier.size() <= 0)
+    return NULL;
+  else
+    return myIdentifier.c_str();
+}
+
 bool ArClientSwitchManager::processFile(void)
 {
   myDataMutex.lock();
   if (myServerClient != NULL)
     myServerClient->setBackupTimeout(myServerBackupTimeout);
+
+  // we only process this once, that's fine since changing it causes
+  // the software to restart
+  if (myConfigFirstProcess)
+  {
+    // if the config wants to connect to the central server and there
+    // isn't already a central server set, use the one in the config
+    if (myConfigConnectToCentralServer && 
+	myCentralServer.empty() && myConfigCentralServer[0] != '\0')
+    {
+      myCentralServer = myConfigCentralServer;
+      myState = TRYING_CONNECTION;
+    }
+    
+    // if we have no identifier set, but the config has one, copy it
+    // over
+    if (myIdentifier.empty() && myConfigIdentifier[0] != '\0')
+    {
+      myIdentifier = myConfigIdentifier;
+    }
+    myConfigFirstProcess = false;
+  }
+
   myDataMutex.unlock();
   return true;
+}
+
+
+AREXPORT void ArClientSwitchManager::addToConfig(
+	const char *configSection, 
+	const char *connectName, const char *connectDesc, 
+	const char *addressName, const char *addressDesc)
+{
+  myConfigFirstProcess = true;
+
+  if (myCentralServer.empty())
+  {
+    Aria::getConfig()->addParam(
+	    ArConfigArg(connectName, &myConfigConnectToCentralServer,
+			connectDesc),
+	    configSection, ArPriority::ADVANCED, "Checkbox", 
+	    ArConfigArg::RESTART_SOFTWARE);
+
+    myConfigDisplayHint = "Visible:";
+    myConfigDisplayHint += connectName;
+    myConfigDisplayHint += "=true";
+    
+    Aria::getConfig()->addParam(
+	    ArConfigArg(addressName, myConfigCentralServer,
+			addressDesc,
+			sizeof(myConfigCentralServer)),
+	    configSection, ArPriority::ADVANCED, 
+	    getConfigDisplayHint(),
+	    ArConfigArg::RESTART_SOFTWARE);
+  }
+
+  if (myIdentifier.empty())
+  {
+    Aria::getConfig()->addParam(
+	    ArConfigArg("Identifier", myConfigIdentifier,
+			"The identifier to use for this robot...  After initial setup this should not be changed",
+			sizeof(myConfigIdentifier)),
+	    configSection, ArPriority::CALIBRATION, 
+	    getConfigDisplayHint(),
+	    ArConfigArg::RESTART_SOFTWARE);
+  }
+}
+
+
+/// Enforces the that the server is using this protocol version
+AREXPORT void ArClientSwitchManager::enforceProtocolVersion(const char *protocolVersion)
+{
+  myDataMutex.lock();
+  if (protocolVersion != NULL)
+    myEnforceProtocolVersion = protocolVersion;
+  else
+    myEnforceProtocolVersion = "";
+  myDataMutex.unlock();
+  ArLog::log(ArLog::Normal, "ArClientSwitchManager: New enforceProtocolVersionSet");
+
+}
+
+AREXPORT void ArClientSwitchManager::enforceType(ArServerCommands::Type type)
+{
+  myDataMutex.lock();
+  myEnforceType = type;
+  myDataMutex.unlock();
+  ArLog::log(ArLog::Normal, "ArClientSwitchManager: New enforce type: %s", 
+	     ArServerCommands::toString(type));
+	     
 }

@@ -47,3 +47,18 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  #		echo ;\
  #		echo       The files are owned by the group \"users\", and all members of that group ;\
+--- a/include/ArConfigArg.h
++++ b/include/ArConfigArg.h
+@@ -307,10 +307,12 @@
+                           char *errorBuffer = NULL, size_t errorBufferLen = 0, 
+                           bool doNotSet = false);
+ 
++#ifndef SWIG
+   /// Sets the argument value for string arguments. The value of @a str is copied to the target string.
+   AREXPORT bool setString(const std::string &str,
+                           char *errorBuffer = NULL, size_t errorBufferLen = 0, 
+                           bool doNotSet = false);
++#endif
+ 
+   AREXPORT bool setCppString(const std::string &str,
+                           char *errorBuffer = NULL, size_t errorBufferLen = 0,

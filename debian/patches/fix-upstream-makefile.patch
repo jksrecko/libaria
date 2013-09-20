@@ -1,57 +1,57 @@
 Description: Fix upstream build system.
  Since the upstream tarball already contains build results,
  Makefile and utils were modified to enable full clean and rebuild.
- .
- Reed (upstream) will consider it for the next major ARIA release (2.8)
- expected in the Summer of 2013.
-Forwarded: Reed Hedges <reed.hedges@adept.com>
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile
-@@ -264,7 +264,6 @@
+@@ -308,10 +308,7 @@
  docs: doc
  doc: docs/index.html
- docs/index.html: $(SRC_FILES) $(HEADER_FILES) $(EXAMPLES_CPP) doxygen.conf docs/overview.dox docs/options/all_options.dox docs/params.dox
+ docs/index.html: $(SRC_FILES) $(HEADER_FILES) $(EXAMPLES_CPP) docs/overview.dox docs/options/all_options.dox docs/params.dox
+-	@echo Removing old documentation...
 -	$(MAKE) cleanDoc
- 	doxygen doxygen.conf
- 
+-	@echo Running dist/make-doc.sh to generate HTML API documentation...
+-	dist/make-doc.sh dev ARIA_DIST_NO_NTP=1
++	doxygen doxygen.conf
+ 	
  arnetworking_swig:
-@@ -349,7 +348,11 @@
+ 	$(MAKE) -C ArNetworking java python
+@@ -395,7 +392,11 @@
  	-rm -f $(MOD_EXAMPLES)
  
  cleanDoc:
--	-rm -rf docs/*.html docs/*.png docs/doxygen.css
+-	-rm  docs/*.html docs/*.png docs/doxygen.css
 +	find docs/ -path docs/figures -prune -o -type d \! -name docs -exec rm -rf \{\} +
 +	find docs/ -path docs/figures -prune -o \! \( -name "*.dox" -o -name docs \) -execdir rm \{\} +
 +
 +cleanParams:
 +	-rm -rf params
  
- cleanPython:
- 	-rm python/_AriaPy.so
-@@ -390,23 +393,21 @@
+ cleandoc: cleanDoc
+ 
+@@ -440,8 +441,6 @@
  cleanAll: clean 
  	rm -f lib/lib*.so*
  	for dir in `find . -maxdepth 1 -name "Ar*" -xtype d`; do cd $$dir; make clean; cd ..; done
 -	$(MAKE) -C ArVideo cleanAll
- 	$(MAKE) -C ArNetworking cleanAll
+-	$(MAKE) -C ArNetworking cleanAll
  
  fullCleanAll: cleanAll cleanJava cleanPython 
  	rm -f lib/lib*.so*
- 	rm -f obj/*.o*
--	for dir in `find . -maxdepth 1 -name "Ar*" -xtype d`; do cd $$dir; make fullClean; cd ..; done
+@@ -450,13 +449,14 @@
  
  
  
- params: utils/makeParams
++
+ params: utils/makeParams$(binsuffix)
  	-mkdir params
--	utils/makeParams
-+	LD_LIBRARY_PATH=lib utils/makeParams
+-	utils/makeParams$(binsuffix)
++	LD_LIBRARY_PATH=lib utils/makeParams$(binsuffix)
  
- CommandLineOptions.txt.in docs/options/all_options.dox: utils/genCommandLineOptionDocs src/ArSimpleConnector.cpp src/ArGPSConnector.cpp src/ArTCM2.cpp
+ CommandLineOptions.txt.in docs/options/all_options.dox: utils/genCommandLineOptionDocs$(binsuffix) src/ArSimpleConnector.cpp src/ArGPSConnector.cpp src/ArTCM2.cpp
  	-mkdir docs/options
--	utils/genCommandLineOptionDocs
-+	LD_LIBRARY_PATH=lib utils/genCommandLineOptionDocs
+-	utils/genCommandLineOptionDocs$(binsuffix)
++	LD_LIBRARY_PATH=lib utils/genCommandLineOptionDocs$(binsuffix)
  
  alllibs: allLibs
  
@@ -67,7 +67,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
    makePref(new ArRobotAmigoSh);
 --- a/ArNetworking/Makefile
 +++ b/ArNetworking/Makefile
-@@ -68,7 +68,7 @@
+@@ -70,7 +70,7 @@
  TARGETS:=../lib/libArNetworking.so examples
  
  EXAMPLES_CPP:=$(shell find examples -name "*.$(CFILEEXT)" | grep -v Mod.cpp)
@@ -76,7 +76,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  TESTS_CPP:=$(shell find tests -name "*.$(CFILEEXT)" | grep -v Mod.cpp)
  TESTS:=$(patsubst %.$(CFILEEXT),%,$(TESTS_CPP))
-@@ -102,20 +102,22 @@
+@@ -104,20 +104,22 @@
  clean: cleanExamples
  	rm -f ../lib/libArNetworking.so ../lib/libArNetworking.a \
  	`find . -name core` $(OFILES) `find . -name '*~'`
@@ -99,9 +99,9 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 +	find docs/ -path docs/figures -prune -o -type d \! -name docs -exec rm -rf \{\} +
 +	find docs/ -path docs/figures -prune -o \! -name docs -execdir rm \{\} +
  
- cleanAll: clean cleanExamples cleanJava cleanPython cleanDoc
+ fullClean: clean cleanExamples cleanJava cleanPython cleanDoc
  
-@@ -182,7 +184,7 @@
+@@ -184,7 +186,7 @@
  
  CommandLineOptions.txt.in docs/options/all_options.dox: genCommandLineOptionDocs
  	-mkdir docs/options

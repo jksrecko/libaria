@@ -7,11 +7,11 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
  	$(INSTALL) -D -m 644 params/* $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
 -	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/lib/
--	$(INSTALL) -D -m 644 lib/libAria.so.2.7.5.2 $(DESTDIR)$(INSTALL_DIR)/lib/
+-	$(INSTALL) -D -m 644 lib/libAria.so.2.8.0 $(DESTDIR)$(INSTALL_DIR)/lib/
 -	cp --no-dereference lib/libAria.so.2 $(DESTDIR)$(INSTALL_DIR)/lib/
 -	cp --no-dereference lib/libAria.so $(DESTDIR)$(INSTALL_DIR)/lib/
 +	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
-+	$(INSTALL) -D -m 644 lib/libAria.so.2.7.5.2 $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
++	$(INSTALL) -D -m 644 lib/libAria.so.2.8.0 $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
 +	cp --no-dereference lib/libAria.so.2 $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
 +	cp --no-dereference lib/libAria.so $(DESTDIR)$(INSTALL_DIR)/lib/$(DEB_HOST_MULTIARCH)
  	@if test -z "$(DIST_INSTALL)"; then \

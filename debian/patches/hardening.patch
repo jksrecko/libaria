@@ -73,8 +73,8 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  ####
  
  lib/libAria.so: $(OFILES) Makefile.dep 
--	$(CXX) -shared -Wl,-soname,libAria.so.2 -o $(@).2.7.5.2 $(OFILES)
-+	$(CXX) -shared -Wl,-soname,libAria.so.2 $(LDFLAGS) -o $(@).2.7.5.2 $(OFILES)
- 	ln -s libAria.so.2.7.5.2 lib/libAria.so.2
+-	$(CXX) -shared -Wl,-soname,libAria.so.2 -o $(@).2.8.0 $(OFILES)
++	$(CXX) -shared -Wl,-soname,libAria.so.2 $(LDFLAGS) -o $(@).2.8.0 $(OFILES)
+ 	ln -s libAria.so.2.8.0 lib/libAria.so.2
  	ln -s libAria.so.2 lib/libAria.so
  

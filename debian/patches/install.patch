@@ -19,8 +19,8 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
  
  lib/libAria.so: $(OFILES) Makefile.dep 
 -	$(CXX) -shared -o $(@) $(OFILES)
-+	$(CXX) -shared -Wl,-soname,libAria.so.2 -o $(@).2.7.5.2 $(OFILES)
-+	ln -s libAria.so.2.7.5.2 lib/libAria.so.2
++	$(CXX) -shared -Wl,-soname,libAria.so.2 -o $(@).2.8.0 $(OFILES)
++	ln -s libAria.so.2.8.0 lib/libAria.so.2
 +	ln -s libAria.so.2 lib/libAria.so
  
  lib/libAria.a: $(OFILES) Makefile.dep 
@@ -61,7 +61,7 @@ Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 +	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
 +	$(INSTALL) -D -m 644 params/* $(DESTDIR)$(INSTALL_DIR)/share/Aria/params
 +	$(INSTALL) -d -m 755 $(DESTDIR)$(INSTALL_DIR)/lib/
-+	$(INSTALL) -D -m 644 lib/libAria.so.2.7.5.2 $(DESTDIR)$(INSTALL_DIR)/lib/
++	$(INSTALL) -D -m 644 lib/libAria.so.2.8.0 $(DESTDIR)$(INSTALL_DIR)/lib/
 +	cp --no-dereference lib/libAria.so.2 $(DESTDIR)$(INSTALL_DIR)/lib/
 +	cp --no-dereference lib/libAria.so $(DESTDIR)$(INSTALL_DIR)/lib/
  	@if test -z "$(DIST_INSTALL)"; then \

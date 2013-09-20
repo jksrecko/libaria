@@ -1,6 +1,7 @@
 Description: Fix upstream build system.
  Since the upstream tarball already contains build results,
  Makefile and utils were modified to enable full clean and rebuild.
+Forwarded: Reed Hedges <reed.hedges@adept.com>
 Author: Srećko Jurić-Kavelj <srecko.juric-kavelj@fer.hr>
 --- a/Makefile
 +++ b/Makefile

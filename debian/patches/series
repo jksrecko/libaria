@@ -5,3 +5,4 @@ multiarch.patch
 python.patch
 examples.patch
 test.patch
+ubuntu-linker-fix.patch

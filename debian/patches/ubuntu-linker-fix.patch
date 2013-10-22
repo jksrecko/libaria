@@ -1,0 +1,34 @@
+Description: Link libAria.so directly with the libraries it uses
+Author: Colin Watson <cjwatson@ubuntu.com>
+Bug-Debian: http://bugs.debian.org/726429
+Forwarded: no
+Last-Update: 2013-10-22
+
+Index: b/Makefile
+===================================================================
+--- a/Makefile
++++ b/Makefile
+@@ -34,12 +34,12 @@
+   $(info Building on MinGW)
+ 	#CXXFLAGS+=-mwindows -mms-bitfields -D__MINGW__ -DMINGW
+ 	CXXFLAGS+=-mms-bitfields -D__MINGW__ -DMINGW
+-	CXXLINK+=-lpthreadGC2 -lwinmm -lws2_32 -lstdc++
++	LIBARIA_LDADD=-lpthreadGC2 -lwinmm -lws2_32 -lstdc++
+ 	CXXSTATICLINK+=-Wl,-Bstatic -lpthread -Wl,-Bdynamic -lwinmm -lws2_32 -lstdc++
+ 	binsuffix:=.exe
+ else
+ 	BARECXXFLAGS+=-fPIC
+-	CXXLINK+=-lpthread -ldl -lrt
++	LIBARIA_LDADD=-lpthread -ldl -lrt
+ 	CXXSTATICLINK+=-Xlinker -Bdynamic -lpthread -ldl -lrt -Xlinker -Bstatic -lstdc++ -Xlinker -Bdynamic
+ 	binsuffix:=
+ endif
+@@ -600,7 +600,7 @@
+ ####
+ 
+ lib/libAria.so: $(OFILES) Makefile.dep 
+-	$(CXX) -shared -Wl,-soname,libAria.so.2 $(LDFLAGS) -o $(@).2.8.0 $(OFILES)
++	$(CXX) -shared -Wl,-soname,libAria.so.2 $(LDFLAGS) -o $(@).2.8.0 $(OFILES) $(LIBARIA_LDADD)
+ 	ln -s libAria.so.2.8.0 lib/libAria.so.2
+ 	ln -s libAria.so.2 lib/libAria.so
+ 

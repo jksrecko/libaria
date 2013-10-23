@@ -17,7 +17,7 @@ override_dh_installchangelogs:
 override_dh_installdocs:
 	dh_installdocs -Xfigures/ -Xoptions/ -X.dox
 
-get-orig-source: MAKEFILE_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+get-orig-source: MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 get-orig-source:
 	wget http://robots.mobilerobots.com/ARIA/download/current/ARIA-2.8.0+gcc4.6.tgz
 	tar xzf ARIA-2.8.0+gcc4.6.tgz

@@ -11,10 +11,14 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 override_dh_auto_build-indep:
 	$(MAKE) -C . docs
 
+override_dh_auto_install-indep: ;
+
+override_dh_auto_test-indep: ;
+
 override_dh_installchangelogs:
 	dh_installchangelogs Changes.txt upstream
 
-override_dh_installdocs:
+override_dh_installdocs-indep:
 	dh_installdocs -Xfigures/ -Xoptions/ -X.dox
 
 get-orig-source: MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))

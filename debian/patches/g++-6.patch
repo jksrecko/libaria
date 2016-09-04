@@ -1,0 +1,47 @@
+Description: Fix GCC 6 related compilation errors.
+ NULL pointer was represented as (bool) false in a few places,
+ but that doesn't work in GCC 6 (since C++11).
+Forwarded: Reed Hedges <reed.hedges@adept.com>
+Author: Srećko Jurić-Kavelj <jksrecko@gmail.com>
+--- a/src/ArCameraCollection.cpp
++++ b/src/ArCameraCollection.cpp
+@@ -566,7 +566,7 @@
+ {
+   CameraInfo *cameraInfo = findCameraInfo(cameraName);
+   if (cameraInfo == NULL) {
+-    return false;
++    return NULL;
+   }
+ 
+   CommandInfo *info = NULL;
+@@ -588,7 +588,7 @@
+ {
+   CameraInfo *cameraInfo = findCameraInfo(cameraName);
+   if (cameraInfo == NULL) {
+-    return false;
++    return NULL;
+   }
+ 
+   ParamInfo *info = NULL;
+--- a/src/ArDataLogger.cpp
++++ b/src/ArDataLogger.cpp
+@@ -55,7 +55,7 @@
+     myPermanentFileName = fileName;
+   myRobot->addUserTask("DataLogger", 50, &myUserTaskCB);
+   myRobot->requestIOPackets();
+-  myConfig = false;
++  myConfig = NULL;
+   myAddToConfigAtConnect = false;
+   myAddedToConfig = false;
+   myConfigLogging = false;
+--- a/src/ArGPSConnector.cpp
++++ b/src/ArGPSConnector.cpp
+@@ -200,7 +200,7 @@
+       // Setup serial connection
+       ArSerialConnection *serialCon = new ArSerialConnection;
+       ArLog::log(ArLog::Normal, "ArGPSConnector: Connecting to GPS on port %s at %d baud...", myPort, myBaud);
+-      if (!serialCon->setBaud(myBaud)) { delete serialCon; return false; }
++      if (!serialCon->setBaud(myBaud)) { delete serialCon; return NULL; }
+       if (serialCon->open(myPort) != 0) {
+         ArLog::log(ArLog::Terse, "ArGPSConnector: Error: could not open GPS serial port %s.", myPort);
+         delete serialCon;

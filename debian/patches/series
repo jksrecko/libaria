@@ -6,3 +6,4 @@ python.patch
 examples.patch
 test.patch
 linkage.patch
+g++-6.patch
